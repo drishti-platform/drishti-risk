@@ -13,10 +13,10 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
-import com.ash.drishti.compute.var.Columns;
-import com.ash.drishti.compute.var.VarBook;
+import com.ash.drishti.banking.compute.var.Columns;
+import com.ash.drishti.banking.compute.var.VarBook;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -156,7 +156,7 @@ final class VarPositions {
     }
 
     /** A position's member trades in order: its run, and any trade an intraday batch added (VAR_GUIDE.md section 8.4). */
-    private static int[] members(com.ash.drishti.compute.var.VarBook b, int p) {
+    private static int[] members(com.ash.drishti.banking.compute.var.VarBook b, int p) {
         int[] out = new int[b.positionMemberCount(p)];
         int[] i = {0};
         b.forEachPositionMember(p, o -> out[i[0]++] = o);

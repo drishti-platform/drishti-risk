@@ -13,15 +13,15 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.frtb;
+package com.ash.drishti.banking.frtb;
 
-import com.ash.drishti.compute.frtb.Drc;
-import com.ash.drishti.compute.frtb.FrtbChoices;
-import com.ash.drishti.compute.frtb.FrtbCompare;
-import com.ash.drishti.compute.frtb.FrtbSa;
-import com.ash.drishti.compute.frtb.Rrao;
-import com.ash.drishti.compute.frtb.Sbm;
-import com.ash.drishti.compute.frtb.SbmModel;
+import com.ash.drishti.banking.compute.frtb.Drc;
+import com.ash.drishti.banking.compute.frtb.FrtbChoices;
+import com.ash.drishti.banking.compute.frtb.FrtbCompare;
+import com.ash.drishti.banking.compute.frtb.FrtbSa;
+import com.ash.drishti.banking.compute.frtb.Rrao;
+import com.ash.drishti.banking.compute.frtb.Sbm;
+import com.ash.drishti.banking.compute.frtb.SbmModel;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;

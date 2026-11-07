@@ -13,11 +13,11 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.frtb;
+package com.ash.drishti.banking.frtb;
 
 import com.ash.drishti.api.AsOf;
 import com.ash.drishti.api.DataNode;
-import com.ash.drishti.compute.frtb.FactorDictionary;
+import com.ash.drishti.banking.compute.frtb.FactorDictionary;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;

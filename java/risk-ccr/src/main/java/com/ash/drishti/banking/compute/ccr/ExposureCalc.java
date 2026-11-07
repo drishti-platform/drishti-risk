@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.compute.ccr;
+package com.ash.drishti.banking.compute.ccr;
 
 import com.ash.drishti.compute.vector.OrdinalSet;
 import java.util.ArrayList;

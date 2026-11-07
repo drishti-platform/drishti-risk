@@ -13,14 +13,14 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
-import com.ash.drishti.compute.var.VarCalc;
-import com.ash.drishti.server.var.VarExplainMath.Op;
+import com.ash.drishti.banking.compute.var.VarCalc;
+import com.ash.drishti.banking.var.VarExplainMath.Op;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,7 +35,7 @@ import org.junit.jupiter.api.Test;
  */
 class VarExplainMathTest {
 
-    static final VarCalc CALC = new VarCalc(0.9, 0.9, com.ash.drishti.compute.var.VarMath.RankRule.KTH_WORST, 3, true);
+    static final VarCalc CALC = new VarCalc(0.9, 0.9, com.ash.drishti.banking.compute.var.VarMath.RankRule.KTH_WORST, 3, true);
     static final int N = 20;
     static final List<Op> DEFAULT = VarExplainMath.plan(VarExplainMath.causes(VarExplainProperties.DEFAULT_ORDER), false, false);
 

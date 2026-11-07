@@ -13,15 +13,15 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.simm;
+package com.ash.drishti.banking.simm;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.data.Offset.offset;
 
 import com.ash.drishti.common.DrishtiException;
-import com.ash.drishti.compute.simm.Simm;
-import com.ash.drishti.compute.simm.SimmChoices;
+import com.ash.drishti.banking.compute.simm.Simm;
+import com.ash.drishti.banking.compute.simm.SimmChoices;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
@@ -75,7 +75,7 @@ class SimmServiceTest {
         assertThat(r.provenance()).containsKey("Inputs");
         SimmService.Run on = svc.run(null, NS, COB, null, null, SimmChoices.defaults(), null);
         SimmService.Run off = svc.run(null, NS, COB, null, null, SimmChoices.defaults().with("hvr", "off"), null);
-        assertThat(com.ash.drishti.compute.simm.SimmCompare.compare(on.collect(), off.collect(), "hvr: on → off").words())
+        assertThat(com.ash.drishti.banking.compute.simm.SimmCompare.compare(on.collect(), off.collect(), "hvr: on → off").words())
                 .isEqualTo("hvr: on → off raises the margin by 5,633,711.74 (2.6%), most of it in Equity Equity vega, bucket 10, at the historical "
                         + "volatility ratio (the vega WS and its concentration factor) step.");
         assertThat(r.imCollect()).isCloseTo(1_231_385.86, offset(0.005));

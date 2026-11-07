@@ -13,15 +13,15 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
-import com.ash.drishti.compute.var.VarMath;
+import com.ash.drishti.banking.compute.var.VarMath;
 import com.ash.drishti.server.dist.XlsxWriter;
 import com.ash.drishti.server.playground.PlaygroundTemplate;
 import com.ash.drishti.server.playground.SheetStream;
 import com.ash.drishti.server.playground.WorkbookStream;
-import com.ash.drishti.server.var.VarExplainMath.Op;
-import com.ash.drishti.server.var.VarExplainMath.State;
+import com.ash.drishti.banking.var.VarExplainMath.Op;
+import com.ash.drishti.banking.var.VarExplainMath.State;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

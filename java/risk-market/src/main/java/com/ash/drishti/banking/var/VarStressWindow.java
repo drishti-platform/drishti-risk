@@ -13,13 +13,13 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.api.DataNode;
 import com.ash.drishti.common.DrishtiException;
 import com.ash.drishti.common.ErrorCode;
-import com.ash.drishti.compute.var.StressWindows;
-import com.ash.drishti.compute.var.VarMath;
+import com.ash.drishti.banking.compute.var.StressWindows;
+import com.ash.drishti.banking.compute.var.VarMath;
 import com.ash.drishti.server.security.Principal;
 import java.time.LocalDate;
 import java.util.ArrayList;

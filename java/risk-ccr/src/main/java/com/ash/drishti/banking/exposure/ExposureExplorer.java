@@ -13,13 +13,13 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.exposure;
+package com.ash.drishti.banking.exposure;
 
-import com.ash.drishti.compute.ccr.CsaTerms;
-import com.ash.drishti.compute.ccr.ExposureBook;
-import com.ash.drishti.compute.ccr.ExposureCalc;
-import com.ash.drishti.compute.ccr.ExposureGrid;
-import com.ash.drishti.compute.ccr.ExposureMath;
+import com.ash.drishti.banking.compute.ccr.CsaTerms;
+import com.ash.drishti.banking.compute.ccr.ExposureBook;
+import com.ash.drishti.banking.compute.ccr.ExposureCalc;
+import com.ash.drishti.banking.compute.ccr.ExposureGrid;
+import com.ash.drishti.banking.compute.ccr.ExposureMath;
 import com.ash.drishti.server.security.Principal;
 import java.util.ArrayList;
 import java.util.HashMap;

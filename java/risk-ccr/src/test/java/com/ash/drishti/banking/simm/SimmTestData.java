@@ -13,11 +13,11 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.simm;
+package com.ash.drishti.banking.simm;
 
 import com.ash.drishti.api.DataNode;
-import com.ash.drishti.server.frtb.FrtbData;
-import com.ash.drishti.server.frtb.FrtbProperties;
+import com.ash.drishti.banking.frtb.FrtbData;
+import com.ash.drishti.banking.frtb.FrtbProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -51,9 +51,9 @@ final class SimmTestData {
         return Files.isDirectory(p.resolve("data/testdata")) ? p : Path.of(".");
     }
 
-    /** The toy parameter folder (drishti-compute/src/test/resources/simm: simm-toy.yaml only). */
+    /** The toy parameter folder (drishti-compute-banking/src/test/resources/simm: simm-toy.yaml only). */
     static Path toyDir() {
-        return root().resolve("drishti-compute/src/test/resources/simm");
+        return root().resolve("drishti-compute-banking/src/test/resources/simm");
     }
 
     static List<DataNode> read(String kind) {

@@ -13,13 +13,13 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.common.DrishtiException;
-import com.ash.drishti.compute.var.ScopeExpr;
-import com.ash.drishti.compute.var.ScopeResolver;
-import com.ash.drishti.compute.var.VarBook;
-import com.ash.drishti.compute.var.VarCalc;
+import com.ash.drishti.banking.compute.var.ScopeExpr;
+import com.ash.drishti.banking.compute.var.ScopeResolver;
+import com.ash.drishti.banking.compute.var.VarBook;
+import com.ash.drishti.banking.compute.var.VarCalc;
 import com.ash.drishti.compute.vector.OrdinalSet;
 import com.ash.drishti.server.security.Principal;
 import java.util.ArrayList;
@@ -155,7 +155,7 @@ final class VarSelection {
             OrdinalSet mine = full.andNot(taken);
             taken = taken.or(full);
             // 2.9.7: the term alone through the answer's lens (its horizon, method and confidences), from its own 1-day vector
-            com.ash.drishti.compute.var.VarLens lens = s.lens() == null ? svc.props().defaultLens() : s.lens();
+            com.ash.drishti.banking.compute.var.VarLens lens = s.lens() == null ? svc.props().defaultLens() : s.lens();
             double[] fullDay = b.vector(full, svc.sums());
             VarCalc.Measures alone = lens.measures(svc.calc(), fullDay, lens.apply(fullDay));
             Map<String, Object> a = new LinkedHashMap<>();

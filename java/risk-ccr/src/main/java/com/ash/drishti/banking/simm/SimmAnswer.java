@@ -13,12 +13,12 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.simm;
+package com.ash.drishti.banking.simm;
 
-import com.ash.drishti.compute.simm.Simm;
-import com.ash.drishti.compute.simm.SimmChoices;
-import com.ash.drishti.compute.simm.SimmCompare;
-import com.ash.drishti.compute.simm.SimmParams;
+import com.ash.drishti.banking.compute.simm.Simm;
+import com.ash.drishti.banking.compute.simm.SimmChoices;
+import com.ash.drishti.banking.compute.simm.SimmCompare;
+import com.ash.drishti.banking.compute.simm.SimmParams;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;

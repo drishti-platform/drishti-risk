@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.exposure;
+package com.ash.drishti.banking.exposure;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -48,7 +48,7 @@ final class ExposurePublisher {
     /** The counterparty table's: the node table's and the counterparty's own. */
     static final Map<String, String> CPTY_COLUMNS = columns(true);
 
-    private final com.ash.drishti.server.official.OfficialSink sink;
+    private final com.ash.drishti.banking.official.OfficialSink sink;
     private final boolean jsonl;
 
     ExposurePublisher(Path root, int retentionYears) {
@@ -56,11 +56,11 @@ final class ExposurePublisher {
     }
 
     ExposurePublisher(Path root, int retentionYears, boolean jsonl) {
-        this(com.ash.drishti.server.official.OfficialSink.of("delta", root == null ? null : root.toString(), Map.of(), retentionYears), jsonl);
+        this(com.ash.drishti.banking.official.OfficialSink.of("delta", root == null ? null : root.toString(), Map.of(), retentionYears), jsonl);
     }
 
     /** Publishes through {@code sink} (Delta or Iceberg, a folder or {@code s3://}; null: nothing is published). */
-    ExposurePublisher(com.ash.drishti.server.official.OfficialSink sink, boolean jsonl) {
+    ExposurePublisher(com.ash.drishti.banking.official.OfficialSink sink, boolean jsonl) {
         this.sink = sink;
         this.jsonl = jsonl;
     }
@@ -113,7 +113,7 @@ final class ExposurePublisher {
 
     /** Where a commit's JSON Lines go on a local root: {@code <root>/risk-results/jsonl/<table>/<date>/<table>-v<version>.jsonl}. */
     Path jsonlFile(String table, LocalDate date, long version) {
-        return com.ash.drishti.server.official.OfficialSink.folder(sink.root()).resolve(FOLDER).resolve("jsonl").resolve(table)
+        return com.ash.drishti.banking.official.OfficialSink.folder(sink.root()).resolve(FOLDER).resolve("jsonl").resolve(table)
                 .resolve(date.toString()).resolve(table + "-v" + version + ".jsonl");
     }
 

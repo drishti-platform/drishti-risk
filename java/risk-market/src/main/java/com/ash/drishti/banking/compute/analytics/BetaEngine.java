@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.compute.reactive.analytics;
+package com.ash.drishti.banking.compute.analytics;
 
 import com.ash.drishti.api.DataNode;
 import com.ash.drishti.api.compute.ComputeEngine;
