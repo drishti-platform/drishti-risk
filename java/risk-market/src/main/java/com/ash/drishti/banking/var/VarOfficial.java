@@ -13,11 +13,11 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.common.DrishtiException;
-import com.ash.drishti.compute.var.Backtest;
-import com.ash.drishti.compute.var.VarBook;
+import com.ash.drishti.banking.compute.var.Backtest;
+import com.ash.drishti.banking.compute.var.VarBook;
 import com.ash.drishti.identity.content.ContentDocs;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -226,7 +226,7 @@ final class VarOfficial implements AutoCloseable {
         long version = prev == null ? 1 : ((Number) prev.get("resultVersion")).longValue() + 1;
         String computedAt = Instant.now().toString();
         // stressed VaR beside VaR (VAR_GUIDE.md section 18.8): the USD record, when the date has a stress set
-        com.ash.drishti.compute.var.VarLens stressLens = null;
+        com.ash.drishti.banking.compute.var.VarLens stressLens = null;
         String stressSet = null;
         String stressNote = null;
         if (VarDate.USD.equals(ccy) && svc.props().stress().enabled()) {
@@ -329,7 +329,7 @@ final class VarOfficial implements AutoCloseable {
 
     /** One node's official capture written, and its figures for the date's record. */
     private Map<String, Object> node(VarDate d, VarBook.Node n, long version, String membership, String computedAt, Map<String, Object> inputs,
-            com.ash.drishti.compute.var.VarLens stressLens) {
+            com.ash.drishti.banking.compute.var.VarLens stressLens) {
         LocalDate date = d.date();
         String ccy = d.currency();
         String scope = "NODE:" + n.id();
@@ -415,7 +415,7 @@ final class VarOfficial implements AutoCloseable {
         Map<String, Object> varAt = new LinkedHashMap<>();                // the backtest's other confidences, from the same vector
         for (double q : backtestConfidences) {
             if (Math.abs(q - svc.props().confidence()) > 1e-9) {
-                varAt.put(String.valueOf(q), svc.scoped(null, scope, date, ccy, com.ash.drishti.compute.var.VarLens.oneDay(q,
+                varAt.put(String.valueOf(q), svc.scoped(null, scope, date, ccy, com.ash.drishti.banking.compute.var.VarLens.oneDay(q,
                         svc.props().esConfidence())).measures().var());
             }
         }

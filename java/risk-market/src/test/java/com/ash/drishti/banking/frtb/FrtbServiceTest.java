@@ -13,16 +13,16 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.frtb;
+package com.ash.drishti.banking.frtb;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.data.Offset.offset;
 
 import com.ash.drishti.api.AsOf;
-import com.ash.drishti.compute.frtb.FrtbChoices;
-import com.ash.drishti.compute.frtb.FrtbCompare;
-import com.ash.drishti.server.var.VarService;
+import com.ash.drishti.banking.compute.frtb.FrtbChoices;
+import com.ash.drishti.banking.compute.frtb.FrtbCompare;
+import com.ash.drishti.banking.var.VarService;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;

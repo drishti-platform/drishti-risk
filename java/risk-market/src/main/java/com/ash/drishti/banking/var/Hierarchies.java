@@ -13,12 +13,12 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.common.DrishtiException;
 import com.ash.drishti.common.ErrorCode;
-import com.ash.drishti.compute.var.Cells;
-import com.ash.drishti.compute.var.HierarchySpec;
+import com.ash.drishti.banking.compute.var.Cells;
+import com.ash.drishti.banking.compute.var.HierarchySpec;
 import com.ash.drishti.packs.Pack;
 import com.ash.drishti.packs.PackRegistry;
 import java.util.ArrayList;

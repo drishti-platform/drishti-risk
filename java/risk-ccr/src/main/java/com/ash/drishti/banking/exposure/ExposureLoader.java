@@ -13,16 +13,16 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.exposure;
+package com.ash.drishti.banking.exposure;
 
 import com.ash.drishti.api.AsOf;
 import com.ash.drishti.api.DataNode;
 import com.ash.drishti.api.EntityDocument;
 import com.ash.drishti.common.DrishtiException;
 import com.ash.drishti.common.ErrorCode;
-import com.ash.drishti.compute.ccr.CsaTerms;
-import com.ash.drishti.compute.ccr.ExposureBook;
-import com.ash.drishti.compute.ccr.ExposureGrid;
+import com.ash.drishti.banking.compute.ccr.CsaTerms;
+import com.ash.drishti.banking.compute.ccr.ExposureBook;
+import com.ash.drishti.banking.compute.ccr.ExposureGrid;
 import com.ash.drishti.engine.source.SourceRouter;
 import java.nio.file.Path;
 import java.time.LocalDate;
@@ -56,7 +56,7 @@ final class ExposureLoader {
     private final ExposureProperties props;
     private final ExposureTier tier;
     /** The hierarchies (2.9.5, shared with VaR): the level columns of the column hierarchies are read from the paths' rows. */
-    private java.util.function.Supplier<com.ash.drishti.server.var.Hierarchies> hierarchies = com.ash.drishti.server.var.Hierarchies::defaults;
+    private java.util.function.Supplier<com.ash.drishti.banking.var.Hierarchies> hierarchies = com.ash.drishti.banking.var.Hierarchies::defaults;
 
     ExposureLoader(SourceRouter router, ExposureProperties props, ExposureTier tier) {
         this.router = router;
@@ -69,17 +69,17 @@ final class ExposureLoader {
     }
 
     /** The hierarchies VaR builds (the setting, a pack's block, or the default), so exposure's nodes are the same. */
-    ExposureLoader hierarchies(java.util.function.Supplier<com.ash.drishti.server.var.Hierarchies> h) {
+    ExposureLoader hierarchies(java.util.function.Supplier<com.ash.drishti.banking.var.Hierarchies> h) {
         this.hierarchies = h;
         return this;
     }
 
-    com.ash.drishti.server.var.Hierarchies hierarchies() {
-        com.ash.drishti.server.var.Hierarchies all;
+    com.ash.drishti.banking.var.Hierarchies hierarchies() {
+        com.ash.drishti.banking.var.Hierarchies all;
         try {
             all = hierarchies.get();
         } catch (RuntimeException e) {
-            return com.ash.drishti.server.var.Hierarchies.defaults();
+            return com.ash.drishti.banking.var.Hierarchies.defaults();
         }
         // a column hierarchy whose level column the paths' table does not keep is skipped, said (DRS-5211 as a warning); the rest load
         if (all.columnSpecs().isEmpty()) {
@@ -87,8 +87,8 @@ final class ExposureLoader {
             return all;
         }
         Map<String, String> why = all.missingColumns(Map.of(props.kinds().paths(), router.columnar(props.kinds().paths())), "");
-        for (com.ash.drishti.compute.var.HierarchySpec s : all.columnSpecs()) {
-            com.ash.drishti.server.var.Hierarchies.skipped("exposure", s.id(), why.get(s.id()));
+        for (com.ash.drishti.banking.compute.var.HierarchySpec s : all.columnSpecs()) {
+            com.ash.drishti.banking.var.Hierarchies.skipped("exposure", s.id(), why.get(s.id()));
         }
         if (!why.equals(skipped)) {
             why.values().forEach(w -> org.slf4j.LoggerFactory.getLogger(ExposureLoader.class).warn("exposure: {}", w));
@@ -106,7 +106,7 @@ final class ExposureLoader {
     }
 
     /** The configured hierarchies (the column ones' words name nodes in a scope). */
-    List<com.ash.drishti.compute.var.HierarchySpec> hierarchySpecs() {
+    List<com.ash.drishti.banking.compute.var.HierarchySpec> hierarchySpecs() {
         return hierarchies().specs();
     }
 

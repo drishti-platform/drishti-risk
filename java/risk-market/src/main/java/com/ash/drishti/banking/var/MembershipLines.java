@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.identity.content.ContentDocs;
 import com.fasterxml.jackson.core.JsonProcessingException;

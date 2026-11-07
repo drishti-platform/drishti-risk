@@ -13,18 +13,18 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.common.DrishtiException;
 import com.ash.drishti.common.ErrorCode;
-import com.ash.drishti.compute.var.Backtest;
-import com.ash.drishti.compute.var.Columns;
-import com.ash.drishti.compute.var.CurrencyTotals;
-import com.ash.drishti.compute.var.ScenarioFx;
-import com.ash.drishti.compute.var.VarBook;
-import com.ash.drishti.compute.var.VarCalc;
-import com.ash.drishti.compute.var.VarLens;
-import com.ash.drishti.compute.var.VarMath;
+import com.ash.drishti.banking.compute.var.Backtest;
+import com.ash.drishti.banking.compute.var.Columns;
+import com.ash.drishti.banking.compute.var.CurrencyTotals;
+import com.ash.drishti.banking.compute.var.ScenarioFx;
+import com.ash.drishti.banking.compute.var.VarBook;
+import com.ash.drishti.banking.compute.var.VarCalc;
+import com.ash.drishti.banking.compute.var.VarLens;
+import com.ash.drishti.banking.compute.var.VarMath;
 import com.ash.drishti.compute.vector.OrdinalSet;
 import com.ash.drishti.server.security.Principal;
 import java.time.Instant;
@@ -72,7 +72,7 @@ final class VarViews {
     }
 
     /** The scope's parametric figures through its lens, or null when the measure is off or the scope has no scenario. */
-    com.ash.drishti.compute.var.ParametricVar.Figures pFigures(VarService.Scoped s) {
+    com.ash.drishti.banking.compute.var.ParametricVar.Figures pFigures(VarService.Scoped s) {
         return parametric == null || !parametric.enabled() || s.vector().length == 0 ? null
                 : parametric.figures(s.vector(), s.oneDay(), lens(s));
     }
@@ -197,9 +197,9 @@ final class VarViews {
         VarProperties pr = svc.props();
         double c = conf == null ? pr.confidence() : conf;
         double ec = esConf == null ? pr.esConfidence() : esConf;
-        com.ash.drishti.compute.var.VarCalc calc = new com.ash.drishti.compute.var.VarCalc(c, ec, svc.calc().rule(), svc.calc().window(),
+        com.ash.drishti.banking.compute.var.VarCalc calc = new com.ash.drishti.banking.compute.var.VarCalc(c, ec, svc.calc().rule(), svc.calc().window(),
                 svc.calc().scaleToVar());
-        com.ash.drishti.compute.var.VarCalc.Measures m = calc.measures(v);
+        com.ash.drishti.banking.compute.var.VarCalc.Measures m = calc.measures(v);
         List<LocalDate> days = s.date().book().scenarioDates();
         o.put("window", v.length);
         o.put("of", s.vector().length);
@@ -461,11 +461,11 @@ final class VarViews {
      * include them.
      */
     static Map<String, Object> intradayNote(VarDate d) {
-        com.ash.drishti.compute.var.VarIntraday l = d.book().intraday();
+        com.ash.drishti.banking.compute.var.VarIntraday l = d.book().intraday();
         if (l == null) {
             return null;
         }
-        com.ash.drishti.compute.var.VarIntraday.Info i = l.info();
+        com.ash.drishti.banking.compute.var.VarIntraday.Info i = l.info();
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("updates", i.updates());
         m.put("trades", i.trades());
@@ -895,7 +895,7 @@ final class VarViews {
             VarCalc.Contribution c = cs.get(i);
             Map<String, Object> r = new LinkedHashMap<>();
             if (pf != null) {                                          // the parametric columns: Euler components that add up exactly
-                var pc = com.ash.drishti.compute.var.ParametricVar.component(pt.vector(), s.vector(), pf);
+                var pc = com.ash.drishti.banking.compute.var.ParametricVar.component(pt.vector(), s.vector(), pf);
                 r.putAll(parametric.row(pc, pf, pt.size(), pt.label(), s.label(), !ps.truncated(), parts.size()));
                 pComp += pc.componentVar();
                 pAlone += pc.standaloneVar();

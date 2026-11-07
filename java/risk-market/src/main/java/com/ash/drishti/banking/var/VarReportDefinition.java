@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

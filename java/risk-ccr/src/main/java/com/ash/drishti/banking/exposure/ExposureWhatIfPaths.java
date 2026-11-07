@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.exposure;
+package com.ash.drishti.banking.exposure;
 
 import com.ash.drishti.api.AsOf;
 import com.ash.drishti.api.compute.ComputeRef;
@@ -22,7 +22,7 @@ import com.ash.drishti.common.ErrorCode;
 import com.ash.drishti.compute.RequestClass;
 import com.ash.drishti.compute.arrow.ArrowIpc;
 import com.ash.drishti.compute.arrow.ArrowTable;
-import com.ash.drishti.compute.ccr.ExposureBook;
+import com.ash.drishti.banking.compute.ccr.ExposureBook;
 import com.ash.drishti.compute.reactive.Answer;
 import com.ash.drishti.compute.reactive.ReactiveConnector;
 import com.ash.drishti.compute.reactive.ReactiveHub;

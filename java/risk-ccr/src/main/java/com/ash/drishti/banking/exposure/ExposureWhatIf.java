@@ -13,13 +13,13 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.exposure;
+package com.ash.drishti.banking.exposure;
 
 import com.ash.drishti.common.DrishtiException;
 import com.ash.drishti.common.ErrorCode;
-import com.ash.drishti.compute.ccr.ExposureBook;
-import com.ash.drishti.compute.ccr.ExposureGrid;
-import com.ash.drishti.compute.ccr.ExposureMath;
+import com.ash.drishti.banking.compute.ccr.ExposureBook;
+import com.ash.drishti.banking.compute.ccr.ExposureGrid;
+import com.ash.drishti.banking.compute.ccr.ExposureMath;
 import com.ash.drishti.server.security.Principal;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -129,7 +129,7 @@ final class ExposureWhatIf {
         ExposureMath.Stats st = base.result().stats;
         int qa = st.at(ask.q());
         double zq = z(ask.q());
-        double[] times = com.ash.drishti.compute.ccr.ExposureCalc.times(g);
+        double[] times = com.ash.drishti.banking.compute.ccr.ExposureCalc.times(g);
         double[] addPfe = new double[times.length];
         double[] addEe = new double[times.length];
         for (Map<String, Object> c : cands) {

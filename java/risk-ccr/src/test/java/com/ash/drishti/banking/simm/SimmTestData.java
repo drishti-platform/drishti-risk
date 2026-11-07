@@ -13,11 +13,11 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.simm;
+package com.ash.drishti.banking.simm;
 
 import com.ash.drishti.api.DataNode;
-import com.ash.drishti.server.frtb.FrtbData;
-import com.ash.drishti.server.frtb.FrtbProperties;
+import com.ash.drishti.banking.frtb.FrtbData;
+import com.ash.drishti.banking.frtb.FrtbProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedReader;
 import java.io.IOException;

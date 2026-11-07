@@ -13,11 +13,11 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.common.TempFiles;
-import com.ash.drishti.compute.var.VarBook;
-import com.ash.drishti.compute.var.VarHotFile;
+import com.ash.drishti.banking.compute.var.VarBook;
+import com.ash.drishti.banking.compute.var.VarHotFile;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;

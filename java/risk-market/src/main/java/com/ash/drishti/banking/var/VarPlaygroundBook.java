@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.server.dist.XlsxWriter;
 import com.ash.drishti.server.playground.ExportSizing;
@@ -342,7 +342,7 @@ final class VarPlaygroundBook {
 
     private String lensLabel() {
         String h = "1D".equals(m.set.horizon()) ? "1-day" : "SUM".equals(m.set.method()) ? "10-day sum" : "10-day √10";
-        return h + " " + com.ash.drishti.compute.var.VarLens.pct(m.set.confidence());
+        return h + " " + com.ash.drishti.banking.compute.var.VarLens.pct(m.set.confidence());
     }
 
     /** The derived named cells: k, the component window, the scale, the interpolation's ranks, the headline 1-day and 10-day figures. */
@@ -419,7 +419,7 @@ final class VarPlaygroundBook {
         double eHeadEs = "1D".equals(m.set.horizon()) ? e.es1() : "SUM".equals(m.set.method()) ? e.es10sum() : e.es1() * VarPlaygroundModel.SQRT10;
         r = result(r, "VaR " + lensLabel() + " (the headline)", "IF(Horizon=\"1D\",VaROneDay,IF(TenDayMethod=\"SUM\",VaRTenSum,VaROneDay*SQRT(10)))",
                 head, eHead, "money.bold");
-        r = result(r, "ES " + com.ash.drishti.compute.var.VarLens.pct(m.set.esConfidence()) + " (the headline's horizon)",
+        r = result(r, "ES " + com.ash.drishti.banking.compute.var.VarLens.pct(m.set.esConfidence()) + " (the headline's horizon)",
                 "IF(Horizon=\"1D\",ESOneDay,IF(TenDayMethod=\"SUM\",ESTenSum,ESOneDay*SQRT(10)))", headEs, eHeadEs, "money.bold");
         r = result(r, "VaR 1-day", "VaROneDay", m.var1, e.var1(), "money");
         r = result(r, "ES 1-day", "ESOneDay", m.es1, e.es1(), "money");

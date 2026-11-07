@@ -13,14 +13,14 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.exposure;
+package com.ash.drishti.banking.exposure;
 
 import com.ash.drishti.common.DrishtiException;
 import com.ash.drishti.common.ErrorCode;
-import com.ash.drishti.compute.ccr.ExposureBook;
-import com.ash.drishti.compute.ccr.ExposureCalc;
-import com.ash.drishti.compute.ccr.ExposureMath;
-import com.ash.drishti.compute.ccr.ExposureScopes;
+import com.ash.drishti.banking.compute.ccr.ExposureBook;
+import com.ash.drishti.banking.compute.ccr.ExposureCalc;
+import com.ash.drishti.banking.compute.ccr.ExposureMath;
+import com.ash.drishti.banking.compute.ccr.ExposureScopes;
 import com.ash.drishti.compute.vector.OrdinalSet;
 import com.ash.drishti.identity.AuditLog;
 import com.ash.drishti.server.security.Principal;
@@ -564,7 +564,7 @@ final class ExposureService implements AutoCloseable {
         }
         noPaths(d, res, scope);
         java.util.Set<String> words = loader.words();
-        boolean naming = com.ash.drishti.compute.var.ScopeExpr.parse(scope, words).refs().stream()
+        boolean naming = com.ash.drishti.banking.compute.var.ScopeExpr.parse(scope, words).refs().stream()
                 .anyMatch(r -> NAMING.contains(r.word()) || words.contains(r.word()));        // a column hierarchy's node names trades as DESK: does
         if (naming && !view.seesTrades(res.trades().and(view.visible()))) {
             throw new DrishtiException(ErrorCode.FORBIDDEN, "a scope of trades, desks, books or a rule may only name the netting sets you see trade "
@@ -594,7 +594,7 @@ final class ExposureService implements AutoCloseable {
             r = ExposureCalc.evaluate(d.book(), set, res.standalone(), params(ask, p == null), paths(d));
         } catch (ExposureCalc.TooLarge e) {
             throw new DrishtiException(ErrorCode.EXPOSURE_BATCH_JOB, e.getMessage() + ": its official figures are computed by the end-of-day capture "
-                    + "(GET /api/v1/exposure/official), or narrow the scope");
+                    + "(GET /api/v1/risk/exposure/official), or narrow the scope");
         }
         if (!d.warnings().isEmpty() && !r.flags.contains("stale-run")) {
             r.flags.add("stale-run");
