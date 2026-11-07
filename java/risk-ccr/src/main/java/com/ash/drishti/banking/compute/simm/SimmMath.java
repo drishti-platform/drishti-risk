@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.compute.simm;
+package com.ash.drishti.banking.compute.simm;
 
 /**
  * The aggregation formulas of ISDA SIMM (SENSITIVITIES_AND_FRTB_SA.md sections 4 and 8, docs/guides/SIMM_GUIDE.md section 5): the

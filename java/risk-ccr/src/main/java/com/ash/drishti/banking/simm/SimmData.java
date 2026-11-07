@@ -13,13 +13,13 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.simm;
+package com.ash.drishti.banking.simm;
 
 import com.ash.drishti.api.AsOf;
 import com.ash.drishti.api.DataNode;
 import com.ash.drishti.api.NodeType;
-import com.ash.drishti.compute.simm.SimmInput;
-import com.ash.drishti.server.frtb.FrtbData;
+import com.ash.drishti.banking.compute.simm.SimmInput;
+import com.ash.drishti.banking.frtb.FrtbData;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -268,7 +268,7 @@ public final class SimmData {
             String ns = text(n, "NETTING_SET");
             if (ns != null && "HEADER".equalsIgnoreCase(text(n, "ROW_TYPE"))) {
                 Map<String, Double> byRc = new LinkedHashMap<>();
-                for (String rc : com.ash.drishti.compute.simm.SimmParams.RISK_CLASSES) {
+                for (String rc : com.ash.drishti.banking.compute.simm.SimmParams.RISK_CLASSES) {
                     double v = num(n, "IM_" + rc.toUpperCase(Locale.ROOT), Double.NaN);
                     if (Double.isFinite(v)) {
                         byRc.put(rc, v);

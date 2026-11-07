@@ -13,12 +13,12 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.common.ErrorCode;
-import com.ash.drishti.compute.var.PositionRules;
-import com.ash.drishti.compute.var.ScenarioFx;
-import com.ash.drishti.compute.var.VarBook;
+import com.ash.drishti.banking.compute.var.PositionRules;
+import com.ash.drishti.banking.compute.var.ScenarioFx;
+import com.ash.drishti.banking.compute.var.VarBook;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -449,7 +449,7 @@ final class VarIntake {
             double[] pnl = live ? java.util.Arrays.copyOf(vector, width) : null;
             // offered when the morning run's form and grain are known for the system (an update in another is refused, never mixed in)
             pending.add(new Object[] {system.strip(), combo, new VarIntradayRows.Row(trade, at, batch == null ? "" : batch,
-                    new com.ash.drishti.compute.var.VarIntraday.Update(trade, pnl, pvAt, texts.clone(), numbers.clone(), pvAt,
+                    new com.ash.drishti.banking.compute.var.VarIntraday.Update(trade, pnl, pvAt, texts.clone(), numbers.clone(), pvAt,
                             pnl == null ? null : pnl.clone()))});
             return;
         }

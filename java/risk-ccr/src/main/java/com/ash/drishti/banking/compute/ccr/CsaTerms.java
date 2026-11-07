@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.compute.ccr;
+package com.ash.drishti.banking.compute.ccr;
 
 /**
  * A netting set's collateral terms in USD (EXPOSURE_GUIDE.md section 18.3, NSET.md section 3.5) and what it holds today.

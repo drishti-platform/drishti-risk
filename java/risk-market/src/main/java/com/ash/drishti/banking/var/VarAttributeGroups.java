@@ -13,14 +13,14 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.api.AsOf;
 import com.ash.drishti.api.ColumnSet;
 import com.ash.drishti.common.DrishtiException;
 import com.ash.drishti.common.ErrorCode;
-import com.ash.drishti.compute.var.Columns;
-import com.ash.drishti.compute.var.VarBook;
+import com.ash.drishti.banking.compute.var.Columns;
+import com.ash.drishti.banking.compute.var.VarBook;
 import com.ash.drishti.compute.vector.OrdinalSet;
 import com.ash.drishti.engine.source.SourceRouter;
 import com.ash.drishti.server.security.Principal;

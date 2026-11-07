@@ -13,10 +13,10 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.compute.ccr;
+package com.ash.drishti.banking.compute.ccr;
 
-import com.ash.drishti.compute.var.PositionRule;
-import com.ash.drishti.compute.var.ScopeExpr;
+import com.ash.drishti.banking.compute.var.PositionRule;
+import com.ash.drishti.banking.compute.var.ScopeExpr;
 import com.ash.drishti.compute.vector.OrdinalSet;
 import java.util.ArrayList;
 import java.util.List;
@@ -61,17 +61,17 @@ public final class ExposureScopes {
     private final ExposureBook book;
     private final Groups groups;
     /** The configured column hierarchies with a scope word (2.9.5): word to its hierarchy ({@code LL:LL-0003/DESK-RATES}). */
-    private final Map<String, com.ash.drishti.compute.var.HierarchySpec> words = new java.util.LinkedHashMap<>();
+    private final Map<String, com.ash.drishti.banking.compute.var.HierarchySpec> words = new java.util.LinkedHashMap<>();
 
     public ExposureScopes(ExposureBook book, Groups groups) {
         this(book, groups, List.of());
     }
 
     /** A resolver that also knows the configured column hierarchies' words ({@code LL:<letter>[/<desk>]}). */
-    public ExposureScopes(ExposureBook book, Groups groups, List<com.ash.drishti.compute.var.HierarchySpec> hierarchies) {
+    public ExposureScopes(ExposureBook book, Groups groups, List<com.ash.drishti.banking.compute.var.HierarchySpec> hierarchies) {
         this.book = book;
         this.groups = groups == null ? g -> Optional.empty() : groups;
-        for (com.ash.drishti.compute.var.HierarchySpec s : hierarchies == null ? List.<com.ash.drishti.compute.var.HierarchySpec>of() : hierarchies) {
+        for (com.ash.drishti.banking.compute.var.HierarchySpec s : hierarchies == null ? List.<com.ash.drishti.banking.compute.var.HierarchySpec>of() : hierarchies) {
             if (s.columns() && s.word() != null) {
                 words.put(s.word(), s);
             }
@@ -221,7 +221,7 @@ public final class ExposureScopes {
                 return b.build();
             }
             default -> {
-                com.ash.drishti.compute.var.HierarchySpec h = words.get(r.word());
+                com.ash.drishti.banking.compute.var.HierarchySpec h = words.get(r.word());
                 if (h != null) {                                          // a node of a column hierarchy: its path of values (2.9.5)
                     OrdinalSet s = node(h, r.arg());
                     if (s.isEmpty()) {
@@ -241,7 +241,7 @@ public final class ExposureScopes {
      * The trades of a column hierarchy's node, named by its path ({@code LL-0003/DESK-RATES}: the first levels' values) or, with leaf ids,
      * by its own value (at any level).
      */
-    private OrdinalSet node(com.ash.drishti.compute.var.HierarchySpec h, String arg) {
+    private OrdinalSet node(com.ash.drishti.banking.compute.var.HierarchySpec h, String arg) {
         String[] parts = arg.split("/");
         OrdinalSet.Builder b = new OrdinalSet.Builder();
         if (h.leafIds() && parts.length == 1) {

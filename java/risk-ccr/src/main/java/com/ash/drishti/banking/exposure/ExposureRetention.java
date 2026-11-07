@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.exposure;
+package com.ash.drishti.banking.exposure;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -34,7 +34,7 @@ import java.util.TreeSet;
  *   <tr><th>Data</th><th>Kept</th><th>Applied by</th></tr>
  *   <tr><td>trade paths ({@code exposure-path})</td><td>the last {@code trade-paths-days} business dates, and each month-end for
  *       {@code trade-paths-month-end-years}</td><td>the lake's owner (Drishti reads them, never deletes them): {@code GET
- *       /api/v1/exposure/retention} lists the dates beyond</td></tr>
+ *       /api/v1/risk/exposure/retention} lists the dates beyond</td></tr>
  *   <tr><td>netting-set matrices (the hot files)</td><td>every date for {@code set-matrices-years}, each month-end for
  *       {@code set-matrices-month-end-years}</td><td>the hot tier: a kept date's file is never trimmed by {@code disk-dates}</td></tr>
  *   <tr><td>statistics (the official records) and trade contributions</td><td>every date for {@code statistics-years} and

@@ -13,17 +13,17 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.exposure;
+package com.ash.drishti.banking.exposure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.ash.drishti.compute.ccr.CsaTerms;
-import com.ash.drishti.compute.ccr.ExposureBook;
-import com.ash.drishti.compute.ccr.ExposureCalc;
-import com.ash.drishti.compute.ccr.ExposureGrid;
-import com.ash.drishti.compute.ccr.ExposureHotFile;
-import com.ash.drishti.compute.ccr.ExposureMath;
-import com.ash.drishti.compute.ccr.ExposureScopes;
+import com.ash.drishti.banking.compute.ccr.CsaTerms;
+import com.ash.drishti.banking.compute.ccr.ExposureBook;
+import com.ash.drishti.banking.compute.ccr.ExposureCalc;
+import com.ash.drishti.banking.compute.ccr.ExposureGrid;
+import com.ash.drishti.banking.compute.ccr.ExposureHotFile;
+import com.ash.drishti.banking.compute.ccr.ExposureMath;
+import com.ash.drishti.banking.compute.ccr.ExposureScopes;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

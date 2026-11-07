@@ -13,11 +13,11 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.common.DrishtiException;
 import com.ash.drishti.common.ErrorCode;
-import com.ash.drishti.compute.var.VarWhatIfMath;
+import com.ash.drishti.banking.compute.var.VarWhatIfMath;
 import com.ash.drishti.server.security.Principal;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -33,8 +33,8 @@ import java.util.Map;
  * sandbox, no compute workers, so it answers on every server.
  *
  * <pre>
- *   POST /api/v1/var/what-if {"scope": "BASKET:asha/unwind", "items": [{"copyOf": "MX-30000121", "factor": -1}], "ccy": "EUR"}
- *   POST /api/v1/var/what-if {"scope": "DESK:RATES", "items": [{"copyOf": "BOOK:BOOK-RATES-3", "factor": -0.5, "label": "hedge"}]}
+ *   POST /api/v1/risk/var/what-if {"scope": "BASKET:asha/unwind", "items": [{"copyOf": "MX-30000121", "factor": -1}], "ccy": "EUR"}
+ *   POST /api/v1/risk/var/what-if {"scope": "DESK:RATES", "items": [{"copyOf": "BOOK:BOOK-RATES-3", "factor": -0.5, "label": "hedge"}]}
  * </pre>
  */
 final class VarWhatIf {

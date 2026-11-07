@@ -13,11 +13,11 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.common.DrishtiException;
 import com.ash.drishti.common.ErrorCode;
-import com.ash.drishti.compute.var.VarBook;
+import com.ash.drishti.banking.compute.var.VarBook;
 import com.ash.drishti.server.security.Principal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -59,7 +59,7 @@ final class VarCaptures {
      * scenario (or window) dates are the lens's, and it names them ({@code horizon}, {@code method}, {@code confidence}); a compare with
      * now reads now through the same lens.
      */
-    Map<String, Object> capture(Principal p, String scope, LocalDate date, String note, String ccy, com.ash.drishti.compute.var.VarLens lens) {
+    Map<String, Object> capture(Principal p, String scope, LocalDate date, String note, String ccy, com.ash.drishti.banking.compute.var.VarLens lens) {
         VarService.Scoped s = svc.scoped(p, scope, date, ccy, lens);
         String c0 = s.date().currency();
         VarBook b = s.date().book();
@@ -135,7 +135,7 @@ final class VarCaptures {
         List<String> gone = new ArrayList<>();
         try {
             Object text = c.get("canonical") != null ? c.get("canonical") : c.get("scope");
-            for (com.ash.drishti.compute.var.ScopeExpr.Ref r : com.ash.drishti.compute.var.ScopeExpr.parse(String.valueOf(text), svc.words().keySet()).refs()) {
+            for (com.ash.drishti.banking.compute.var.ScopeExpr.Ref r : com.ash.drishti.banking.compute.var.ScopeExpr.parse(String.valueOf(text), svc.words().keySet()).refs()) {
                 if (r.word().equals("BASKET") && !svc.saved().basketExists(r.arg()) && !gone.contains(r.arg())) {
                     gone.add(r.arg());
                 }
@@ -156,7 +156,7 @@ final class VarCaptures {
         String canonical = null;
         if (scope != null && !scope.isBlank()) {
             try {
-                canonical = com.ash.drishti.compute.var.ScopeExpr.parse(scope, svc.words().keySet()).toString();
+                canonical = com.ash.drishti.banking.compute.var.ScopeExpr.parse(scope, svc.words().keySet()).toString();
             } catch (IllegalArgumentException e) {
                 throw new DrishtiException(ErrorCode.BAD_REQUEST, e.getMessage());
             }
@@ -187,7 +187,7 @@ final class VarCaptures {
         String ccy = currency(ca);
         if (b == null || b.isBlank() || b.equalsIgnoreCase("now")) {
             String scope = String.valueOf(ca.get("scope"));
-            com.ash.drishti.compute.var.VarLens lens = lensOf(ca);
+            com.ash.drishti.banking.compute.var.VarLens lens = lensOf(ca);
             Map<String, Object> head = views.headline(p, scope, null, ccy, lens);
             Map<String, Object> contrib = views.contributions(p, scope, null, "child", null, ccy, lens);
             cb = new LinkedHashMap<>();
@@ -240,11 +240,11 @@ final class VarCaptures {
     }
 
     /** A capture's lens (2.9.7), null for the default (one written before 2.9.7: 1-day at its own confidences). */
-    private com.ash.drishti.compute.var.VarLens lensOf(Map<String, Object> c) {
+    private com.ash.drishti.banking.compute.var.VarLens lensOf(Map<String, Object> c) {
         Object h = c.get("horizon");
         Object m = c.get("method");
         try {
-            com.ash.drishti.compute.var.VarLens l = svc.props().lens(h == null ? null : String.valueOf(h), m == null ? null : String.valueOf(m),
+            com.ash.drishti.banking.compute.var.VarLens l = svc.props().lens(h == null ? null : String.valueOf(h), m == null ? null : String.valueOf(m),
                     c.get("confidence") instanceof Number n ? n.doubleValue() : null,
                     c.get("esConfidence") instanceof Number n ? n.doubleValue() : null, c.get("set") == null ? null : String.valueOf(c.get("set")));
             return l.equals(svc.props().defaultLens()) ? null : l;

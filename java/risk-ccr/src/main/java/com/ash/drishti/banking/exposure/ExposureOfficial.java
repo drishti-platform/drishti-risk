@@ -13,15 +13,15 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.exposure;
+package com.ash.drishti.banking.exposure;
 
 import com.ash.drishti.api.AsOf;
 import com.ash.drishti.api.DataNode;
 import com.ash.drishti.common.DrishtiException;
-import com.ash.drishti.compute.ccr.ExposureBook;
-import com.ash.drishti.compute.ccr.ExposureCalc;
-import com.ash.drishti.compute.ccr.ExposureGrid;
-import com.ash.drishti.compute.ccr.ExposureMath;
+import com.ash.drishti.banking.compute.ccr.ExposureBook;
+import com.ash.drishti.banking.compute.ccr.ExposureCalc;
+import com.ash.drishti.banking.compute.ccr.ExposureGrid;
+import com.ash.drishti.banking.compute.ccr.ExposureMath;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -369,10 +369,10 @@ final class ExposureOfficial implements AutoCloseable {
     }
 
     /** A column hierarchy's nodes from the date's trades: the root (the bank), then every distinct path of the level columns' values. */
-    static List<Node> columnNodes(ExposureDate d, com.ash.drishti.compute.var.HierarchySpec s) {
+    static List<Node> columnNodes(ExposureDate d, com.ash.drishti.banking.compute.var.HierarchySpec s) {
         List<Node> out = new ArrayList<>();
-        out.add(new Node(s.id(), s.rootNodeId(), s.rootName(), null, com.ash.drishti.compute.var.HierarchySpec.ROOT_LEVEL, "BANK"));
-        com.ash.drishti.compute.ccr.ExposureScopes cols = new com.ash.drishti.compute.ccr.ExposureScopes(d.book(), null);
+        out.add(new Node(s.id(), s.rootNodeId(), s.rootName(), null, com.ash.drishti.banking.compute.var.HierarchySpec.ROOT_LEVEL, "BANK"));
+        com.ash.drishti.banking.compute.ccr.ExposureScopes cols = new com.ash.drishti.banking.compute.ccr.ExposureScopes(d.book(), null);
         Set<String> seen = new java.util.HashSet<>();
         Map<String, String> parentOf = new java.util.HashMap<>();
         int k = s.levels().size();
@@ -410,7 +410,7 @@ final class ExposureOfficial implements AutoCloseable {
      */
     List<Node> nodes(ExposureDate d) {
         List<Node> out = new ArrayList<>();
-        com.ash.drishti.server.var.Hierarchies hs = svc.loader().hierarchies();
+        com.ash.drishti.banking.var.Hierarchies hs = svc.loader().hierarchies();
         Map<String, DataNode> h = new LinkedHashMap<>();
         try {
             svc.loader().documents(svc.props().kinds().hierarchy(), AsOf.of(d.date())).forEach((id, n) -> {
@@ -442,7 +442,7 @@ final class ExposureOfficial implements AutoCloseable {
             out.add(new Node(String.valueOf(ExposureLoader.text(n, "HIERARCHY")), id, ExposureLoader.text(n, "NAME"), ExposureLoader.text(n, "PARENT_ID"),
                     ExposureLoader.text(n, "LEVEL"), bs.isEmpty() ? null : String.join(" + ", bs)));
         }
-        for (com.ash.drishti.compute.var.HierarchySpec s : hs.columnSpecs()) {
+        for (com.ash.drishti.banking.compute.var.HierarchySpec s : hs.columnSpecs()) {
             out.addAll(columnNodes(d, s));
         }
         if (out.isEmpty()) {

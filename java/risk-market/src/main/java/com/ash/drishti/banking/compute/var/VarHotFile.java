@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.compute.var;
+package com.ash.drishti.banking.compute.var;
 
 import com.ash.drishti.compute.vector.GroupedVectors;
 import com.ash.drishti.compute.vector.MappedMatrix;

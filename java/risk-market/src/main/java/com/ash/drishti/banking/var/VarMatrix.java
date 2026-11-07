@@ -13,13 +13,13 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.common.DrishtiException;
 import com.ash.drishti.common.ErrorCode;
-import com.ash.drishti.compute.var.ScenarioFx;
-import com.ash.drishti.compute.var.VarBook;
-import com.ash.drishti.compute.var.VarCalc;
+import com.ash.drishti.banking.compute.var.ScenarioFx;
+import com.ash.drishti.banking.compute.var.VarBook;
+import com.ash.drishti.banking.compute.var.VarCalc;
 import com.ash.drishti.server.security.Principal;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -384,7 +384,7 @@ final class VarMatrix {
         VarBook b = s.date().book();
         double[] pvUsd = {0};
         int[] counts = {0, 0};                                                // with a PV, sent as scenario PVs
-        com.ash.drishti.compute.var.Columns tc = b.trades();
+        com.ash.drishti.banking.compute.var.Columns tc = b.trades();
         boolean hasPv = tc.has("PV");
         VarIntake.Summary in = s.date().intake();
         s.set().forEach(o -> {

@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.compute.var;
+package com.ash.drishti.banking.compute.var;
 
 /**
  * VaR backtesting over a history (VAR_GUIDE.md section 7): a day is an <b>exception</b> when its loss (hypothetical P&amp;L below zero)

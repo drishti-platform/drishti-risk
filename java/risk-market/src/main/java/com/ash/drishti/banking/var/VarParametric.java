@@ -13,11 +13,11 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.compute.linalg.Blas;
-import com.ash.drishti.compute.var.ParametricVar;
-import com.ash.drishti.compute.var.VarLens;
+import com.ash.drishti.banking.compute.var.ParametricVar;
+import com.ash.drishti.banking.compute.var.VarLens;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;

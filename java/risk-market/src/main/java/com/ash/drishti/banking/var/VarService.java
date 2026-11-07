@@ -13,16 +13,16 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.common.DrishtiException;
 import com.ash.drishti.common.ErrorCode;
-import com.ash.drishti.compute.var.CurrencyTotals;
-import com.ash.drishti.compute.var.ScenarioFx;
-import com.ash.drishti.compute.var.ScopeExpr;
-import com.ash.drishti.compute.var.ScopeResolver;
-import com.ash.drishti.compute.var.VarBook;
-import com.ash.drishti.compute.var.VarCalc;
+import com.ash.drishti.banking.compute.var.CurrencyTotals;
+import com.ash.drishti.banking.compute.var.ScenarioFx;
+import com.ash.drishti.banking.compute.var.ScopeExpr;
+import com.ash.drishti.banking.compute.var.ScopeResolver;
+import com.ash.drishti.banking.compute.var.VarBook;
+import com.ash.drishti.banking.compute.var.VarCalc;
 import com.ash.drishti.compute.vector.OrdinalSet;
 import com.ash.drishti.compute.vector.ParallelSums;
 import com.ash.drishti.identity.AuditLog;
@@ -59,7 +59,7 @@ public final class VarService implements AutoCloseable {
      */
     record Scoped(VarDate date, VarAccess.View view, ScopeResolver.Resolution res, OrdinalSet set, int hidden, double[] vector,
             VarCalc.Measures measures, String kind, String label, long computeMs, boolean cached, Map<String, Object> shards,
-            com.ash.drishti.compute.var.VarLens lens, double[] oneDay) {
+            com.ash.drishti.banking.compute.var.VarLens lens, double[] oneDay) {
 
         Scoped(VarDate date, VarAccess.View view, ScopeResolver.Resolution res, OrdinalSet set, int hidden, double[] vector,
                 VarCalc.Measures measures, String kind, String label, long computeMs, boolean cached, Map<String, Object> shards) {
@@ -73,7 +73,7 @@ public final class VarService implements AutoCloseable {
         }
 
         /** The same scope read through another lens (its 1-day vector kept). */
-        Scoped through(com.ash.drishti.compute.var.VarLens l, VarCalc base, long ms, boolean hit) {
+        Scoped through(com.ash.drishti.banking.compute.var.VarLens l, VarCalc base, long ms, boolean hit) {
             double[] v = l.apply(oneDay);
             return new Scoped(date, view, res, set, hidden, v, l.measures(base, oneDay, v), kind, label, ms, hit, shards, l, oneDay);
         }
@@ -717,7 +717,7 @@ public final class VarService implements AutoCloseable {
                 }
             }
             java.util.List<String> batches = VarIntradayRows.batchAt(fresh).entrySet().stream()      // the order the answers list them in
-                    .sorted(com.ash.drishti.compute.var.VarIntraday.BATCH_ORDER).map(Map.Entry::getKey).toList();
+                    .sorted(com.ash.drishti.banking.compute.var.VarIntraday.BATCH_ORDER).map(Map.Entry::getKey).toList();
             if (fresh.isEmpty()) {
                 if (!next.parts().equals(state.parts()) && dates.replace(d, f0, CompletableFuture.completedFuture(usd.withBook(usd.book(), next)))) {
                     relabel(d, state, next);
@@ -1241,7 +1241,7 @@ public final class VarService implements AutoCloseable {
      * at the configured confidences). The 1-day vector is the default lens's (cached); the lens's vector and measures are computed from it
      * and cached beside it, so a 10-day sum is always the windowed sum of the same summed 1-day vector.
      */
-    Scoped scoped(Principal p, String scope, LocalDate asked, String ccy, com.ash.drishti.compute.var.VarLens lens) {
+    Scoped scoped(Principal p, String scope, LocalDate asked, String ccy, com.ash.drishti.banking.compute.var.VarLens lens) {
         boolean stressed = lens != null && lens.stressed();
         if (stressed && !VarDate.USD.equals(VarCurrencies.normalise(ccy))) {
             throw new DrishtiException(ErrorCode.BAD_REQUEST, "stressed VaR is answered in USD, the stress set's own currency (asked: "
@@ -1249,7 +1249,7 @@ public final class VarService implements AutoCloseable {
         }
         // stressed VaR (VAR_GUIDE.md section 18.8): the same scope on the date's stress-set book, then the same lens on its 1-day vector
         Scoped base = stressed ? scoped1d(p, scope, stressed(asked)) : scoped1d(p, scope, asked, ccy);
-        com.ash.drishti.compute.var.VarLens dflt = props.defaultLens();
+        com.ash.drishti.banking.compute.var.VarLens dflt = props.defaultLens();
         if (lens == null || lens.equals(dflt)) {
             return base.lens() == null ? new Scoped(base.date(), base.view(), base.res(), base.set(), base.hidden(), base.vector(), base.measures(),
                     base.kind(), base.label(), base.computeMs(), base.cached(), base.shards(), dflt, base.vector()) : base;
@@ -1306,7 +1306,7 @@ public final class VarService implements AutoCloseable {
             }
         });
         Map<String, Double> notionals = new LinkedHashMap<>();
-        com.ash.drishti.compute.var.Columns pc = b.positions();
+        com.ash.drishti.banking.compute.var.Columns pc = b.positions();
         for (String pid : positions) {
             int pi = b.positionIndex(pid);
             if (pi >= 0 && pc != null) {

@@ -13,20 +13,20 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.frtb;
+package com.ash.drishti.banking.frtb;
 
 import com.ash.drishti.api.AsOf;
 import com.ash.drishti.api.DataNode;
 import com.ash.drishti.common.DrishtiException;
 import com.ash.drishti.common.ErrorCode;
-import com.ash.drishti.compute.frtb.FactorDictionary;
-import com.ash.drishti.compute.frtb.FrtbChoices;
-import com.ash.drishti.compute.frtb.FrtbExamples;
-import com.ash.drishti.compute.frtb.FrtbInput;
-import com.ash.drishti.compute.frtb.FrtbParams;
-import com.ash.drishti.compute.frtb.FrtbSa;
+import com.ash.drishti.banking.compute.frtb.FactorDictionary;
+import com.ash.drishti.banking.compute.frtb.FrtbChoices;
+import com.ash.drishti.banking.compute.frtb.FrtbExamples;
+import com.ash.drishti.banking.compute.frtb.FrtbInput;
+import com.ash.drishti.banking.compute.frtb.FrtbParams;
+import com.ash.drishti.banking.compute.frtb.FrtbSa;
 import com.ash.drishti.server.security.Principal;
-import com.ash.drishti.server.var.VarService;
+import com.ash.drishti.banking.var.VarService;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;

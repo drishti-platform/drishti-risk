@@ -13,9 +13,9 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
-import com.ash.drishti.compute.var.ParametricVar;
+import com.ash.drishti.banking.compute.var.ParametricVar;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -59,7 +59,7 @@ public record VarParametricProperties(Boolean enabled, String weighting, Double 
         return new ParametricVar.Settings(ParametricVar.Weighting.of(weighting), lambda);
     }
 
-    /** {@code GET /api/v1/var/status}'s {@code parametric}. */
+    /** {@code GET /api/v1/risk/var/status}'s {@code parametric}. */
     Map<String, Object> describe() {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("enabled", enabled);

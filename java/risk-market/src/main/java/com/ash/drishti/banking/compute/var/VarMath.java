@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.compute.var;
+package com.ash.drishti.banking.compute.var;
 
 /**
  * The measures of historical-simulation VaR read from a scope's P&amp;L vector (gains positive), VAR_GUIDE.md section 18. Every
