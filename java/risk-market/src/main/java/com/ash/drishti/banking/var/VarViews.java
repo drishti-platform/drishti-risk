@@ -13,18 +13,18 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.common.DrishtiException;
 import com.ash.drishti.common.ErrorCode;
-import com.ash.drishti.compute.var.Backtest;
-import com.ash.drishti.compute.var.Columns;
-import com.ash.drishti.compute.var.CurrencyTotals;
-import com.ash.drishti.compute.var.ScenarioFx;
-import com.ash.drishti.compute.var.VarBook;
-import com.ash.drishti.compute.var.VarCalc;
-import com.ash.drishti.compute.var.VarLens;
-import com.ash.drishti.compute.var.VarMath;
+import com.ash.drishti.banking.compute.var.Backtest;
+import com.ash.drishti.banking.compute.var.Columns;
+import com.ash.drishti.banking.compute.var.CurrencyTotals;
+import com.ash.drishti.banking.compute.var.ScenarioFx;
+import com.ash.drishti.banking.compute.var.VarBook;
+import com.ash.drishti.banking.compute.var.VarCalc;
+import com.ash.drishti.banking.compute.var.VarLens;
+import com.ash.drishti.banking.compute.var.VarMath;
 import com.ash.drishti.compute.vector.OrdinalSet;
 import com.ash.drishti.server.security.Principal;
 import java.time.Instant;
@@ -49,6 +49,37 @@ final class VarViews {
     private final VarSelection selection;
     private final VarAttributeGroups attributes;
 
+    private com.ash.drishti.banking.RiskLimits limits = com.ash.drishti.banking.RiskLimits.defaults();
+
+    /** The module's limit rule (drishti.risk.limit-near): a limit use's status, within, near or breach. */
+    VarViews limits(com.ash.drishti.banking.RiskLimits l) {
+        this.limits = l == null ? com.ash.drishti.banking.RiskLimits.defaults() : l;
+        return this;
+    }
+
+    com.ash.drishti.banking.RiskLimits limits() {
+        return limits;
+    }
+
+    /**
+     * A what-if's limit figures for its scope: the scope's limit (when comparable with its VaR), the use before and after, and the status
+     * after (within, near, breach); null when the scope has no comparable limit.
+     */
+    Map<String, Object> limitAfter(VarService.Scoped s, double before, double after) {
+        double limit = limitOf(s);
+        if (Double.isNaN(limit) || limit == 0 || !limitBasis(s).matches(lens(s))) {
+            return null;
+        }
+        Map<String, Object> m = new java.util.LinkedHashMap<>();
+        m.put("limit", round(limit));
+        m.put("useBefore", before / limit);
+        m.put("useAfter", after / limit);
+        m.put("statusBefore", limits.status(before / limit));
+        m.put("status", limits.status(after / limit));
+        m.put("near", limits.limitNear());
+        return m;
+    }
+
     VarViews(VarService svc) {
         this.svc = svc;
         this.selection = new VarSelection(svc);
@@ -59,7 +90,7 @@ final class VarViews {
         return svc;
     }
 
-    /** Parametric VaR beside historical (PARAMETRIC_VAR.md; null or off: no parametric block). */
+    /** Parametric VaR beside historical (docs/guides/VAR_GUIDE.md; null or off: no parametric block). */
     private VarParametric parametric;
 
     VarViews parametric(VarParametric p) {
@@ -72,7 +103,7 @@ final class VarViews {
     }
 
     /** The scope's parametric figures through its lens, or null when the measure is off or the scope has no scenario. */
-    com.ash.drishti.compute.var.ParametricVar.Figures pFigures(VarService.Scoped s) {
+    com.ash.drishti.banking.compute.var.ParametricVar.Figures pFigures(VarService.Scoped s) {
         return parametric == null || !parametric.enabled() || s.vector().length == 0 ? null
                 : parametric.figures(s.vector(), s.oneDay(), lens(s));
     }
@@ -197,9 +228,9 @@ final class VarViews {
         VarProperties pr = svc.props();
         double c = conf == null ? pr.confidence() : conf;
         double ec = esConf == null ? pr.esConfidence() : esConf;
-        com.ash.drishti.compute.var.VarCalc calc = new com.ash.drishti.compute.var.VarCalc(c, ec, svc.calc().rule(), svc.calc().window(),
+        com.ash.drishti.banking.compute.var.VarCalc calc = new com.ash.drishti.banking.compute.var.VarCalc(c, ec, svc.calc().rule(), svc.calc().window(),
                 svc.calc().scaleToVar());
-        com.ash.drishti.compute.var.VarCalc.Measures m = calc.measures(v);
+        com.ash.drishti.banking.compute.var.VarCalc.Measures m = calc.measures(v);
         List<LocalDate> days = s.date().book().scenarioDates();
         o.put("window", v.length);
         o.put("of", s.vector().length);
@@ -259,7 +290,7 @@ final class VarViews {
         out.put("lens", lensNote(s));
         Map<String, Object> pBlock = pHeadline(s);
         if (pBlock != null) {
-            out.put("parametric", pBlock);                             // the cross-check beside historical (PARAMETRIC_VAR.md section 6)
+            out.put("parametric", pBlock);                             // the cross-check beside historical (docs/guides/VAR_GUIDE.md section 6)
         }
         if (lens(s).stressed()) {                                      // the 12-week average over the node's official records
             out.put("stressAverage", stressAverage(s));
@@ -302,6 +333,8 @@ final class VarViews {
         out.put("limitBasis", Double.isNaN(limit) ? null : basis.describe());
         out.put("limitComparable", Double.isNaN(limit) ? null : comparable);
         out.put("limitUse", Double.isNaN(limit) || limit == 0 || !comparable ? null : s.measures().var() / limit);
+        out.put("limitStatus", limits.status((Double) out.get("limitUse")));         // within, near (drishti.risk.limit-near), breach
+        out.put("limitNear", limits.limitNear());
         if (!Double.isNaN(limit) && !comparable) {
             out.put("limitNote", "limit is for " + basis.label() + (lens(s).stressed() ? " VaR: stressed VaR is not compared with it"
                     : ": not comparable"));
@@ -450,7 +483,7 @@ final class VarViews {
         m.put("cache", s.cached() ? "hit" : "miss");
         m.put("loadedMs", s.date().loadMs());
         if (s.shards() != null) {
-            m.put("shards", s.shards());                              // a sharded date (VAR_SHARDING.md): the shards asked, who answered
+            m.put("shards", s.shards());                              // a sharded date (DATA_ARCHITECTURE.md#13-var-sharding-how-it-is-built): the shards asked, who answered
         }
         return m;
     }
@@ -461,11 +494,11 @@ final class VarViews {
      * include them.
      */
     static Map<String, Object> intradayNote(VarDate d) {
-        com.ash.drishti.compute.var.VarIntraday l = d.book().intraday();
+        com.ash.drishti.banking.compute.var.VarIntraday l = d.book().intraday();
         if (l == null) {
             return null;
         }
-        com.ash.drishti.compute.var.VarIntraday.Info i = l.info();
+        com.ash.drishti.banking.compute.var.VarIntraday.Info i = l.info();
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("updates", i.updates());
         m.put("trades", i.trades());
@@ -642,7 +675,7 @@ final class VarViews {
                 total[0] = runs.size();
                 Sizer z = new Sizer(b);
                 int[] keep = largest(runs, max, r -> z.position(s.set(), r[0])).stream().mapToInt(r -> r[0]).toArray();
-                out.addAll(b.readAhead(s.set(), keep, new int[0], () -> {  // one call per remote shard, not one per position (VAR_SHARDING 15)
+                out.addAll(b.readAhead(s.set(), keep, new int[0], () -> {  // one call per remote shard, not one per position (DATA_ARCHITECTURE.md section 13 15)
                     List<Part> ps = new ArrayList<>(keep.length);
                     for (int pi : keep) {
                         ps.add(position(b, s.set(), pi));
@@ -867,7 +900,7 @@ final class VarViews {
         return contributions(p, scope, date, by, scenario, ccy, lens, false);
     }
 
-    /** The same, {@code matrix}: with the parts' correlation and covariance matrix (parametric, PARAMETRIC_VAR.md section 3). */
+    /** The same, {@code matrix}: with the parts' correlation and covariance matrix (parametric, docs/guides/VAR_GUIDE.md section 3). */
     Map<String, Object> contributions(Principal p, String scope, LocalDate date, String by, String scenario, String ccy, VarLens lens, boolean matrix) {
         VarService.Scoped s = svc.scoped(p, scope, date, ccy, lens);
         VarBook b = s.date().book();
@@ -895,7 +928,7 @@ final class VarViews {
             VarCalc.Contribution c = cs.get(i);
             Map<String, Object> r = new LinkedHashMap<>();
             if (pf != null) {                                          // the parametric columns: Euler components that add up exactly
-                var pc = com.ash.drishti.compute.var.ParametricVar.component(pt.vector(), s.vector(), pf);
+                var pc = com.ash.drishti.banking.compute.var.ParametricVar.component(pt.vector(), s.vector(), pf);
                 r.putAll(parametric.row(pc, pf, pt.size(), pt.label(), s.label(), !ps.truncated(), parts.size()));
                 pComp += pc.componentVar();
                 pAlone += pc.standaloneVar();
@@ -1387,6 +1420,7 @@ final class VarViews {
         m.put("limit", Double.isNaN(n.limit()) ? null : round(n.limit()));
         boolean comparable = svc.loader().limitBasis(s.date().date(), n.id()).matches(lens(s));
         m.put("limitUse", Double.isNaN(n.limit()) || n.limit() == 0 || !comparable ? null : s.measures().var() / n.limit());
+        m.put("limitStatus", limits.status((Double) m.get("limitUse")));
         m.put("limitComparable", Double.isNaN(n.limit()) ? null : comparable);
         m.put("trades", s.set().size());
         m.put("hidden", s.hidden());

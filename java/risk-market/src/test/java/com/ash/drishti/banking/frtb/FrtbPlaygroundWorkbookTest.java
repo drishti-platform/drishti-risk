@@ -13,17 +13,17 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.frtb;
+package com.ash.drishti.banking.frtb;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ash.drishti.common.Branding;
-import com.ash.drishti.compute.frtb.FactorDictionary;
-import com.ash.drishti.compute.frtb.FrtbChoices;
-import com.ash.drishti.compute.frtb.FrtbExamples;
-import com.ash.drishti.compute.frtb.FrtbInput;
-import com.ash.drishti.compute.frtb.FrtbSa;
-import com.ash.drishti.compute.frtb.Sbm;
+import com.ash.drishti.banking.compute.frtb.FactorDictionary;
+import com.ash.drishti.banking.compute.frtb.FrtbChoices;
+import com.ash.drishti.banking.compute.frtb.FrtbExamples;
+import com.ash.drishti.banking.compute.frtb.FrtbInput;
+import com.ash.drishti.banking.compute.frtb.FrtbSa;
+import com.ash.drishti.banking.compute.frtb.Sbm;
 import com.ash.drishti.server.dist.XlsxFormulas;
 import com.ash.drishti.server.playground.LibreOfficeRecalc;
 import com.ash.drishti.server.playground.PlaygroundTemplate;
@@ -40,7 +40,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * The FRTB-SA Playground's workbook against the engine (SENSITIVITIES_AND_FRTB_SA.md sections 12.1a and 13.2): written <b>without cached
+ * The FRTB-SA Playground's workbook against the engine (docs/guides/FRTB_SA_GUIDE.md sections 12.1a and 13.2): written <b>without cached
  * values</b> and recalculated by headless LibreOffice, so every figure read back is LibreOffice's; each must equal the engine's to the
  * cent. The demo's sensitivities of six books (every risk class, delta, vega and curvature) with the default switches and with each switch
  * flipped; the hand-built cases with DRC, RRAO and a delivered gamma (the curvature-source switch both ways).

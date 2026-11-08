@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.compute.frtb;
+package com.ash.drishti.banking.compute.frtb;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -117,6 +117,25 @@ public final class Sbm {
                 }
             }
             return 0;
+        }
+
+        /**
+         * A risk class's own total in a scenario: its delta, vega and curvature charges added (MAR21.6: the SBM adds the measures within a
+         * class, then the classes), so the classes' totals add up to {@link #total}. 0 when the scope has none of the class.
+         */
+        public double classTotal(String cls, int scenario) {
+            double t = 0;
+            for (ClassCharge c : charges) {
+                if (c.cls.equals(cls)) {
+                    t += c.charge[scenario];
+                }
+            }
+            return t;
+        }
+
+        /** The risk classes the charges name, in their order. */
+        public List<String> classes() {
+            return charges.stream().map(c -> c.cls).distinct().toList();
         }
 
         public ClassCharge classCharge(String cls, String measure) {

@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.server.dist.XlsxWriter;
 import com.ash.drishti.server.playground.ExportSizing;
@@ -31,7 +31,7 @@ import java.util.TreeMap;
 import java.util.function.Consumer;
 
 /**
- * The VaR Playground's workbook (docs/architecture/VAR_PLAYGROUND.md sections 6 to 9), generated for the positions chosen: Main (the named
+ * The VaR Playground's workbook (docs/guides/VAR_GUIDE.md sections 6 to 9), generated for the positions chosen: Main (the named
  * inputs, the results beside the engine's with a check each, every confidence, the per-position table, the check band), Config (one row a
  * position), Data (values only: the scenario PVs or P&amp;L as delivered, and Rest of scope), FX (one column a currency), PnL (every cell a
  * formula), Explain and Provenance. Positions are columns while they fit (16,384 columns), rows beyond. Every formula comes from here,
@@ -52,7 +52,7 @@ final class VarPlaygroundBook {
     static final List<String> SERIES = List.of("Portfolio", "Rank", "Mark", "VaR window", "ES tail", "10-day sum", "10-day rank",
             "10-day VaR window", "10-day ES tail");
 
-    /** The engine's own figures, written beside the sheet's (VAR_PLAYGROUND.md section 8). Per-item arrays follow the items. */
+    /** The engine's own figures, written beside the sheet's (docs/guides/VAR_GUIDE.md section 8). Per-item arrays follow the items. */
     record Engine(double var1, double es1, int varScenario, double var10sum, double es10sum, double smoothed, List<double[]> confidences,
             List<double[]> esConfidences, double[] componentVar, double[] componentEs, double[] component10, double[] incremental,
             double diversification) {}
@@ -342,7 +342,7 @@ final class VarPlaygroundBook {
 
     private String lensLabel() {
         String h = "1D".equals(m.set.horizon()) ? "1-day" : "SUM".equals(m.set.method()) ? "10-day sum" : "10-day √10";
-        return h + " " + com.ash.drishti.compute.var.VarLens.pct(m.set.confidence());
+        return h + " " + com.ash.drishti.banking.compute.var.VarLens.pct(m.set.confidence());
     }
 
     /** The derived named cells: k, the component window, the scale, the interpolation's ranks, the headline 1-day and 10-day figures. */
@@ -419,7 +419,7 @@ final class VarPlaygroundBook {
         double eHeadEs = "1D".equals(m.set.horizon()) ? e.es1() : "SUM".equals(m.set.method()) ? e.es10sum() : e.es1() * VarPlaygroundModel.SQRT10;
         r = result(r, "VaR " + lensLabel() + " (the headline)", "IF(Horizon=\"1D\",VaROneDay,IF(TenDayMethod=\"SUM\",VaRTenSum,VaROneDay*SQRT(10)))",
                 head, eHead, "money.bold");
-        r = result(r, "ES " + com.ash.drishti.compute.var.VarLens.pct(m.set.esConfidence()) + " (the headline's horizon)",
+        r = result(r, "ES " + com.ash.drishti.banking.compute.var.VarLens.pct(m.set.esConfidence()) + " (the headline's horizon)",
                 "IF(Horizon=\"1D\",ESOneDay,IF(TenDayMethod=\"SUM\",ESTenSum,ESOneDay*SQRT(10)))", headEs, eHeadEs, "money.bold");
         r = result(r, "VaR 1-day", "VaROneDay", m.var1, e.var1(), "money");
         r = result(r, "ES 1-day", "ESOneDay", m.es1, e.es1(), "money");

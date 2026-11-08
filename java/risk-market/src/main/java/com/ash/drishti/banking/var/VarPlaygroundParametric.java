@@ -13,9 +13,9 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
-import com.ash.drishti.compute.var.ParametricVar;
+import com.ash.drishti.banking.compute.var.ParametricVar;
 import com.ash.drishti.server.playground.SheetStream;
 import com.ash.drishti.server.playground.WorkbookStream;
 import java.util.ArrayList;
@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The VaR Playground's Parametric tab (the parametric measure) (docs/architecture/PARAMETRIC_VAR.md section 10). The engine's parametric
+ * The VaR Playground's Parametric tab (the parametric measure) (docs/guides/VAR_GUIDE.md section 10). The engine's parametric
  * figures for the playground's portfolio and its positions (the check cells' right-hand side), the grid's extra columns and the explanation's
  * steps for the screen, and the workbook's <b>Parametric</b> tab: the named inputs and results ({@code PConfidence}, {@code PEsConfidence},
  * {@code PWeighting}, {@code PLambda}, {@code PN}, {@code PMu}, {@code PSigma}, {@code PZ}, {@code PEsFactor}, {@code PVaR}, {@code PES}) beside
@@ -127,7 +127,7 @@ final class VarPlaygroundParametric {
         }
         steps.add("8 · The components add up to the VaR: Σ = " + VarParametric.money(sum) + " = " + VarParametric.money(f.var()) + ".");
         m.put("steps", steps);
-        m.put("describe", describe == null ? List.of() : describe.describe(f, com.ash.drishti.compute.var.VarLens.oneDay(f.confidence(), f.esConfidence()),
+        m.put("describe", describe == null ? List.of() : describe.describe(f, com.ash.drishti.banking.compute.var.VarLens.oneDay(f.confidence(), f.esConfidence()),
                 "the playground's portfolio", "the date's set", null, Double.NaN, 0));
         return m;
     }

@@ -13,16 +13,16 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.ash.drishti.common.Branding;
-import com.ash.drishti.compute.var.ScenarioFx;
-import com.ash.drishti.compute.var.VarCalc;
-import com.ash.drishti.compute.var.VarLens;
-import com.ash.drishti.compute.var.VarMath;
+import com.ash.drishti.banking.compute.var.ScenarioFx;
+import com.ash.drishti.banking.compute.var.VarCalc;
+import com.ash.drishti.banking.compute.var.VarLens;
+import com.ash.drishti.banking.compute.var.VarMath;
 import com.ash.drishti.server.dist.XlsxFormulas;
 import com.ash.drishti.server.playground.ExportSizing;
 import com.ash.drishti.server.playground.LibreOfficeRecalc;
@@ -44,7 +44,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * The VaR Playground's workbook against the engine (VAR_PLAYGROUND.md section 12), with no server: positions priced as scenario PVs in
+ * The VaR Playground's workbook against the engine (docs/guides/VAR_GUIDE.md section 12), with no server: positions priced as scenario PVs in
  * USD, EUR and JPY and as USD P&amp;L vectors, the engine's vectors made the engine's way ({@link ScenarioFx#pnlFromPv},
  * {@link ScenarioFx#convert}) and its figures by {@link VarCalc} and {@link VarLens}; the workbook written <b>without cached values</b> and
  * recalculated by headless LibreOffice, so every figure read back is LibreOffice's own; each must equal the engine's to the cent. 1, 50 and

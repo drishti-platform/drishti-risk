@@ -13,16 +13,16 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.common.DrishtiException;
 import com.ash.drishti.common.ErrorCode;
-import com.ash.drishti.compute.var.CurrencyTotals;
-import com.ash.drishti.compute.var.ScenarioFx;
-import com.ash.drishti.compute.var.ScopeExpr;
-import com.ash.drishti.compute.var.ScopeResolver;
-import com.ash.drishti.compute.var.VarBook;
-import com.ash.drishti.compute.var.VarCalc;
+import com.ash.drishti.banking.compute.var.CurrencyTotals;
+import com.ash.drishti.banking.compute.var.ScenarioFx;
+import com.ash.drishti.banking.compute.var.ScopeExpr;
+import com.ash.drishti.banking.compute.var.ScopeResolver;
+import com.ash.drishti.banking.compute.var.VarBook;
+import com.ash.drishti.banking.compute.var.VarCalc;
 import com.ash.drishti.compute.vector.OrdinalSet;
 import com.ash.drishti.compute.vector.ParallelSums;
 import com.ash.drishti.identity.AuditLog;
@@ -54,12 +54,12 @@ public final class VarService implements AutoCloseable {
 
     /**
      * A scope resolved and computed for one viewer on one date; {@code shards} what its sum asked of a sharded date's shards (null: the
-     * date is not sharded, VAR_SHARDING.md). {@code vector} and {@code measures} are the lens's ({@code lens}: the horizon, the 10-day
+     * date is not sharded, DATA_ARCHITECTURE.md#13-var-sharding-how-it-is-built). {@code vector} and {@code measures} are the lens's ({@code lens}: the horizon, the 10-day
      * method and the confidences, 2.9.7); {@code oneDay} the scope's 1-day vector they come from (the same array on the default lens).
      */
     record Scoped(VarDate date, VarAccess.View view, ScopeResolver.Resolution res, OrdinalSet set, int hidden, double[] vector,
             VarCalc.Measures measures, String kind, String label, long computeMs, boolean cached, Map<String, Object> shards,
-            com.ash.drishti.compute.var.VarLens lens, double[] oneDay) {
+            com.ash.drishti.banking.compute.var.VarLens lens, double[] oneDay) {
 
         Scoped(VarDate date, VarAccess.View view, ScopeResolver.Resolution res, OrdinalSet set, int hidden, double[] vector,
                 VarCalc.Measures measures, String kind, String label, long computeMs, boolean cached, Map<String, Object> shards) {
@@ -73,7 +73,7 @@ public final class VarService implements AutoCloseable {
         }
 
         /** The same scope read through another lens (its 1-day vector kept). */
-        Scoped through(com.ash.drishti.compute.var.VarLens l, VarCalc base, long ms, boolean hit) {
+        Scoped through(com.ash.drishti.banking.compute.var.VarLens l, VarCalc base, long ms, boolean hit) {
             double[] v = l.apply(oneDay);
             return new Scoped(date, view, res, set, hidden, v, l.measures(base, oneDay, v), kind, label, ms, hit, shards, l, oneDay);
         }
@@ -113,7 +113,7 @@ public final class VarService implements AutoCloseable {
     private final Map<String, String> aheadState = new java.util.concurrent.ConcurrentSkipListMap<>();
     /** Dates that could not be loaded, with the vector version they were refused at and why. */
     private final Map<LocalDate, String[]> refused = new ConcurrentHashMap<>();
-    /** VaR sharding across Drishti*net (VAR_SHARDING.md): a date put together from its shards when on; null in tests that do not set it. */
+    /** VaR sharding across Drishti*net (DATA_ARCHITECTURE.md#13-var-sharding-how-it-is-built): a date put together from its shards when on; null in tests that do not set it. */
     private volatile VarShards shards;
     private final com.github.benmanes.caffeine.cache.Cache<String, Scoped> cache =
             com.github.benmanes.caffeine.cache.Caffeine.newBuilder().maximumWeight(ANSWERS_BYTES).weigher(VarService::weight).recordStats()
@@ -424,7 +424,7 @@ public final class VarService implements AutoCloseable {
         return r != null && r[0].equals(loader.version(d));
     }
 
-    /** Busy protection (docs/admin/OPERATIONS.md, "Busy protection"): a new date load asks the gate; absent in a test that makes the service. */
+    /** Busy protection (docs/guides/OPERATIONS_GUIDE.md, "Busy protection"): a new date load asks the gate; absent in a test that makes the service. */
     private com.ash.drishti.server.admission.AdmissionGate gate;
     private com.ash.drishti.server.admission.AdmissionGate.Loads gateLoads;
 
@@ -717,7 +717,7 @@ public final class VarService implements AutoCloseable {
                 }
             }
             java.util.List<String> batches = VarIntradayRows.batchAt(fresh).entrySet().stream()      // the order the answers list them in
-                    .sorted(com.ash.drishti.compute.var.VarIntraday.BATCH_ORDER).map(Map.Entry::getKey).toList();
+                    .sorted(com.ash.drishti.banking.compute.var.VarIntraday.BATCH_ORDER).map(Map.Entry::getKey).toList();
             if (fresh.isEmpty()) {
                 if (!next.parts().equals(state.parts()) && dates.replace(d, f0, CompletableFuture.completedFuture(usd.withBook(usd.book(), next)))) {
                     relabel(d, state, next);
@@ -1044,7 +1044,7 @@ public final class VarService implements AutoCloseable {
     }
 
     /**
-     * A sharded date put together again while the one loaded keeps answering (VAR_SHARDING.md section 10): {@code build} runs outside every
+     * A sharded date put together again while the one loaded keeps answering (DATA_ARCHITECTURE.md section 14): {@code build} runs outside every
      * lock; the result replaces the date only when the date loaded is still the one the build started from (the same morning book: an
      * intraday batch applied meanwhile is read again by the build), in one step, so every answer reads one whole date. False when nothing
      * was replaced (not loaded, reloaded meanwhile); a failed build throws and the date loaded stays.
@@ -1082,7 +1082,7 @@ public final class VarService implements AutoCloseable {
     }
 
     /** What is loaded, for the provenance box and Admin. */
-    /** The engine registry's word on whether VaR runs on this node (COMPUTE_ENGINES.md); unset (a test of the service alone): the old switch. */
+    /** The engine registry's word on whether VaR runs on this node (ADMIN_GUIDE.md); unset (a test of the service alone): the old switch. */
     private volatile java.util.function.BooleanSupplier running;
 
     public void running(java.util.function.BooleanSupplier on) {
@@ -1241,7 +1241,7 @@ public final class VarService implements AutoCloseable {
      * at the configured confidences). The 1-day vector is the default lens's (cached); the lens's vector and measures are computed from it
      * and cached beside it, so a 10-day sum is always the windowed sum of the same summed 1-day vector.
      */
-    Scoped scoped(Principal p, String scope, LocalDate asked, String ccy, com.ash.drishti.compute.var.VarLens lens) {
+    Scoped scoped(Principal p, String scope, LocalDate asked, String ccy, com.ash.drishti.banking.compute.var.VarLens lens) {
         boolean stressed = lens != null && lens.stressed();
         if (stressed && !VarDate.USD.equals(VarCurrencies.normalise(ccy))) {
             throw new DrishtiException(ErrorCode.BAD_REQUEST, "stressed VaR is answered in USD, the stress set's own currency (asked: "
@@ -1249,7 +1249,7 @@ public final class VarService implements AutoCloseable {
         }
         // stressed VaR (VAR_GUIDE.md section 18.8): the same scope on the date's stress-set book, then the same lens on its 1-day vector
         Scoped base = stressed ? scoped1d(p, scope, stressed(asked)) : scoped1d(p, scope, asked, ccy);
-        com.ash.drishti.compute.var.VarLens dflt = props.defaultLens();
+        com.ash.drishti.banking.compute.var.VarLens dflt = props.defaultLens();
         if (lens == null || lens.equals(dflt)) {
             return base.lens() == null ? new Scoped(base.date(), base.view(), base.res(), base.set(), base.hidden(), base.vector(), base.measures(),
                     base.kind(), base.label(), base.computeMs(), base.cached(), base.shards(), dflt, base.vector()) : base;
@@ -1306,7 +1306,7 @@ public final class VarService implements AutoCloseable {
             }
         });
         Map<String, Double> notionals = new LinkedHashMap<>();
-        com.ash.drishti.compute.var.Columns pc = b.positions();
+        com.ash.drishti.banking.compute.var.Columns pc = b.positions();
         for (String pid : positions) {
             int pi = b.positionIndex(pid);
             if (pi >= 0 && pc != null) {

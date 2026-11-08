@@ -13,14 +13,14 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
-import com.ash.drishti.compute.var.VarCalc;
-import com.ash.drishti.server.var.VarExplainMath.Op;
+import com.ash.drishti.banking.compute.var.VarCalc;
+import com.ash.drishti.banking.var.VarExplainMath.Op;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,13 +29,13 @@ import java.util.Random;
 import org.junit.jupiter.api.Test;
 
 /**
- * The states and steps of "why VaR moved" (VAR_GUIDE.md section 3.11; OVERSIGHT_LENS.md section 4.1's tests) on crafted vectors where
+ * The states and steps of "why VaR moved" (VAR_GUIDE.md section 3.11; docs/architecture/LENSES.md section 4.1's tests) on crafted vectors where
  * each cause alone moves VaR by a known amount: one trade out, one in, one restated vector, one book moved, a rolled window. Each step
  * equals it and the others are zero; on random inputs the steps telescope to the change and the last state is the later date's scope.
  */
 class VarExplainMathTest {
 
-    static final VarCalc CALC = new VarCalc(0.9, 0.9, com.ash.drishti.compute.var.VarMath.RankRule.KTH_WORST, 3, true);
+    static final VarCalc CALC = new VarCalc(0.9, 0.9, com.ash.drishti.banking.compute.var.VarMath.RankRule.KTH_WORST, 3, true);
     static final int N = 20;
     static final List<Op> DEFAULT = VarExplainMath.plan(VarExplainMath.causes(VarExplainProperties.DEFAULT_ORDER), false, false);
 

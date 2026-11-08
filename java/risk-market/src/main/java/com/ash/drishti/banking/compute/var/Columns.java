@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.compute.var;
+package com.ash.drishti.banking.compute.var;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -139,7 +139,7 @@ public final class Columns {
     }
 
     /**
-     * Several column sets one after the other (a sharded date's shards, VAR_SHARDING.md): the rows of the first, then of the second ...; the
+     * Several column sets one after the other (a sharded date's shards, DATA_ARCHITECTURE.md#13-var-sharding-how-it-is-built): the rows of the first, then of the second ...; the
      * columns of the first, each dictionary the union of theirs (codes renumbered). Every part has the same columns.
      */
     static Columns concat(List<Columns> parts) {

@@ -13,15 +13,15 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.api.AsOf;
 import com.ash.drishti.api.DataNode;
 import com.ash.drishti.api.EntityDocument;
 import com.ash.drishti.common.DrishtiException;
 import com.ash.drishti.common.ErrorCode;
-import com.ash.drishti.compute.var.PositionRules;
-import com.ash.drishti.compute.var.VarBook;
+import com.ash.drishti.banking.compute.var.PositionRules;
+import com.ash.drishti.banking.compute.var.VarBook;
 import com.ash.drishti.compute.vector.ParallelSums;
 import com.ash.drishti.engine.source.SourceRouter;
 import java.time.LocalDate;
@@ -115,7 +115,7 @@ final class VarLoader {
     }
 
     /**
-     * The rows of a date per shard key value (VAR_SHARDING.md section 3), read as columns (no vector is read): every kind of {@code kinds}
+     * The rows of a date per shard key value (DATA_ARCHITECTURE.md section 13), read as columns (no vector is read): every kind of {@code kinds}
      * that a connector holds counted together. Empty when a kind's source cannot answer the key as columns (the date is then not cut).
      */
     java.util.Optional<java.util.SortedMap<List<String>, Long>> keyCounts(LocalDate date, List<String> key, List<String> kinds) {
@@ -233,7 +233,7 @@ final class VarLoader {
     }
 
     /**
-     * The digest a shard's book built now would have (VAR_SHARDING.md section 6): what a member that puts the date together expects of the
+     * The digest a shard's book built now would have (DATA_ARCHITECTURE.md section 13): what a member that puts the date together expects of the
      * shard's skeleton, computed from its own reads of the inputs' versions (empty when the trades' source cannot say its version).
      */
     String shardDigest(LocalDate date, VarShardScope shard) {
@@ -241,7 +241,7 @@ final class VarLoader {
     }
 
     /**
-     * One shard of a sharded date (VAR_SHARDING.md section 5): the date's inputs read for the rows of the shard's key range only (the
+     * One shard of a sharded date (DATA_ARCHITECTURE.md section 13): the date's inputs read for the rows of the shard's key range only (the
      * plugin skips the files whose statistics hold none of its keys; every row is checked here), built and written as the shard's own hot
      * file (its {@code RANG} section), the morning run only (the day's updates are applied by each member on the date it puts together).
      */
@@ -331,7 +331,7 @@ final class VarLoader {
             List<LocalDate> days = scenarioDates;
             VarIntake.Summary sum = intake.summary();
             long tVectors = System.nanoTime();
-            com.ash.drishti.compute.var.ShardAssembly.Nodes rows = nodeRows(asOf, hs, limits);
+            com.ash.drishti.banking.compute.var.ShardAssembly.Nodes rows = nodeRows(asOf, hs, limits);
             for (String[] r : rows.rows()) {
                 b.node(r[0], r[1], r[2], r[3], r[4], rows.books().get(r[0]), rows.limits().get(r[0]));
             }
@@ -383,9 +383,9 @@ final class VarLoader {
     /**
      * The hierarchy rows of a date (the {@code risk-hierarchy} kind, for the hierarchies built from rows) with their books and limits (a
      * var-limit row wins over the row's own {@code LIMIT_VAR}), the root names as configured, and the hierarchies built from columns: what
-     * a date's nodes are built from (a load, or a sharded date put together, VAR_SHARDING.md).
+     * a date's nodes are built from (a load, or a sharded date put together, DATA_ARCHITECTURE.md#13-var-sharding-how-it-is-built).
      */
-    com.ash.drishti.compute.var.ShardAssembly.Nodes nodeRows(AsOf asOf, Hierarchies hs, Map<String, Double> limits) {
+    com.ash.drishti.banking.compute.var.ShardAssembly.Nodes nodeRows(AsOf asOf, Hierarchies hs, Map<String, Double> limits) {
         List<String[]> rows = new ArrayList<>();
         Map<String, List<String>> books = new java.util.HashMap<>();
         Map<String, Double> lim = new java.util.HashMap<>();
@@ -405,9 +405,9 @@ final class VarLoader {
             books.put(nid, List.copyOf(bs));
             lim.put(nid, limits.getOrDefault(nid, number(text(n, "LIMIT_VAR"))));   // a var-limit row wins over the row's own LIMIT_VAR
         }
-        List<com.ash.drishti.compute.var.HierarchySpec> specs = hs.specs().stream().filter(com.ash.drishti.compute.var.HierarchySpec::columns)
+        List<com.ash.drishti.banking.compute.var.HierarchySpec> specs = hs.specs().stream().filter(com.ash.drishti.banking.compute.var.HierarchySpec::columns)
                 .map(s -> s.withRootName(props.rootName(s.id(), null, s.rootName()))).toList();
-        return new com.ash.drishti.compute.var.ShardAssembly.Nodes(rows, books, lim, specs, limits);
+        return new com.ash.drishti.banking.compute.var.ShardAssembly.Nodes(rows, books, lim, specs, limits);
     }
 
     private VarIntake intake(LocalDate date, AsOf asOf, VarBook.Builder b, PositionRules pr, String setId, List<LocalDate> scenarioDates,
@@ -618,7 +618,7 @@ final class VarLoader {
         kept.put(k.scenarioPv(), router.columnar(k.scenarioPv()));
         Map<String, String> why = all.missingColumns(kept, " on " + date);
         Map<String, String> before = skipped.put(date, why);
-        for (com.ash.drishti.compute.var.HierarchySpec s : all.columnSpecs()) {
+        for (com.ash.drishti.banking.compute.var.HierarchySpec s : all.columnSpecs()) {
             Hierarchies.skipped("var", s.id(), why.get(s.id()));
         }
         if (!why.equals(before)) {
@@ -657,7 +657,7 @@ final class VarLoader {
     }
 
     /**
-     * The portfolios' VaR limits (2.9.7, decision 8 of COMPUTED_ATTRIBUTES.md: every VaR limit lives in {@code var-limit}, with its currency):
+     * The portfolios' VaR limits (2.9.7, DATA_ARCHITECTURE.md section 12: every VaR limit lives in {@code var-limit}, with its currency):
      * the date's var-limit rows of hierarchy {@code PORTFOLIO}, portfolio id to limit in USD; empty when no connector serves the kind.
      */
     Map<String, Double> portfolioLimits(AsOf asOf) {
@@ -684,14 +684,14 @@ final class VarLoader {
 
         static final LimitBasis DEFAULT = new LimitBasis(1, 0.99);
 
-        boolean matches(com.ash.drishti.compute.var.VarLens lens) {
+        boolean matches(com.ash.drishti.banking.compute.var.VarLens lens) {
             // a VaR limit is set against VaR on the normal scenario set: stressed VaR is never compared with it
             return !lens.stressed() && lens.days() == days && Math.abs(lens.confidence() - confidence) < 1e-9;
         }
 
         /** {@code 1-day 99%}. */
         String label() {
-            return days + "-day " + com.ash.drishti.compute.var.VarLens.pct(confidence);
+            return days + "-day " + com.ash.drishti.banking.compute.var.VarLens.pct(confidence);
         }
 
         Map<String, Object> describe() {
@@ -706,7 +706,7 @@ final class VarLoader {
         static LimitBasis of(String horizon, String confidence) {
             int d = 1;
             try {
-                d = com.ash.drishti.compute.var.VarLens.parseHorizon(horizon);
+                d = com.ash.drishti.banking.compute.var.VarLens.parseHorizon(horizon);
             } catch (IllegalArgumentException e) {
                 // unreadable: the default horizon
             }
@@ -878,13 +878,13 @@ final class VarLoader {
     /** Applies updates (USD) on a USD book: each trade's difference into its book, its nodes and the per-trade-currency totals. */
     VarBook apply(LocalDate date, VarBook book, List<VarIntradayRows.Row> rows, List<LocalDate> days, VarIntake.Summary sum) {
         String last = null;
-        List<com.ash.drishti.compute.var.VarIntraday.Update> ups = new ArrayList<>();
+        List<com.ash.drishti.banking.compute.var.VarIntraday.Update> ups = new ArrayList<>();
         for (VarIntradayRows.Row r : rows) {
             last = VarIntradayRows.compare(r.computedAt(), last) > 0 ? r.computedAt() : last;
             ups.add(r.usd());
         }
-        com.ash.drishti.compute.var.ScenarioFx fx = fx(date, days);
-        return com.ash.drishti.compute.var.VarIntraday.apply(book, ups, exact(date, book.morning(), sum, days), c -> fx.rates(c).orElse(null),
+        com.ash.drishti.banking.compute.var.ScenarioFx fx = fx(date, days);
+        return com.ash.drishti.banking.compute.var.VarIntraday.apply(book, ups, exact(date, book.morning(), sum, days), c -> fx.rates(c).orElse(null),
                 VarIntradayRows.batchAt(rows), last);
     }
 
@@ -893,7 +893,7 @@ final class VarLoader {
      * memory (float32 rows), its morning row read back from the lake by its id ({@code PNL-<trade>-<set>}, 2.9.5, or the earlier
      * {@code PV-<trade>-<set>}; {@code SPV-<trade>-<set>}), its float32 row when that cannot be read.
      */
-    com.ash.drishti.compute.var.VarIntraday.Morning exact(LocalDate date, VarBook morning, VarIntake.Summary sum, List<LocalDate> days) {
+    com.ash.drishti.banking.compute.var.VarIntraday.Morning exact(LocalDate date, VarBook morning, VarIntake.Summary sum, List<LocalDate> days) {
         if (morning.hot() == null && !morning.sharded()) {
             return morning::tradeVector;
         }
@@ -935,14 +935,14 @@ final class VarLoader {
         if (!fromPv) {
             return v;
         }
-        com.ash.drishti.compute.var.ScenarioFx.Rates r = fx(date, days).rates(text(d.data(), "CURRENCY") == null ? "USD" : text(d.data(), "CURRENCY"))
+        com.ash.drishti.banking.compute.var.ScenarioFx.Rates r = fx(date, days).rates(text(d.data(), "CURRENCY") == null ? "USD" : text(d.data(), "CURRENCY"))
                 .orElse(null);
         double base = number(text(d.data(), "BASE_PV"));
         if (r == null || Double.isNaN(base)) {
             return null;
         }
         double[] out = new double[width];
-        com.ash.drishti.compute.var.ScenarioFx.pnlFromPv(base, v, width, r, out);
+        com.ash.drishti.banking.compute.var.ScenarioFx.pnlFromPv(base, v, width, r, out);
         return out;
     }
 
@@ -1022,7 +1022,7 @@ final class VarLoader {
 
     /** The scenario-PV kind's vector column: each trade's PV under each scenario, in its own currency. */
     static final String SCENARIO_PV = "SCENARIO_PV";
-    private final Map<String, com.ash.drishti.compute.var.ScenarioFx> fxCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, com.ash.drishti.banking.compute.var.ScenarioFx> fxCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
      * The date's FX against USD for its scenarios (VAR_GUIDE.md section 15.9): per currency, the batch's supplied scenario rates (the
@@ -1030,7 +1030,7 @@ final class VarLoader {
      * {@code fx-spot} kind (today's rate moved by each scenario day's 1-day move); pairs against USD only (every cross goes through
      * USD). Kept per date and input versions.
      */
-    com.ash.drishti.compute.var.ScenarioFx fx(LocalDate date, List<LocalDate> scenarioDates) {
+    com.ash.drishti.banking.compute.var.ScenarioFx fx(LocalDate date, List<LocalDate> scenarioDates) {
         return fx(date, scenarioDates, null);
     }
 
@@ -1039,17 +1039,17 @@ final class VarLoader {
      * (the stress set's supplied rows left out). The stress days' FX is never derived from a history the lake does not hold: a currency
      * the stress set's batch did not supply is refused for its trades ({@code DRS-5207}), as for the normal set.
      */
-    com.ash.drishti.compute.var.ScenarioFx fx(LocalDate date, List<LocalDate> scenarioDates, String stressSet) {
+    com.ash.drishti.banking.compute.var.ScenarioFx fx(LocalDate date, List<LocalDate> scenarioDates, String stressSet) {
         VarProperties.Kinds k = props.kinds();
         AsOf asOf = AsOf.of(date);
         String key = date + "|" + router.dataVersion(k.fxScenario(), asOf).orElse("") + "|" + router.dataVersion(k.fxSpot(), asOf).orElse("")
                 + "|" + scenarioDates.size() + "|" + scenarioDates.get(scenarioDates.size() - 1) + "|" + stressSet;
-        com.ash.drishti.compute.var.ScenarioFx hit = fxCache.get(key);
+        com.ash.drishti.banking.compute.var.ScenarioFx hit = fxCache.get(key);
         if (hit != null) {
             return hit;
         }
         java.util.Set<String> stressIds = stressSet == null ? stressIds(date) : java.util.Set.of();
-        List<com.ash.drishti.compute.var.ScenarioFx.Rates> supplied = new ArrayList<>();
+        List<com.ash.drishti.banking.compute.var.ScenarioFx.Rates> supplied = new ArrayList<>();
         for (DataNode d : optional(k.fxScenario(), asOf).values()) {
             String ccy = text(d, "CURRENCY");
             DataNode rs = d.get("RATES");
@@ -1065,7 +1065,7 @@ final class VarLoader {
             for (int i = 0; i < r.length; i++) {
                 r[i] = rs.get(i + skip).isNull() ? Double.NaN : rs.get(i + skip).asDouble();
             }
-            supplied.add(new com.ash.drishti.compute.var.ScenarioFx.Rates(ccy, number(text(d, "RATE")), r, "supplied"));
+            supplied.add(new com.ash.drishti.banking.compute.var.ScenarioFx.Rates(ccy, number(text(d, "RATE")), r, "supplied"));
         }
         Map<String, Double> today = new java.util.TreeMap<>();
         Map<String, java.util.TreeMap<LocalDate, Double>> history = new java.util.TreeMap<>();
@@ -1098,7 +1098,7 @@ final class VarLoader {
                 h.put(date, usdPer.applyAsDouble(mid));
             }
         }
-        com.ash.drishti.compute.var.ScenarioFx fx = com.ash.drishti.compute.var.ScenarioFx.assemble(scenarioDates, supplied, today, history);
+        com.ash.drishti.banking.compute.var.ScenarioFx fx = com.ash.drishti.banking.compute.var.ScenarioFx.assemble(scenarioDates, supplied, today, history);
         if (fxCache.size() > 32) {
             fxCache.clear();
         }

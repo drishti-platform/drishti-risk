@@ -13,15 +13,15 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.simm;
+package com.ash.drishti.banking.simm;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ash.drishti.common.Branding;
-import com.ash.drishti.compute.simm.Simm;
-import com.ash.drishti.compute.simm.SimmChoices;
-import com.ash.drishti.compute.simm.SimmExamples;
-import com.ash.drishti.compute.simm.SimmInput;
+import com.ash.drishti.banking.compute.simm.Simm;
+import com.ash.drishti.banking.compute.simm.SimmChoices;
+import com.ash.drishti.banking.compute.simm.SimmExamples;
+import com.ash.drishti.banking.compute.simm.SimmInput;
 import com.ash.drishti.server.dist.XlsxFormulas;
 import com.ash.drishti.server.playground.LibreOfficeRecalc;
 import com.ash.drishti.server.playground.PlaygroundTemplate;
@@ -38,7 +38,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * The SIMM Playground's workbook against the engine (SENSITIVITIES_AND_FRTB_SA.md sections 12.1a and 13.2), with the TOY parameter file
+ * The SIMM Playground's workbook against the engine (docs/guides/FRTB_SA_GUIDE.md sections 12.1a and 13.2), with the TOY parameter file
  * (not ISDA's): written <b>without cached values</b> and recalculated by headless LibreOffice, so every figure read back is LibreOffice's;
  * each must equal the engine's to the cent. Two demo netting sets (rates, credit, equity, commodity and FX; delta, vega and curvature;
  * concentration factors above 1) with the default switches, each switch flipped, and the post side (every sensitivity negated in Data);

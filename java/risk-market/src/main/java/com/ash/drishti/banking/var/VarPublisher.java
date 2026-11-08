@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -26,7 +26,7 @@ import java.util.Map;
 /**
  * Publishes the official end-of-day results to {@code <root>/risk-results/var-official/} (VAR_GUIDE.md section 19, docs/contracts/README.md
  * section 11) for other systems: one row per node of every hierarchy per business date, appended as one commit per capture run through
- * an {@link com.ash.drishti.server.official.OfficialSink}: a Delta table (the default) or an Iceberg table
+ * an {@link com.ash.drishti.banking.official.OfficialSink}: a Delta table (the default) or an Iceberg table
  * ({@code drishti.var.official.format: iceberg}), the root a folder or {@code s3://} (2.9.5). The table is append-only ({@code delta.appendOnly}): a restated date adds rows with the next
  * {@code RESULT_VERSION}, nothing is overwritten. Its log and removed files are kept for the retention years (7 by default), so its
  * time travel reaches back that far. No engine reads it back (a guard test fails the build when a connector points there).
@@ -45,7 +45,7 @@ final class VarPublisher {
     /** The published columns and their types, in order (VAR_GUIDE.md section 19; BUSINESS_DATE is the partition column business_date). */
     static final Map<String, String> COLUMNS = columns();
 
-    private final com.ash.drishti.server.official.OfficialSink sink;
+    private final com.ash.drishti.banking.official.OfficialSink sink;
     private final boolean jsonl;
 
     VarPublisher(Path root, int retentionYears) {
@@ -53,11 +53,11 @@ final class VarPublisher {
     }
 
     VarPublisher(Path root, int retentionYears, boolean jsonl) {
-        this(com.ash.drishti.server.official.OfficialSink.of("delta", root == null ? null : root.toString(), Map.of(), retentionYears), jsonl);
+        this(com.ash.drishti.banking.official.OfficialSink.of("delta", root == null ? null : root.toString(), Map.of(), retentionYears), jsonl);
     }
 
     /** Publishes through {@code sink} (Delta or Iceberg, a folder or {@code s3://}; null: nothing is published). */
-    VarPublisher(com.ash.drishti.server.official.OfficialSink sink, boolean jsonl) {
+    VarPublisher(com.ash.drishti.banking.official.OfficialSink sink, boolean jsonl) {
         this.sink = sink;
         this.jsonl = jsonl;
     }
@@ -97,7 +97,7 @@ final class VarPublisher {
     }
 
     /** The sink, or null. */
-    com.ash.drishti.server.official.OfficialSink sink() {
+    com.ash.drishti.banking.official.OfficialSink sink() {
         return sink;
     }
 
@@ -108,7 +108,7 @@ final class VarPublisher {
 
     /** Where a commit's JSON Lines go on a local root: {@code <root>/risk-results/jsonl/var-official/<date>/var-official-v<version>.jsonl}. */
     Path jsonlFile(LocalDate date, long version) {
-        return com.ash.drishti.server.official.OfficialSink.folder(sink.root()).resolve(FOLDER).resolve("jsonl").resolve(TABLE)
+        return com.ash.drishti.banking.official.OfficialSink.folder(sink.root()).resolve(FOLDER).resolve("jsonl").resolve(TABLE)
                 .resolve(date.toString()).resolve(TABLE + "-v" + version + ".jsonl");
     }
 

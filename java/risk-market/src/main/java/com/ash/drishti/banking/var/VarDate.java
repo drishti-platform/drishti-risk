@@ -13,10 +13,10 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.api.DataNode;
-import com.ash.drishti.compute.var.VarBook;
+import com.ash.drishti.banking.compute.var.VarBook;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -40,7 +40,7 @@ record VarDate(LocalDate date, VarBook book, Map<String, Portfolio> portfolios, 
         VarIntake.Summary intake, Map<String, String> versions, List<String> warnings, String currency, Map<String, Object> fx,
         VarIntradayRows intraday) {
 
-    static final String USD = com.ash.drishti.compute.var.ScenarioFx.USD;
+    static final String USD = com.ash.drishti.banking.compute.var.ScenarioFx.USD;
 
     VarDate {
         versions = versions == null ? Map.of() : Map.copyOf(versions);

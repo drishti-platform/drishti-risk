@@ -13,18 +13,18 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.common.DrishtiException;
 import com.ash.drishti.common.ErrorCode;
-import com.ash.drishti.compute.var.VarBook;
-import com.ash.drishti.compute.var.VarCalc;
-import com.ash.drishti.compute.var.VarMath;
+import com.ash.drishti.banking.compute.var.VarBook;
+import com.ash.drishti.banking.compute.var.VarCalc;
+import com.ash.drishti.banking.compute.var.VarMath;
 import com.ash.drishti.compute.vector.OrdinalSet;
 import com.ash.drishti.server.security.Principal;
-import com.ash.drishti.server.var.VarExplainMath.Op;
-import com.ash.drishti.server.var.VarExplainMath.State;
-import com.ash.drishti.server.var.VarExplainMath.Step;
+import com.ash.drishti.banking.var.VarExplainMath.Op;
+import com.ash.drishti.banking.var.VarExplainMath.State;
+import com.ash.drishti.banking.var.VarExplainMath.Step;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -35,7 +35,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Why VaR moved (VAR_GUIDE.md section 3.11; OVERSIGHT_LENS.md section 4.1, RO1): a scope's VaR on two business dates (default: the
+ * Why VaR moved (VAR_GUIDE.md section 3.11; docs/architecture/LENSES.md section 4.1, RO1): a scope's VaR on two business dates (default: the
  * business date before the newest, and the newest), split into causes that add up exactly to the change, with who drove each.
  *
  * <p>The two dates are opened through the engine ({@link VarService#date}, so both are counted in {@code hot-dates} and the least

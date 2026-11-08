@@ -13,9 +13,9 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
-import com.ash.drishti.compute.var.PositionRules;
+import com.ash.drishti.banking.compute.var.PositionRules;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -72,9 +72,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *     {@code word}, {@code limits}); when set, wins over a loaded pack's {@code hierarchies:} block; neither: MGMT and LEGAL from the
  *     {@code risk-hierarchy} rows, as before 2.9.5
  * @param viewCacheMb the most memory the viewers' views (bitsets per date, version, currency and role set) may take (64); idle ones go
- *     after an hour and a date's go with it (2.9.7, RESOURCES_AND_SCALE.md section 5.3)
+ *     after an hour and a date's go with it (2.9.7, CLUSTER_GUIDE.md section 5.3)
  * @param versionCheck how often an open date compares its data version with the lake's (30 s; 0 switches the watch off): a changed date
- *     reloads in the background without a data-load signal (2.9.7, RESOURCES_AND_SCALE.md section 4.4)
+ *     reloads in the background without a data-load signal (2.9.7, CLUSTER_GUIDE.md section 4.4)
  * @param loadThreads the threads that load business dates from the lake (2), off the common pool (2.9.7)
  * @param tenDayMethod how a 10-day VaR is made when the method is not named (2.9.7, VAR_GUIDE.md section 18.6): {@code sqrt10} (the
  *     default: the 1-day figures × √10) or {@code sum} (each 10-day scenario the sum of 10 consecutive 1-day scenario P&amp;Ls)
@@ -353,7 +353,7 @@ public record VarProperties(Boolean enabled, Double confidence, Double esConfide
      * @param keepOnShutdown keep the hot files when the server stops (false: they are deleted at shutdown, and at start any left over)
      * @param closeGraceSeconds how long an evicted date stays mapped for the requests still reading it before it is unmapped
      * @param maxDiskGb the most disk the hot files (dates, listed currencies, shard books) may take (0: half the disk's size); the least
-     *     recently used beyond are deleted, never an open one (2.9.7, RESOURCES_AND_SCALE.md section 7.2)
+     *     recently used beyond are deleted, never an open one (2.9.7, CLUSTER_GUIDE.md section 7.2)
      */
     public record Tier(String mode, String dir, Integer diskDates, Boolean keepOnShutdown, Integer closeGraceSeconds, Double maxDiskGb) {
 
@@ -417,8 +417,8 @@ public record VarProperties(Boolean enabled, Double confidence, Double esConfide
         viewCacheMb = viewCacheMb == null || viewCacheMb <= 0 ? 64 : viewCacheMb;
         versionCheck = versionCheck == null || versionCheck.isNegative() ? java.time.Duration.ofSeconds(30) : versionCheck;
         loadThreads = loadThreads == null || loadThreads <= 0 ? 2 : loadThreads;
-        tenDayMethod = (tenDayMethod == null || tenDayMethod.isBlank() ? com.ash.drishti.compute.var.VarLens.Method.SQRT
-                : com.ash.drishti.compute.var.VarLens.Method.parse(tenDayMethod)).word();
+        tenDayMethod = (tenDayMethod == null || tenDayMethod.isBlank() ? com.ash.drishti.banking.compute.var.VarLens.Method.SQRT
+                : com.ash.drishti.banking.compute.var.VarLens.Method.parse(tenDayMethod)).word();
         confidences = confidenceList(confidences, List.of(0.95, 0.975, 0.99, 0.995), confidence, "drishti.var.confidences");
         esConfidences = confidenceList(esConfidences, List.of(0.95, 0.975, 0.99), esConfidence, "drishti.var.es-confidences");
         stress = stress == null ? new Stress(null, null, null) : stress;
@@ -449,20 +449,20 @@ public record VarProperties(Boolean enabled, Double confidence, Double esConfide
     }
 
     /** The default 10-day method. */
-    public com.ash.drishti.compute.var.VarLens.Method defaultTenDayMethod() {
-        return com.ash.drishti.compute.var.VarLens.Method.parse(tenDayMethod);
+    public com.ash.drishti.banking.compute.var.VarLens.Method defaultTenDayMethod() {
+        return com.ash.drishti.banking.compute.var.VarLens.Method.parse(tenDayMethod);
     }
 
     /** The default lens: 1 day at the configured confidences (what official records and every answer without a choice use). */
-    public com.ash.drishti.compute.var.VarLens defaultLens() {
-        return com.ash.drishti.compute.var.VarLens.oneDay(confidence, esConfidence);
+    public com.ash.drishti.banking.compute.var.VarLens defaultLens() {
+        return com.ash.drishti.banking.compute.var.VarLens.oneDay(confidence, esConfidence);
     }
 
     /**
      * A lens asked for (any part null: the default's): {@code horizon} 1d or 10d, {@code method} sqrt10 or sum (10d only; none: the
      * {@code ten-day-method}), the confidences from the configured lists. Throws IllegalArgumentException in words when not allowed.
      */
-    public com.ash.drishti.compute.var.VarLens lens(String horizon, String method, Double conf, Double esConf) {
+    public com.ash.drishti.banking.compute.var.VarLens lens(String horizon, String method, Double conf, Double esConf) {
         return lens(horizon, method, conf, esConf, null);
     }
 
@@ -470,7 +470,7 @@ public record VarProperties(Boolean enabled, Double confidence, Double esConfide
      * The same on a scenario set: {@code set} {@code normal} (null, blank) or {@code stressed} ({@code stress}, {@code svar}); refused in
      * words when it is neither, or stressed VaR is switched off.
      */
-    public com.ash.drishti.compute.var.VarLens lens(String horizon, String method, Double conf, Double esConf, String set) {
+    public com.ash.drishti.banking.compute.var.VarLens lens(String horizon, String method, Double conf, Double esConf, String set) {
         boolean stressed = stressed(set);
         if (stressed && !stress.enabled()) {
             throw new IllegalArgumentException("stressed VaR is switched off on this server (drishti.var.stress.enabled)");
@@ -488,13 +488,13 @@ public record VarProperties(Boolean enabled, Double confidence, Double esConfide
         };
     }
 
-    private com.ash.drishti.compute.var.VarLens lens1(String horizon, String method, Double conf, Double esConf) {
-        int days = com.ash.drishti.compute.var.VarLens.parseHorizon(horizon);
-        com.ash.drishti.compute.var.VarLens.Method m = com.ash.drishti.compute.var.VarLens.Method.NONE;
+    private com.ash.drishti.banking.compute.var.VarLens lens1(String horizon, String method, Double conf, Double esConf) {
+        int days = com.ash.drishti.banking.compute.var.VarLens.parseHorizon(horizon);
+        com.ash.drishti.banking.compute.var.VarLens.Method m = com.ash.drishti.banking.compute.var.VarLens.Method.NONE;
         if (method != null && !method.isBlank()) {
-            m = com.ash.drishti.compute.var.VarLens.Method.parse(method);
+            m = com.ash.drishti.banking.compute.var.VarLens.Method.parse(method);
             if (days == 1 && (horizon == null || horizon.isBlank())) {
-                days = com.ash.drishti.compute.var.VarLens.TEN;             // a method alone implies 10 days
+                days = com.ash.drishti.banking.compute.var.VarLens.TEN;             // a method alone implies 10 days
             } else if (days == 1) {
                 throw new IllegalArgumentException("method " + method + " is for the 10-day horizon (horizon=10d)");
             }
@@ -503,7 +503,7 @@ public record VarProperties(Boolean enabled, Double confidence, Double esConfide
         }
         double c = conf == null ? confidence : allowed(conf, confidences, "confidence");
         double ec = esConf == null ? esConfidence : allowed(esConf, esConfidences, "esConfidence");
-        return new com.ash.drishti.compute.var.VarLens(days, m, c, ec);
+        return new com.ash.drishti.banking.compute.var.VarLens(days, m, c, ec);
     }
 
     /** {@code c} (a fraction, or a percentage above 1: 99 is 0.99) when it is one of {@code list}, else refused in words. */
@@ -515,7 +515,7 @@ public record VarProperties(Boolean enabled, Double confidence, Double esConfide
             }
         }
         throw new IllegalArgumentException(what + " " + c + " is not offered; the configured ones: " + list.stream()
-                .map(com.ash.drishti.compute.var.VarLens::pct).toList());
+                .map(com.ash.drishti.banking.compute.var.VarLens::pct).toList());
     }
 
     /** ISO codes in upper case, USD first and once, the rest in the order given (duplicates and blanks dropped). */
@@ -530,12 +530,12 @@ public record VarProperties(Boolean enabled, Double confidence, Double esConfide
         return List.copyOf(c);
     }
 
-    public com.ash.drishti.compute.var.VarMath.RankRule rule() {
-        return rankRule.startsWith("interp") ? com.ash.drishti.compute.var.VarMath.RankRule.INTERPOLATED
-                : com.ash.drishti.compute.var.VarMath.RankRule.KTH_WORST;
+    public com.ash.drishti.banking.compute.var.VarMath.RankRule rule() {
+        return rankRule.startsWith("interp") ? com.ash.drishti.banking.compute.var.VarMath.RankRule.INTERPOLATED
+                : com.ash.drishti.banking.compute.var.VarMath.RankRule.KTH_WORST;
     }
 
-    public com.ash.drishti.compute.var.VarCalc calc() {
-        return new com.ash.drishti.compute.var.VarCalc(confidence, esConfidence, rule(), componentWindow, componentScaleToVar);
+    public com.ash.drishti.banking.compute.var.VarCalc calc() {
+        return new com.ash.drishti.banking.compute.var.VarCalc(confidence, esConfidence, rule(), componentWindow, componentScaleToVar);
     }
 }

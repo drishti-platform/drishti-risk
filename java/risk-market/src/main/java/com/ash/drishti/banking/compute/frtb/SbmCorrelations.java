@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.compute.frtb;
+package com.ash.drishti.banking.compute.frtb;
 
 /**
  * The SBM's prescribed correlations (the medium scenario; FRTB_SA_GUIDE.md section 4.4): within a bucket (ρ, MAR21.46 to MAR21.94) and

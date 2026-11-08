@@ -13,16 +13,16 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.frtb;
+package com.ash.drishti.banking.frtb;
 
-import com.ash.drishti.compute.frtb.Drc;
-import com.ash.drishti.compute.frtb.FrtbChoices;
-import com.ash.drishti.compute.frtb.FrtbInput;
-import com.ash.drishti.compute.frtb.FrtbParams;
-import com.ash.drishti.compute.frtb.FrtbSa;
-import com.ash.drishti.compute.frtb.Rrao;
-import com.ash.drishti.compute.frtb.Sbm;
-import com.ash.drishti.compute.frtb.SbmModel;
+import com.ash.drishti.banking.compute.frtb.Drc;
+import com.ash.drishti.banking.compute.frtb.FrtbChoices;
+import com.ash.drishti.banking.compute.frtb.FrtbInput;
+import com.ash.drishti.banking.compute.frtb.FrtbParams;
+import com.ash.drishti.banking.compute.frtb.FrtbSa;
+import com.ash.drishti.banking.compute.frtb.Rrao;
+import com.ash.drishti.banking.compute.frtb.Sbm;
+import com.ash.drishti.banking.compute.frtb.SbmModel;
 import com.ash.drishti.server.dist.XlsxWriter;
 import com.ash.drishti.server.playground.PlaygroundTemplate;
 import com.ash.drishti.server.playground.SheetStream;
@@ -36,7 +36,7 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * The FRTB-SA Playground's workbook (SENSITIVITIES_AND_FRTB_SA.md sections 12.1 and 12.1a, FRTB_SA_GUIDE.md section 8): Main, Config, Data,
+ * The FRTB-SA Playground's workbook (docs/guides/FRTB_SA_GUIDE.md sections 12.1 and 12.1a, FRTB_SA_GUIDE.md section 8): Main, Config, Data,
  * WS, Buckets, Classes, Curvature, DRC, RRAO, Explain and Provenance. Every derived cell is a formula of the common set; the method's
  * switches are cells of Config with a drop-down, read by the formulas ({@code IF} on the switch), so flipping one recomputes the
  * alternative live; Main holds the engine's figures for the choices exported and for every one-switch alternative, each with its check.

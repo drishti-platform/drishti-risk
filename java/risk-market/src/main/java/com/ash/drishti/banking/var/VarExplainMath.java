@@ -13,10 +13,10 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
-import com.ash.drishti.compute.var.VarCalc;
-import com.ash.drishti.compute.var.VarMath;
+import com.ash.drishti.banking.compute.var.VarCalc;
+import com.ash.drishti.banking.compute.var.VarMath;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,7 +24,7 @@ import java.util.Locale;
 import java.util.TreeSet;
 
 /**
- * The arithmetic of "why VaR moved" (VAR_GUIDE.md section 3.11; OVERSIGHT_LENS.md section 4.1, RO1), with no engine: a sequence of
+ * The arithmetic of "why VaR moved" (VAR_GUIDE.md section 3.11; docs/architecture/LENSES.md section 4.1, RO1), with no engine: a sequence of
  * <b>states</b>, each a full VaR computation, from the earlier date's VaR (S0) to the later date's (the last state). Each step is the
  * difference of two consecutive states, so the steps add up to V(to) − V(from) exactly (a telescoping sum).
  *

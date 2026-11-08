@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.exposure;
+package com.ash.drishti.banking.exposure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -22,7 +22,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * The exposure trade-paths cache key (RESOURCES_AND_SCALE.md section 6.5): two different sets of trades of the same size whose 32-bit
+ * The exposure trade-paths cache key (CLUSTER_GUIDE.md section 6.5): two different sets of trades of the same size whose 32-bit
  * list hashes collide must not share a key (before 2.9.7 the key was the hash and the size, so they shared an answer).
  */
 class ExposurePathsKeyTest {

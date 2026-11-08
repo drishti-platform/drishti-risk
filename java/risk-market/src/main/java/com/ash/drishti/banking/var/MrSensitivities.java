@@ -13,11 +13,11 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.common.DrishtiException;
 import com.ash.drishti.common.ErrorCode;
-import com.ash.drishti.server.frtb.FrtbService;
+import com.ash.drishti.banking.frtb.FrtbService;
 import com.ash.drishti.server.security.Principal;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -32,20 +32,20 @@ import java.util.TreeMap;
 import java.util.function.Supplier;
 
 /**
- * The MR lens's sensitivity views (MR_CUBE_GUIDE.md section 7; tab C's ladder C2 and tab B's heat map B4): the sums of the position
+ * The MR lens's sensitivity views (PIVOT_GUIDE.md section 29.7; tab C's ladder C2 and tab B's heat map B4): the sums of the position
  * sensitivities of a scope by bucket, in Java. The ladder is GIRR delta (DV01) by curve currency and a grid's tenor buckets
  * ({@code drishti.cube.mr.grids}), net and gross, each against its two-sided limit ({@code drishti.cube.mr.ladder-limits}); the heat map is one
  * class's and measure's sums by two factor parts. The elements are the sensitivities engine's, read as the person sees the scope.
  */
 final class MrSensitivities {
 
-    /** A bucket at this share of its limit is "near" (amber); over 100% a breach. */
-    static final double NEAR = 0.8;
     private final MrCubeProperties props;
+    private final com.ash.drishti.banking.RiskLimits limits;           // near from drishti.risk.limit-near, a breach over 100%
     private final Supplier<FrtbService> frtb;
 
-    MrSensitivities(MrCubeProperties props, Supplier<FrtbService> frtb) {
+    MrSensitivities(MrCubeProperties props, Supplier<FrtbService> frtb, com.ash.drishti.banking.RiskLimits limits) {
         this.props = props;
+        this.limits = limits == null ? com.ash.drishti.banking.RiskLimits.defaults() : limits;
         this.frtb = frtb == null ? () -> null : frtb;
     }
 
@@ -94,7 +94,7 @@ final class MrSensitivities {
 
     /**
      * The sensitivity ladder of a scope: GIRR delta (DV01) by curve currency and the grid's tenor buckets, net and gross, each against its
-     * two-sided limit ({@code use = max(net / limit, -net / limit)}), "near" from 80% and a breach over 100%; or, with {@code by} two factor
+     * two-sided limit ({@code use = max(net / limit, -net / limit)}), within, near (drishti.risk.limit-near) or breach; or, with {@code by} two factor
      * parts, the factor heat map (the sums of one class and measure by the two parts).
      */
     Map<String, Object> answer(Principal p, String scope, LocalDate date, String grid, String by, String riskClass, String measure,
@@ -173,7 +173,7 @@ final class MrSensitivities {
                         double use = Math.max(s[0] / lim, -s[0] / lim);
                         cell.put("limit", lim);
                         cell.put("use", Math.round(use * 1e6) / 1e6);
-                        cell.put("status", use > 1 ? "breach" : use >= NEAR ? "near" : "ok");
+                        cell.put("status", limits.status(use));
                     }
                 }
                 if (s != null) {

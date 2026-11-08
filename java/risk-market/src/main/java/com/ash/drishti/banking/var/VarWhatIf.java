@@ -13,11 +13,11 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.common.DrishtiException;
 import com.ash.drishti.common.ErrorCode;
-import com.ash.drishti.compute.var.VarWhatIfMath;
+import com.ash.drishti.banking.compute.var.VarWhatIfMath;
 import com.ash.drishti.server.security.Principal;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -33,8 +33,8 @@ import java.util.Map;
  * sandbox, no compute workers, so it answers on every server.
  *
  * <pre>
- *   POST /api/v1/var/what-if {"scope": "BASKET:asha/unwind", "items": [{"copyOf": "MX-30000121", "factor": -1}], "ccy": "EUR"}
- *   POST /api/v1/var/what-if {"scope": "DESK:RATES", "items": [{"copyOf": "BOOK:BOOK-RATES-3", "factor": -0.5, "label": "hedge"}]}
+ *   POST /api/v1/risk/var/what-if {"scope": "BASKET:asha/unwind", "items": [{"copyOf": "MX-30000121", "factor": -1}], "ccy": "EUR"}
+ *   POST /api/v1/risk/var/what-if {"scope": "DESK:RATES", "items": [{"copyOf": "BOOK:BOOK-RATES-3", "factor": -0.5, "label": "hedge"}]}
  * </pre>
  */
 final class VarWhatIf {
@@ -42,9 +42,16 @@ final class VarWhatIf {
     static final String ENGINE = "Java VaR engine (the server)";
     private static final int MAX_ITEMS = 50;
     private final VarService svc;
+    private final VarViews views;
 
     VarWhatIf(VarService svc) {
+        this(svc, null);
+    }
+
+    /** With the views: the answer also holds the scope's limit, the use before and after and its status (within, near, breach). */
+    VarWhatIf(VarService svc, VarViews views) {
         this.svc = svc;
+        this.views = views;
     }
 
     @SuppressWarnings("unchecked")
@@ -167,6 +174,7 @@ final class VarWhatIf {
         out.put("after", after);
         out.put("change", change);
         out.put("items", items);
+        out.put("limit", views == null ? null : views.limitAfter(base, r.beforeVar(), r.afterVar()));   // null: no comparable limit
         out.put("engine", ENGINE);
         out.put("note", "each hypothetical trade is a copy of a booked trade's P&L vector over the " + base.date().book().width()
                 + " scenario days, scaled by its factor, added to the scope; incremental VaR in the order listed; the stressed VaR is the "

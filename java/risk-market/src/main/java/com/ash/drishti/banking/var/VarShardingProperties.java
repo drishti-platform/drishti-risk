@@ -13,14 +13,14 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import java.util.List;
 import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * The server's settings of VaR sharding across Drishti*net (VAR_SHARDING.md section 9). What is sharded comes from the market-risk pack's
+ * The server's settings of VaR sharding across Drishti*net (DATA_ARCHITECTURE.md section 14). What is sharded comes from the market-risk pack's
  * {@code sharding:} block ({@code enabled}, {@code key}, {@code kinds}, {@code target-shard-mb}, {@code replicas}); the same keys here, when
  * set, win over it (a test, or a site that does not edit its pack). No block and no {@code enabled} here: sharding is off and every date is
  * loaded whole, exactly as before 2.9.6. The rest are this server's own.
@@ -35,12 +35,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param coordinatorOnly this member owns no shard: it puts dates together and coordinates queries only
  * @param zoneTag the member tag prefix naming its zone ({@code az}: a tag {@code az:us-east-1a}); owners spread over zones; blank: none
  * @param pins a shard pinned to a member, first owner whatever the hashing (tests): shard range or id to node id, the same on every member
- * @param drain start drained: this member hands its shards over and takes no new ones (also {@code POST /api/v1/var/shards/drain})
+ * @param drain start drained: this member hands its shards over and takes no new ones (also {@code POST /api/v1/risk/var/shards/drain})
  * @param callTimeoutSeconds how long a partial sum may take on an owner before its other replica is asked (30)
  * @param skeletonTimeoutSeconds how long an owner may take to build and send a shard's skeleton (600)
  * @param rebalanceSeconds how often this member looks at the members and its shards (2)
  * @param releaseAfterSeconds how long a shard book is kept after no member has had its date open and nothing read it (900), unless the
- *     date is among the lake's newest {@code hot-dates}; 2.9.7 (RESOURCES_AND_SCALE.md section 5.3)
+ *     date is among the lake's newest {@code hot-dates}; 2.9.7 (CLUSTER_GUIDE.md section 5.3)
  */
 @ConfigurationProperties("drishti.var.sharding")
 public record VarShardingProperties(Boolean enabled, List<String> key, List<String> kinds, Double targetShardMb, Integer replicas,

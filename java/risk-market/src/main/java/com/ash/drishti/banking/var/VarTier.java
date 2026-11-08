@@ -13,11 +13,11 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.common.TempFiles;
-import com.ash.drishti.compute.var.VarBook;
-import com.ash.drishti.compute.var.VarHotFile;
+import com.ash.drishti.banking.compute.var.VarBook;
+import com.ash.drishti.banking.compute.var.VarHotFile;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -357,7 +357,7 @@ final class VarTier implements AutoCloseable {
     }
 
     /**
-     * A shard's folder (VAR_SHARDING.md): {@code <date>-shard-<i>} (USD) or {@code <date>-<CCY>-shard-<i>}, each its own, so a shard's file
+     * A shard's folder (DATA_ARCHITECTURE.md#13-var-sharding-how-it-is-built): {@code <date>-shard-<i>} (USD) or {@code <date>-<CCY>-shard-<i>}, each its own, so a shard's file
      * is never taken for another's or the whole date's older build.
      */
     Path folder(LocalDate date, String currency, int shard) {

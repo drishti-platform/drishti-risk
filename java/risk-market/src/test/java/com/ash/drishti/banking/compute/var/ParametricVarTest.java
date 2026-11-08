@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.compute.var;
+package com.ash.drishti.banking.compute.var;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -30,7 +30,7 @@ import java.util.Random;
 import org.junit.jupiter.api.Test;
 
 /**
- * {@link ParametricVar} (docs/architecture/PARAMETRIC_VAR.md section 15): μ, σ, VaR and ES by hand and against BigDecimal; z and the ES
+ * {@link ParametricVar} (docs/guides/VAR_GUIDE.md section 15): μ, σ, VaR and ES by hand and against BigDecimal; z and the ES
  * factor against tables; the sign of μ; σ = 0; EWMA weights; the shape; Euler components adding up to the VaR and ES to the cent (five desks,
  * 1,000 positions, μ ≠ 0, EWMA); incremental against a recomputation; the matrix through Java and OpenBLAS against plain loops; the curve.
  */

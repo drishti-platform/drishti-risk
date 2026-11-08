@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.compute.simm;
+package com.ash.drishti.banking.compute.simm;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -24,7 +24,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * ISDA SIMM for one netting set (or scope) and one direction (docs/guides/SIMM_GUIDE.md section 5; SENSITIVITIES_AND_FRTB_SA.md section 8,
+ * ISDA SIMM for one netting set (or scope) and one direction (docs/guides/SIMM_GUIDE.md section 5; docs/guides/FRTB_SA_GUIDE.md section 8,
  * checked against SIMM 2.8+2512 in section 18): the elements netted per factor within each product class; delta, vega, curvature and base
  * correlation per risk class with the concentration factors at the grain the rules set (per currency for rates, per issuer and seniority
  * for credit, per factor otherwise), f_kl within a bucket and g_bc across currencies, every bucket's net capped at its K, the residual

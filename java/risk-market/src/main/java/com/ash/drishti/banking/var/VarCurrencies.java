@@ -13,13 +13,13 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.common.DrishtiException;
 import com.ash.drishti.common.ErrorCode;
-import com.ash.drishti.compute.var.CurrencyBook;
-import com.ash.drishti.compute.var.ScenarioFx;
-import com.ash.drishti.compute.var.VarBook;
+import com.ash.drishti.banking.compute.var.CurrencyBook;
+import com.ash.drishti.banking.compute.var.ScenarioFx;
+import com.ash.drishti.banking.compute.var.VarBook;
 import com.ash.drishti.compute.vector.ParallelSums;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -144,11 +144,11 @@ final class VarCurrencies {
         }
         int w = cur.book().width();
         VarBook um = usd.book().morning();
-        List<com.ash.drishti.compute.var.VarIntraday.Update> ups = new java.util.ArrayList<>();
+        List<com.ash.drishti.banking.compute.var.VarIntraday.Update> ups = new java.util.ArrayList<>();
         String last = null;
         int pvAt = VarBook.TRADE_NUMBERS.indexOf("PV");
         for (VarIntradayRows.Row r : rows) {
-            com.ash.drishti.compute.var.VarIntraday.Update u = r.usd();
+            com.ash.drishti.banking.compute.var.VarIntraday.Update u = r.usd();
             last = VarIntradayRows.compare(r.computedAt(), last) > 0 ? r.computedAt() : last;
             double[] pnl = null;
             double pvUsd = u.pvUsd();
@@ -161,9 +161,9 @@ final class VarCurrencies {
             if (nums != null) {
                 nums[pvAt] = pv;
             }
-            ups.add(new com.ash.drishti.compute.var.VarIntraday.Update(u.tradeId(), pnl, pv, u.texts(), nums, pvUsd, u.pnlUsd()));
+            ups.add(new com.ash.drishti.banking.compute.var.VarIntraday.Update(u.tradeId(), pnl, pv, u.texts(), nums, pvUsd, u.pnlUsd()));
         }
-        com.ash.drishti.compute.var.VarIntraday.Morning exact = o -> {
+        com.ash.drishti.banking.compute.var.VarIntraday.Morning exact = o -> {
             double[] row = new double[w];
             um.store().copy(o, row);
             double p = um.trades().number("PV", o);
@@ -171,7 +171,7 @@ final class VarCurrencies {
             ScenarioFx.convert(Double.isNaN(p) ? 0 : p, row, w, rep, out);
             return out;
         };
-        VarBook b = com.ash.drishti.compute.var.VarIntraday.apply(cur.book(), ups, exact, c -> fx.rates(c).orElse(null), VarIntradayRows.batchAt(rows), last);
+        VarBook b = com.ash.drishti.banking.compute.var.VarIntraday.apply(cur.book(), ups, exact, c -> fx.rates(c).orElse(null), VarIntradayRows.batchAt(rows), last);
         return cur.withBook(b, usd.intraday());
     }
 }

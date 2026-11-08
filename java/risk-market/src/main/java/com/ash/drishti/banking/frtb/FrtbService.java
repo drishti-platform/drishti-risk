@@ -13,20 +13,20 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.frtb;
+package com.ash.drishti.banking.frtb;
 
 import com.ash.drishti.api.AsOf;
 import com.ash.drishti.api.DataNode;
 import com.ash.drishti.common.DrishtiException;
 import com.ash.drishti.common.ErrorCode;
-import com.ash.drishti.compute.frtb.FactorDictionary;
-import com.ash.drishti.compute.frtb.FrtbChoices;
-import com.ash.drishti.compute.frtb.FrtbExamples;
-import com.ash.drishti.compute.frtb.FrtbInput;
-import com.ash.drishti.compute.frtb.FrtbParams;
-import com.ash.drishti.compute.frtb.FrtbSa;
+import com.ash.drishti.banking.compute.frtb.FactorDictionary;
+import com.ash.drishti.banking.compute.frtb.FrtbChoices;
+import com.ash.drishti.banking.compute.frtb.FrtbExamples;
+import com.ash.drishti.banking.compute.frtb.FrtbInput;
+import com.ash.drishti.banking.compute.frtb.FrtbParams;
+import com.ash.drishti.banking.compute.frtb.FrtbSa;
 import com.ash.drishti.server.security.Principal;
-import com.ash.drishti.server.var.VarService;
+import com.ash.drishti.banking.var.VarService;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -137,7 +137,7 @@ public final class FrtbService {
         return drcBytes;
     }
 
-    /** The engine registry's word on FRTB-SA and on the position sensitivities (COMPUTE_ENGINES.md); unset: the old switch, and on. */
+    /** The engine registry's word on FRTB-SA and on the position sensitivities (ADMIN_GUIDE.md); unset: the old switch, and on. */
     private volatile java.util.function.BooleanSupplier running;
     private volatile java.util.function.BooleanSupplier sensitivitiesRunning;
 
@@ -294,7 +294,7 @@ public final class FrtbService {
             FrtbInput in = FrtbExamples.together();
             FrtbSa.Result r = FrtbSa.run(in, prm, choices);
             Map<String, Object> prov = provenance(null, List.of(), prm, choices, in, r);
-            prov.put("Inputs", "the design's hand-built cases 1 to 5 (SENSITIVITIES_AND_FRTB_SA.md section 13.1), no data read");
+            prov.put("Inputs", "the design's hand-built cases 1 to 5 (docs/guides/FRTB_SA_GUIDE.md section 13.1), no data read");
             return new Run(r, EXAMPLE, EXAMPLE, null, null, "USD", prov, digest(in), List.of());
         }
         AsOf asOf = new AsOf(date, knownAt);
@@ -492,7 +492,7 @@ public final class FrtbService {
 
     /**
      * One element of a scope's sensitivities in the reporting currency, with its factor resolved and its record's position and trades (the MR
-     * cube's ladders, heat map and per-cell sums read these, MR_CUBE_GUIDE.md section 6).
+     * cube's ladders, heat map and per-cell sums read these, PIVOT_GUIDE.md section 29.6).
      */
     public record Element(String positionKey, String tradeId, List<String> tradeIds, String grain, FactorDictionary.Factor factor, String measure,
             double value) {}

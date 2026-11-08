@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.exposure;
+package com.ash.drishti.banking.exposure;
 
 import com.ash.drishti.common.DrishtiException;
 import com.ash.drishti.common.ErrorCode;
@@ -88,7 +88,7 @@ final class ExposureCaptures {
         String canonical = null;
         if (scope != null && !scope.isBlank()) {
             try {
-                canonical = com.ash.drishti.compute.var.ScopeExpr.parse(scope, svc.loader().words()).toString();
+                canonical = com.ash.drishti.banking.compute.var.ScopeExpr.parse(scope, svc.loader().words()).toString();
             } catch (IllegalArgumentException e) {
                 throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, e.getMessage());
             }

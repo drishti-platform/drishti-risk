@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.compute.var;
+package com.ash.drishti.banking.compute.var;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
@@ -76,7 +76,7 @@ class HierarchyEquivalenceTest {
     static void load() throws IOException {
         Path repo = VarTestDataPrecisionTest.root();
         data = repo.resolve("data/testdata/market-risk");
-        Map<String, Object> pack = new ObjectMapper(new YAMLFactory()).readValue(repo.resolve("config/packs/market-risk/pack.yaml").toFile(), Map.class);
+        Map<String, Object> pack = new ObjectMapper(new YAMLFactory()).readValue(repo.resolve("config/packs/banking/market-risk/pack.yaml").toFile(), Map.class);
         rules = PositionRules.of((Map<?, ?>) pack.get("positions"));
         scen = new ArrayList<>();
         VarTestDataPrecisionTest.lines(data.resolve("scenario-set"), n -> n.path("SCENARIO_DATES").forEach(d -> scen.add(LocalDate.parse(d.asText()))));

@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.compute.simm;
+package com.ash.drishti.banking.compute.simm;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -23,7 +23,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * The SIMM method choices as named switches (docs/contracts/SIMM.md section 6.9, SENSITIVITIES_AND_FRTB_SA.md section 12.1a): the
+ * The SIMM method choices as named switches (docs/contracts/SIMM.md section 6.9, docs/guides/FRTB_SA_GUIDE.md section 12.1a): the
  * concentration thresholds and the historical volatility ratios as the version sets them, or switched off to see what they add; the
  * parameter version is chosen beside them (the CSA's by default, another installed version for a recalibration date). Typed overrides of
  * any parameter ({@code key → value}) make every figure "not the regulatory figure".

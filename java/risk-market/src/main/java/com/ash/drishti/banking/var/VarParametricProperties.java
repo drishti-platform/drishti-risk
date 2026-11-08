@@ -13,16 +13,16 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
-import com.ash.drishti.compute.var.ParametricVar;
+import com.ash.drishti.banking.compute.var.ParametricVar;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Parametric VaR, a cross-check beside historical (docs/architecture/PARAMETRIC_VAR.md section 5; VAR_GUIDE.md section 18.15).
+ * Parametric VaR, a cross-check beside historical (docs/guides/VAR_GUIDE.md section 5; VAR_GUIDE.md section 18.15).
  *
  * @param enabled the measure (off: no parametric block, no PVAR alias, no playground Parametric tab, no pvar(); asked: refused in words)
  * @param weighting {@code equal} or {@code ewma}; anything else refuses the start
@@ -59,7 +59,7 @@ public record VarParametricProperties(Boolean enabled, String weighting, Double 
         return new ParametricVar.Settings(ParametricVar.Weighting.of(weighting), lambda);
     }
 
-    /** {@code GET /api/v1/var/status}'s {@code parametric}. */
+    /** {@code GET /api/v1/risk/var/status}'s {@code parametric}. */
     Map<String, Object> describe() {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("enabled", enabled);

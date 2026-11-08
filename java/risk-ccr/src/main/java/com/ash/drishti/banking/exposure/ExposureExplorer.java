@@ -13,13 +13,13 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.exposure;
+package com.ash.drishti.banking.exposure;
 
-import com.ash.drishti.compute.ccr.CsaTerms;
-import com.ash.drishti.compute.ccr.ExposureBook;
-import com.ash.drishti.compute.ccr.ExposureCalc;
-import com.ash.drishti.compute.ccr.ExposureGrid;
-import com.ash.drishti.compute.ccr.ExposureMath;
+import com.ash.drishti.banking.compute.ccr.CsaTerms;
+import com.ash.drishti.banking.compute.ccr.ExposureBook;
+import com.ash.drishti.banking.compute.ccr.ExposureCalc;
+import com.ash.drishti.banking.compute.ccr.ExposureGrid;
+import com.ash.drishti.banking.compute.ccr.ExposureMath;
 import com.ash.drishti.server.security.Principal;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -40,8 +40,10 @@ final class ExposureExplorer {
     /** The quantiles of the path fan: 5 to 95% and 25 to 75% around the median. */
     static final double[] FAN = {0.05, 0.25, 0.5, 0.75, 0.95};
     private final ExposureService svc;
+    private final com.ash.drishti.banking.RiskLimits limits;
 
-    ExposureExplorer(ExposureService svc) {
+    ExposureExplorer(ExposureService svc, com.ash.drishti.banking.RiskLimits limits) {
+        this.limits = limits == null ? com.ash.drishti.banking.RiskLimits.defaults() : limits;
         this.svc = svc;
     }
 
@@ -123,6 +125,8 @@ final class ExposureExplorer {
         m.put("confidence", svc.props().limitConfidence());
         m.put("used", Math.round(used));
         m.put("use", used / l.amount());
+        m.put("status", limits.status(used / l.amount()));                   // within, near (drishti.risk.limit-near), breach
+        m.put("near", limits.limitNear());
         m.put("note", "the stored credit limit (credit-limit " + l.id() + "), compared with the computed peak PFE at "
                 + Math.round(svc.props().limitConfidence() * 100) + "%");
         return m;

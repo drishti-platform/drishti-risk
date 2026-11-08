@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.frtb;
+package com.ash.drishti.banking.frtb;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -41,7 +41,7 @@ public record FrtbProperties(Boolean enabled, String parametersDir, String sensi
 
     public FrtbProperties {
         enabled = enabled == null || enabled;
-        parametersDir = blank(parametersDir) ? "./config/packs/market-risk/capital" : parametersDir.strip();
+        parametersDir = blank(parametersDir) ? "./config/packs/banking/market-risk/capital" : parametersDir.strip();
         sensitivityKind = blank(sensitivityKind) ? "position-sensitivity" : sensitivityKind.strip();
         factorKind = blank(factorKind) ? "risk-factor" : factorKind.strip();
         defaultRiskKind = blank(defaultRiskKind) ? "default-risk" : defaultRiskKind.strip();

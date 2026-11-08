@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.compute.var;
+package com.ash.drishti.banking.compute.var;
 
 import com.ash.drishti.compute.vector.ShardedVectors;
 import com.ash.drishti.compute.vector.Vectors;
@@ -27,7 +27,7 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * A sharded business date put together on one member (VAR_SHARDING.md section 5): the shards' books, each built by its owners from the
+ * A sharded business date put together on one member (DATA_ARCHITECTURE.md section 13): the shards' books, each built by its owners from the
  * shard's rows alone, one after the other in key order. Because a shard is a range of the hot file's own order (legal entity, desk), the
  * shards' trades side by side are the whole date's trades in the order one server would sort them; the positions, books, cells and nodes
  * are then derived by the same code as a whole date's ({@link Cells#layout}, {@link Cells#derive}, {@link VarBook#nodes}), every book's and

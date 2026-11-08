@@ -13,13 +13,13 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.compute.frtb;
+package com.ash.drishti.banking.compute.frtb;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.data.Offset.offset;
 
-import com.ash.drishti.compute.simm.SimmMath;
+import com.ash.drishti.banking.compute.simm.SimmMath;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -29,7 +29,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /**
- * The hand-built cases of SENSITIVITIES_AND_FRTB_SA.md section 13.1 against the engine, to the cent, with the market-risk pack's own
+ * The hand-built cases of docs/guides/FRTB_SA_GUIDE.md section 13.1 against the engine, to the cent, with the market-risk pack's own
  * parameter files. Cases 1 and 2 are written with MAR21.46's exact formula (the {@code girr-correlation} switch); the default, the
  * published table, is asserted beside them. Cases 6 and 11 are SIMM's aggregation formulas with toy parameters.
  */
@@ -41,8 +41,8 @@ class FrtbHandBuiltCasesTest {
     static FrtbParams params;
 
     static Path capital() {
-        Path p = Path.of("..", "config", "packs", "market-risk", "capital");
-        return Files.isDirectory(p) ? p : Path.of("config", "packs", "market-risk", "capital");
+        Path p = Path.of("..", "config", "packs", "banking", "market-risk", "capital");
+        return Files.isDirectory(p) ? p : Path.of("config", "packs", "banking", "market-risk", "capital");
     }
 
     @BeforeAll
@@ -171,6 +171,14 @@ class FrtbHandBuiltCasesTest {
         assertThat(r.sbm().total[1]).isCloseTo(281_300.03, offset(CENT));
         assertThat(r.sbm().total[2]).isCloseTo(271_079.64, offset(CENT));
         assertThat(Sbm.SCENARIOS[r.sbm().binding]).isEqualTo("low");
+        // a class's total is its measures added (the screen's Total column comes from here), and the classes' totals add up to SBM
+        assertThat(r.sbm().classTotal("EQ", 0)).isCloseTo(180_000, offset(CENT));
+        assertThat(r.sbm().classes()).contains("GIRR", "EQ");
+        for (int sc = 0; sc < 3; sc++) {
+            final int s = sc;
+            assertThat(r.sbm().classes().stream().mapToDouble(c -> r.sbm().classTotal(c, s)).sum()).isCloseTo(r.sbm().total[s], offset(CENT));
+        }
+        assertThat(r.sbm().classTotal("FX", 0)).isZero();
         assertThat(r.total()).isCloseTo(566_757.11, offset(CENT));
         double sum = Arrays.stream(r.contributions()).sum();
         assertThat(sum).isCloseTo(r.total(), offset(CENT));

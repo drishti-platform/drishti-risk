@@ -13,11 +13,11 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
-import com.ash.drishti.compute.var.VarBook;
-import com.ash.drishti.compute.var.VarCalc;
-import com.ash.drishti.compute.var.VarLens;
+import com.ash.drishti.banking.compute.var.VarBook;
+import com.ash.drishti.banking.compute.var.VarCalc;
+import com.ash.drishti.banking.compute.var.VarLens;
 import com.ash.drishti.compute.vector.OrdinalSet;
 import com.ash.drishti.compute.vector.ParallelSums;
 import java.util.ArrayList;
@@ -51,7 +51,7 @@ final class VarPartTotals {
     /** Missing positions computed on one thread up to this many; more are split across the sum threads. */
     private static final int PARALLEL_FROM = 256;
     /**
-     * The positions or trades whose remote reads are fetched ahead together (VAR_SHARDING.md section 15): one step's answers held at
+     * The positions or trades whose remote reads are fetched ahead together (DATA_ARCHITECTURE.md section 13): one step's answers held at
      * once, about 4 MB at 509 scenarios.
      */
     static final int AHEAD = com.ash.drishti.compute.vector.ShardedVectors.BATCH;

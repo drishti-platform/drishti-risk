@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -21,7 +21,7 @@ import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * The market-risk cube's settings, {@code drishti.cube.mr} (MR_CUBE_GUIDE.md section 9; engine {@code mr-cube}, COMPUTE_ENGINES.md: needs
+ * The market-risk cube's settings, {@code drishti.cube.mr} (PIVOT_GUIDE.md#29-the-mr-cube-preset section 9; engine {@code mr-cube}, ADMIN_GUIDE.md: needs
  * {@code var} and {@code pivot}, uses {@code sensitivities} and {@code frtb-sa}). The cube is the pivot engine's VaR source with its MR
  * lens: the switch is {@code drishti.engines.mr-cube.enabled} ({@code config/engines/mr-cube.yaml}); the pivot engine's budget, busy
  * protection and partial-state cache ({@code drishti.pivot.*}) apply to it as to every source.
@@ -31,8 +31,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param grids the sensitivity ladders' bucket grids: a grid to its buckets, each {@code label: from-to} in years ({@code 10-} open)
  * @param ladderLimits two-sided DV01 limits per currency and grid bucket ({@code USD 2-5Y: 1500000}); none: the ladder shows no limit bars and
  *     says so
- * @param sbmMaxCells the most cells whose FRTB-SA SBM capital one evaluation computes (each a run of the FRTB-SA engine on the cell's scope)
- * @param stressedMaxCells the most cells whose stressed VaR one evaluation computes scope by scope
+ * @param sbmMaxCells the cells of a view that get FRTB-SA SBM capital (each a run of the FRTB-SA engine on the cell's scope): its first in the
+ *     grid's order (VarPivotProvider.cap)
+ * @param stressedMaxCells the cells of a view that get stressed VaR, computed scope by scope: its first in the grid's order
  * @param sparklineDates the business dates a sparkline reads (each date is the view computed again, from the pivot engine's cache when it can)
  * @param sparklineMaxCells the most cells a view draws sparklines for
  * @param whatIfRows the most rows the what-if side by side computes (each a what-if on the row's scope), the total always added

@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,7 +21,7 @@ import java.util.Locale;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Why VaR moved (VAR_GUIDE.md section 3.11; OVERSIGHT_LENS.md section 4.1, RO1): the settings of the explanation of a VaR change between
+ * Why VaR moved (VAR_GUIDE.md section 3.11; docs/architecture/LENSES.md section 4.1, RO1): the settings of the explanation of a VaR change between
  * two business dates.
  *
  * @param enabled the explanation, its API, its tab and its workbook are on (off: refused in words)

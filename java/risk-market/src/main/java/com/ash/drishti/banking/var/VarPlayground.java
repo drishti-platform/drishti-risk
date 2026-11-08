@@ -13,16 +13,16 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.server.var;
+package com.ash.drishti.banking.var;
 
 import com.ash.drishti.common.DrishtiException;
 import com.ash.drishti.common.ErrorCode;
-import com.ash.drishti.compute.var.Columns;
-import com.ash.drishti.compute.var.ScenarioFx;
-import com.ash.drishti.compute.var.VarBook;
-import com.ash.drishti.compute.var.VarCalc;
-import com.ash.drishti.compute.var.VarLens;
-import com.ash.drishti.compute.var.VarMath;
+import com.ash.drishti.banking.compute.var.Columns;
+import com.ash.drishti.banking.compute.var.ScenarioFx;
+import com.ash.drishti.banking.compute.var.VarBook;
+import com.ash.drishti.banking.compute.var.VarCalc;
+import com.ash.drishti.banking.compute.var.VarLens;
+import com.ash.drishti.banking.compute.var.VarMath;
 import com.ash.drishti.compute.vector.OrdinalSet;
 import com.ash.drishti.server.playground.ExportSizing;
 import com.ash.drishti.server.playground.PlaygroundTemplate;
@@ -39,7 +39,7 @@ import java.util.Map;
 import java.util.TreeSet;
 
 /**
- * The VaR Playground (docs/architecture/VAR_PLAYGROUND.md): a scope's VaR worked out in a grid and in a workbook of real formulas. The
+ * The VaR Playground (docs/guides/VAR_GUIDE.md): a scope's VaR worked out in a grid and in a workbook of real formulas. The
  * inputs are built as the person (their nodes, roles and masks, as every VaR answer) from the engine's own vectors on the date: each
  * position's scenario P&amp;L in the reporting currency as the engine holds it, its USD value today and the currency its PVs came in, and
  * the date's scenario FX; each position's scenario PVs are recovered from them ({@code PV(s) = (P&L_r(s) + p / FX_r(base)) × FX_r(s) /
@@ -410,7 +410,7 @@ final class VarPlayground {
     }
 
     /**
-     * The playground's Parametric tab (PARAMETRIC_VAR.md section 10): the parametric figures of what was built, the 1-day portfolio and its positions (Rest of
+     * The playground's Parametric tab (docs/guides/VAR_GUIDE.md section 10): the parametric figures of what was built, the 1-day portfolio and its positions (Rest of
      * scope included), with the server's parametric settings; refused in words while the measure is off.
      */
     VarPlaygroundParametric.Engine parametric(Built b) {
