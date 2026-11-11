@@ -47,13 +47,13 @@ final class SimmTestData {
     private SimmTestData() {}
 
     static Path root() {
-        Path p = Path.of("..");
+        Path p = Path.of("../../..");
         return Files.isDirectory(p.resolve("data/testdata")) ? p : Path.of(".");
     }
 
-    /** The toy parameter folder (drishti-compute-banking/src/test/resources/simm: simm-toy.yaml only). */
+    /** The toy parameter folder (modules/banking/banking-compute/src/test/resources/simm: simm-toy.yaml only). */
     static Path toyDir() {
-        return root().resolve("drishti-compute-banking/src/test/resources/simm");
+        return root().resolve("modules/banking/banking-compute/src/test/resources/simm");
     }
 
     static List<DataNode> read(String kind) {

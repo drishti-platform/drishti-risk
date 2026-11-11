@@ -39,7 +39,7 @@ final class FrtbTestData {
     private FrtbTestData() {}
 
     static Path root() {
-        Path p = Path.of("..");
+        Path p = Path.of("../../..");
         return Files.isDirectory(p.resolve("data/testdata")) ? p : Path.of(".");
     }
 
