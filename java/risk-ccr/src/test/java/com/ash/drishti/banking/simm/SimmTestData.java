@@ -52,9 +52,9 @@ final class SimmTestData {
         return Files.isDirectory(p.resolve("data/testdata")) ? p : Path.of(TestRoots.module(), ".");
     }
 
-    /** The toy parameter folder (modules/banking/banking-compute/src/test/resources/simm: simm-toy.yaml only). */
+    /** The toy parameter folder (modules/banking/java/banking-compute/src/test/resources/simm: simm-toy.yaml only). */
     static Path toyDir() {
-        return root().resolve("modules/banking/banking-compute/src/test/resources/simm");
+        return root().resolve("modules/banking/java/banking-compute/src/test/resources/simm");
     }
 
     static List<DataNode> read(String kind) {
