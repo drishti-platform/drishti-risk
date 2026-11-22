@@ -1,0 +1,67 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Risk. Proprietary: see LICENSE.
+# Hand cases of the market-risk engine: two positions, four scenarios, one hierarchy over DESK. With N = 4, k = ceil(4 x 0.01) = 1 and
+# ceil(4 x 0.025) = 1: VaR and ES are both minus the worst scenario P&L of the scope.
+suite: market-risk/headline-by-hand
+engine: market-risk
+since: "0.1"
+description: The bank's VaR and ES by hand; a viewer of one desk; the newest two scenarios; a missing scenario set; a request without rows.
+given:
+  snapshot: { date: "2026-01-13" }
+  options:
+    hierarchies:
+      - { id: MGMT, title: Management, levels: DESK, level-names: desk, ids: leaf, root-id: BANK, root-name: Bank }
+  inputs:
+    scenario-pv: absent
+    pnl-vector:
+      rows:
+        - { VECTOR_ID: V1, SCENARIO_SET_ID: HS-4, POSITION_ID: P1, TRADE_STATUS: NEW, CURRENCY: USD, DESK: A, TT_BOOK: A1, PNL: [ -10, 5, 3, -2 ] }
+        - { VECTOR_ID: V2, SCENARIO_SET_ID: HS-4, POSITION_ID: P2, TRADE_STATUS: NEW, CURRENCY: USD, DESK: B, TT_BOOK: B1, PNL: [ 4, -8, 1, 6 ] }
+    scenario-set:
+      rows:
+        - { SCENARIO_SET_ID: HS-4, SET_TYPE: HISTORICAL, SCENARIO_DATES: "2026-01-07,2026-01-08,2026-01-09,2026-01-12" }
+    fx-scenario:
+      rows:
+        - { FX_SCENARIO_ID: FX-EUR, SCENARIO_SET_ID: HS-4, CURRENCY: EUR, RATE: 1.25, RATES: [ 1.25, 1.25, 1.25, 1.25 ] }
+    var-limit: absent
+    system-basket: absent
+cases:
+  - id: the-bank
+    source: "by hand: the bank's P&L is [-6, -3, 4, 4]; the worst is -6: VaR 6, ES 6"
+    reference: true
+    request: { outputs: [ headline ], params: { scenario-set: "", window: 0, currency: USD }, visibility: { scenario-pv: all, pnl-vector: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        headline:
+          columns: [ HIERARCHY, NODE_ID, VAR, ES, VAR_UNITS, ES_UNITS ]
+          rows:
+            - [ MGMT, "MGMT~BANK", 6, 6, 6, 6 ]
+
+  - id: a-viewer-of-desk-a
+    source: "by hand: only P1 is seen; its worst is -10: VaR 10, ES 10 (filter equivalence)"
+    request:
+      outputs: [ headline ]
+      params: { scenario-set: "", window: 0, currency: USD }
+      visibility: { scenario-pv: { eq: [ DESK, A ] }, pnl-vector: { eq: [ DESK, A ] } }
+      seed: 0
+    expect:
+      status: complete
+      tables: { headline: { columns: [ HIERARCHY, NODE_ID, VAR, ES, VAR_UNITS, ES_UNITS ], rows: [ [ MGMT, "MGMT~BANK", 10, 10, 10, 10 ] ] } }
+
+  - id: the-newest-two-scenarios
+    source: "by hand: the window keeps [4, 4]; the worst is 4, a gain: VaR -4, ES -4"
+    request: { outputs: [ headline ], params: { scenario-set: "", window: 2, currency: USD }, visibility: { scenario-pv: all, pnl-vector: all }, seed: 0 }
+    expect:
+      status: complete
+      tables: { headline: { columns: [ HIERARCHY, NODE_ID, VAR, ES, VAR_UNITS, ES_UNITS ], rows: [ [ MGMT, "MGMT~BANK", -4, -4, -4, -4 ] ] } }
+
+  - id: no-scenario-set
+    source: "ENGINE_SPEC 8.2: missing input is an answer"
+    given: { inputs: { scenario-set: absent } }
+    request: { outputs: [ headline ], params: { scenario-set: "", window: 0, currency: USD }, visibility: { scenario-pv: all, pnl-vector: all }, seed: 0 }
+    expect: { status: not-found, missing: [ { input: scenario-set, outputs: [ headline ] } ] }
+
+  - id: a-request-without-rows-is-refused
+    source: "ENGINE_SPEC 8.6 rule 1"
+    request: { outputs: [ headline ], params: { scenario-set: "", window: 0, currency: USD }, visibility: {}, seed: 0 }
+    expect: { refused: ENG-4002 }

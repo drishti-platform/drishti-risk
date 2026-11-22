@@ -1,0 +1,114 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Risk. Proprietary: see LICENSE.
+# The counterparty-credit engine of Drishti Risk: exposure from supplied simulator paths (EE, EPE, EEPE, PFE), netting and collateral.
+engine: 1
+id: ccr
+version: 0.1.0
+title: Counterparty credit exposure
+about: >-
+  Exposure profiles and figures (current exposure, EE, ENE, effective EE, EPE, effective EPE, PFE at each confidence and its peak) for
+  any scope of netting sets, counterparties, legal entities, desks, books or trades, from mark-to-market paths a simulator supplies,
+  netted by set and collateralised under each set's CSA terms. The engine never simulates nor prices: missing paths are an answer.
+publisher: { id: com.ash.risk, name: Drishti Risk }
+product: drishti-risk-ccr
+api: "0.1"
+platform: { tools: "1.1" }
+codes: RSK
+snapshot:
+  dimensions: [ { name: date, type: date, label: Business date } ]
+inputs:
+  simulation-run:
+    contract: risk/simulation-run@1
+    about: The simulator's run for the date; its grid (dates, roles, look-back indices, tenors) and the number of paths.
+    key: [ RUN_ID ]
+    columns: [ RUN_ID, BATCH_ID, BUSINESS_DATE, PATHS, GRID_DATES, GRID_ROLE, LOOKBACK_OF, GRID_TENORS ]
+  exposure-path:
+    contract: risk/exposure-path@1
+    about: One row per trade and grid point; the trade's MtM on every path (MTM).
+    key: [ TRADE_ID, GRID_INDEX ]
+    columns: [ TRADE_ID, GRID_INDEX, NETTING_SET, COUNTERPARTY, LEGAL_ENTITY, DESK, TT_BOOK, ASSET_CLASS, PRODUCT, SOURCE_SYSTEM,
+               MATURITY_DATE, NOTIONAL, MTM ]
+    vector: MTM
+    scope-columns: [ COUNTERPARTY, LEGAL_ENTITY, DESK, TT_BOOK, NETTING_SET ]
+  netting-set:
+    contract: risk/netting-set@1
+    about: Each netting set's CSA and collateral balance.
+    required: false
+    key: [ NETTING_SET_ID ]
+    columns: [ NETTING_SET_ID, COUNTERPARTY, LEGAL_ENTITY, CSA, COLLATERAL_BALANCE ]
+  csa:
+    contract: risk/csa@1
+    about: The CSA terms (thresholds, minimum transfer amounts, independent amount, rounding, margin period, frequency, type).
+    required: false
+    key: [ CSA_ID ]
+    columns: [ CSA_ID, THRESHOLD_THEM, THRESHOLD_US, MTA, MTA_THEM, MTA_US, INDEPENDENT_AMOUNT, ROUNDING, MPOR_DAYS, MARGIN_FREQUENCY_DAYS, MARGIN_TYPE ]
+  collateral-balance:
+    contract: risk/collateral-balance@1
+    about: Each balance's collateral held after haircut (NET; posted negative) and initial margin held.
+    required: false
+    key: [ BALANCE_ID ]
+    columns: [ BALANCE_ID, NET, IM_HELD ]
+  trade-valuation:
+    contract: risk/trade-valuation@1
+    about: Each trade's MtM on the business date (else its paths' mean at the first grid date stands in).
+    required: false
+    key: [ TRADE_ID ]
+    columns: [ TRADE_ID, MTM ]
+options:
+  model: { type: enum, options: [ lagged, current, none ], default: lagged, label: Collateral model }
+  rule: { type: enum, options: [ kth, interpolated ], default: kth, label: Quantile rule }
+  confidences: { type: list, items: number, default: [ 0.95, 0.99 ], label: PFE confidences }
+  pfe-confidence: { type: number, default: 0.95, min: 0.5, max: 0.9999, label: Headline PFE confidence }
+  pfe-window: { type: int, default: 21, min: 1, label: Effective window (grid points) }
+  im-model: { type: enum, options: [ held, none ], default: held, label: Initial margin }
+params:
+  scope: { type: text, default: BANK, label: Scope, help: "BANK, NSET:<id>, CPTY:<id>, LE:<id>, DESK:<id>, BOOK:<id>, TRD:<id>,..." }
+  standalone: { type: bool, default: false, label: Standalone, help: "True: the scope's trades as if they were netted only among themselves." }
+outputs:
+  exposure-summary:
+    title: Exposure figures of a scope
+    about: One row for the scope asked.
+    shape: row
+    params: [ scope, standalone ]
+    key: [ SCOPE ]
+    columns:
+      - { name: SCOPE, type: string, nullable: false, label: Scope }
+      - { name: TRADES, type: integer, nullable: false, label: Trades }
+      - { name: CE, type: number, nullable: false, label: Current exposure, measure: true }
+      - { name: EPE, type: number, nullable: false, label: EPE, measure: true }
+      - { name: EEPE, type: number, nullable: false, label: Effective EPE, measure: true }
+      - { name: PEAK_EE, type: number, nullable: false, label: Peak EE, measure: true }
+      - { name: PEAK_PFE, type: number, nullable: false, label: Peak PFE, measure: true }
+      - { name: PEAK_PFE_DATE, type: date, nullable: true, label: Peak PFE date }
+  exposure-profile:
+    title: Exposure profile of a scope
+    about: One row per primary grid point.
+    shape: series
+    axis: POINT
+    params: [ scope, standalone ]
+    key: [ POINT ]
+    columns:
+      - { name: POINT, type: integer, nullable: false, label: Point }
+      - { name: DATE, type: date, nullable: false, label: Date }
+      - { name: TENOR, type: string, nullable: true, label: Tenor }
+      - { name: EE, type: number, nullable: false, label: EE, measure: true }
+      - { name: ENE, type: number, nullable: false, label: ENE, measure: true }
+      - { name: EEE, type: number, nullable: false, label: Effective EE, measure: true }
+      - { name: PFE, type: number, nullable: false, label: PFE, measure: true }
+      - { name: EE_UNCOLL, type: number, nullable: false, label: EE uncollateralised, measure: true }
+  netting-set-summary:
+    title: Exposure figures of every netting set
+    about: One row per netting set, standalone.
+    key: [ NETTING_SET ]
+    columns:
+      - { name: NETTING_SET, type: string, nullable: false, label: Netting set }
+      - { name: COUNTERPARTY, type: string, nullable: true, label: Counterparty }
+      - { name: TRADES, type: integer, nullable: false, label: Trades }
+      - { name: CE, type: number, nullable: false, label: Current exposure, measure: true }
+      - { name: EPE, type: number, nullable: false, label: EPE, measure: true }
+      - { name: EEPE, type: number, nullable: false, label: Effective EPE, measure: true }
+      - { name: PEAK_PFE, type: number, nullable: false, label: Peak PFE, measure: true }
+capabilities: [ explain, workbook ]
+limits:
+  memory: { fixed-bytes: 16777216, per-row-bytes: { exposure-path: 2048 } }
+  cancel-latency: 1s
+ui: { group: Risk, words: [ EXP, PFE, EPE ] }

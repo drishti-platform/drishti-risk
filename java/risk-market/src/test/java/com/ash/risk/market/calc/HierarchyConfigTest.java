@@ -1,0 +1,113 @@
+/*
+ * Drishti Risk · market and counterparty risk as engines.
+ *
+ * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
+ * All rights reserved.
+ *
+ * PROPRIETARY AND CONFIDENTIAL.
+ *
+ * This file is the confidential and proprietary property of Ashutosh Sinha.
+ * Unauthorised copying, use, modification, distribution or disclosure of this
+ * file, via any medium, is strictly prohibited except with the express prior
+ * written permission of the copyright holder.
+ *
+ * See the LICENSE file in the root of this repository for the full terms.
+ */
+package com.ash.risk.market.calc;
+
+import com.ash.risk.kernel.scope.HierarchySpec;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+
+/**
+ * The hierarchies' configuration (2.9.5, VAR_GUIDE.md section 16): read from a pack's {@code hierarchies:} block or the
+ * {@code drishti.var.hierarchies} setting; the levels written {@code "A > B"} or as a list; the defaults; and what is refused (a
+ * duplicate id or word, a reserved word, a column hierarchy without levels, an unknown source or ids mode).
+ */
+class HierarchyConfigTest {
+
+    private static Map<String, Object> m(Object... kv) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        for (int i = 0; i < kv.length; i += 2) {
+            out.put((String) kv[i], kv[i + 1]);
+        }
+        return out;
+    }
+
+    @Test
+    void theManifestsBlockIsRead() {
+        List<HierarchySpec> h = HierarchySpec.parse(m(
+                "MGMT", m("title", "Management", "levels", "DIVISION > DESK > TT_BOOK", "ids", "leaf"),
+                "LEGAL", m("title", "Legal entities", "levels", "LEGAL_ENTITY > DESK > TT_BOOK", "ids", "leaf", "empty-label", "(none)"),
+                "LL", m("title", "Limit letters", "levels", "LIMIT_LETTER > DESK", "word", "ll", "limits", "var-limit")));
+        assertThat(h).extracting(HierarchySpec::id).containsExactly("MGMT", "LEGAL", "LL");
+        assertThat(h.get(1).blankName()).isEqualTo("(none)");
+        assertThat(h.get(0).blankName()).isEqualTo("(Blank)");
+        assertThat(h.get(0).withDefaultEmptyLabel("(unassigned)").blankName()).isEqualTo("(unassigned)");
+        assertThat(h.get(1).withDefaultEmptyLabel("(unassigned)").blankName()).isEqualTo("(none)");
+        HierarchySpec ll = h.get(2);
+        assertThat(ll.levels()).containsExactly("LIMIT_LETTER", "DESK");
+        assertThat(ll.levelNames()).containsExactly("limit-letter", "desk");
+        assertThat(ll.word()).isEqualTo("LL");
+        assertThat(ll.limits()).isEqualTo("var-limit");
+        assertThat(ll.rootNodeId()).isEqualTo("LL~BANK");
+        assertThat(ll.rootName()).isEqualTo("Limit letters");
+        assertThat(ll.nodeId(List.of("LL-0042", "DESK-RATES"), 2)).isEqualTo("LL~LL-0042/DESK-RATES");
+        assertThat(Cells.columns(h)).containsExactly("DIVISION", "DESK", "LEGAL_ENTITY", "LIMIT_LETTER");
+        assertThat(HierarchySpec.digest(h)).contains("LL:[LIMIT_LETTER, DESK]").contains("(none)");
+        assertThat(HierarchySpec.digest(List.of())).isEmpty();
+    }
+
+    @Test
+    void levelsAsAListLevelNamesLeafIdsAndARoot() {
+        HierarchySpec s = HierarchySpec.of("MGMT", m("levels", List.of("DIVISION", "DESK", "TT_BOOK"), "level-names", List.of("division", "desk", "book"),
+                "ids", "leaf", "root", m("id", "BANK", "name", "Drishti Bank")));
+        assertThat(s.leafIds()).isTrue();
+        assertThat(s.levelNames()).containsExactly("division", "desk", "book");
+        assertThat(s.nodeId(List.of("DIV-MARKETS", "DESK-RATES"), 2)).isEqualTo("MGMT~DESK-RATES");
+        assertThat(s.rootName()).isEqualTo("Drishti Bank");
+        assertThat(Cells.columns(List.of(s))).containsExactly("DIVISION", "DESK");
+        // levels bound by Spring from indexed keys (levels[0], levels[1])
+        HierarchySpec bound = HierarchySpec.of("LL", m("levels", m("0", "LIMIT_LETTER", "1", "DESK")));
+        assertThat(bound.levels()).containsExactly("LIMIT_LETTER", "DESK");
+    }
+
+    @Test
+    void aBlankNodeIsAlwaysAPathIdEvenInALeafHierarchy() {
+        HierarchySpec s = HierarchySpec.of("MGMT", m("levels", "DIVISION > DESK > TT_BOOK", "ids", "leaf"));
+        java.util.List<String> v = new java.util.ArrayList<>(java.util.Arrays.asList("DIV-MARKETS", null, "BOOK-1"));
+        assertThat(s.nodeId(v, 2)).isEqualTo("MGMT~DIV-MARKETS/~");
+        assertThat(s.nodeId(v, 3)).isEqualTo("MGMT~BOOK-1");
+        assertThat(HierarchySpec.blankNode("MGMT~DIV-MARKETS/~")).isTrue();
+        v.set(1, " ");                                                   // an empty text is a missing value
+        assertThat(s.nodeId(v, 2)).isEqualTo("MGMT~DIV-MARKETS/~");
+        v.set(0, "");
+        assertThat(s.nodeId(v, 1)).isEqualTo("MGMT~~");
+        assertThat(s.nodeId(v, 2)).isEqualTo("MGMT~~/~");
+        assertThat(HierarchySpec.blankNode("MGMT~~")).isTrue();
+        assertThat(HierarchySpec.blankNode("MGMT~DESK-RATES")).isFalse();
+    }
+
+    @Test
+    void whatIsRefused() {
+        assertThatThrownBy(() -> HierarchySpec.parse(m("LL", m("levels", "LIMIT_LETTER", "word", "DESK"))))
+                .hasMessageContaining("the engine's own");
+        assertThatThrownBy(() -> HierarchySpec.parse(m("A", m("levels", "X", "word", "W"), "B", m("levels", "Y", "word", "W"))))
+                .hasMessageContaining("names two hierarchies");
+        assertThatThrownBy(() -> HierarchySpec.parse(m("LL", m("title", "Letters")))).hasMessageContaining("names no levels");
+        assertThatThrownBy(() -> HierarchySpec.parse(m("MGMT", m("title", "Management", "source", "risk-hierarchy"))))
+                .hasMessageContaining("the risk-hierarchy kind is removed");
+        assertThatThrownBy(() -> HierarchySpec.parse(m("LL", m("levels", "X", "ids", "short")))).hasMessageContaining("ids is path or leaf");
+        assertThatThrownBy(() -> HierarchySpec.parse(m("ll-1", m("levels", "X")))).hasMessageContaining("not a name");
+        assertThatThrownBy(() -> HierarchySpec.parse(m("LL", m("levels", "X > X")))).hasMessageContaining("twice");
+        assertThatThrownBy(() -> HierarchySpec.parse(m("LL", "letters"))).hasMessageContaining("not a map");
+        assertThatThrownBy(() -> HierarchySpec.check(List.of(HierarchySpec.of("MGMT", m("levels", "DESK")), HierarchySpec.of("mgmt", m("levels", "DESK")))))
+                .hasMessageContaining("configured twice");
+    }
+}

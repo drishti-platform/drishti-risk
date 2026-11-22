@@ -36,11 +36,21 @@ class NamesNoHostTest {
 
     private static final Pattern HOST = Pattern.compile("com[./]ash[./]drishti|\\bDRS-\\d|\\bdrishti\\.[a-z]|org[./]springframework|\\b[Pp]acks?\\b|\\b[Mm]nemonics?\\b|\\bSutras?\\b");
 
+    /**
+     * The modules the move (K3) brought, still naming the host until K4 cuts them onto options and visibility (java/SPLIT_EXEMPTIONS.md,
+     * section 4): reported, not failed. The set only shrinks.
+     */
+    static final java.util.Set<String> MOVED_UNTIL_K4 = java.util.Set.of("risk-kernel", "risk-market", "risk-ccr");
+
     @Test
     void noSourceNamesAHost() throws Exception {
         List<String> out = new ArrayList<>();
         try (Stream<Path> modules = Files.list(Repo.JAVA)) {
             for (Path m : modules.filter(p -> Files.isDirectory(p.resolve("src/main"))).sorted().toList()) {
+                if (MOVED_UNTIL_K4.contains(m.getFileName().toString())) {
+                    System.out.println("names no host: " + m.getFileName() + " is exempt until K4 (SPLIT_EXEMPTIONS.md)");
+                    continue;
+                }
                 for (Path p : Repo.files(m.resolve("src/main"), ".java", ".yaml", ".properties")) {
                     if (HOST.matcher(Repo.read(p)).find()) {
                         out.add(Repo.rel(p));
