@@ -1,0 +1,169 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Risk. Proprietary: see LICENSE.
+# The market-risk engine of Drishti Risk: historical VaR and ES over supplied scenario P&L, by hierarchy node and by system basket.
+engine: 1
+id: market-risk
+version: 0.1.0
+title: Market risk
+about: >-
+  Historical VaR and expected shortfall over supplied valuations (scenario PVs or P&L vectors), for every node of any number of
+  hierarchies built from promoted columns and for every system basket, with component VaR, limits and their use, in the reporting
+  currency asked. The engine never prices: a missing input is an answer naming what is not found.
+publisher: { id: com.ash.risk, name: Drishti Risk }
+product: drishti-risk-market
+api: "0.1"
+platform: { tools: "1.1" }
+codes: RSK
+snapshot:
+  dimensions: [ { name: date, type: date, label: Business date } ]
+inputs:
+  scenario-pv:
+    contract: risk/scenario-pv@1
+    about: One row per position or trade and scenario set; its full revaluation under each scenario (SCENARIO_PV) and today's PV.
+    required: false
+    key: [ SCENARIO_PV_ID ]
+    columns: [ SCENARIO_PV_ID, SCENARIO_SET_ID, TRADE_ID, POSITION_ID, TRADE_STATUS, CURRENCY, TRADE_CURRENCY, BASE_PV, QUANTITY,
+               LEGAL_ENTITY, DIVISION, DESK, TT_BOOK, LIMIT_LETTER, PORTFOLIO, STRATEGY, PRODUCT_GROUP, PRODUCT_TYPE, COUNTERPARTY,
+               DIRECTION, SECURITY_ID, INSTRUMENT, INSTRUMENT_ID, ISIN, TICKER, CONTRACT, TAGS, SCENARIO_PV ]
+    vector: SCENARIO_PV
+    scope-columns: [ LEGAL_ENTITY, DIVISION, DESK, TT_BOOK, LIMIT_LETTER, PORTFOLIO ]
+  pnl-vector:
+    contract: risk/pnl-vector@1
+    about: One row per position or trade and scenario set; its scenario P&L in USD (PNL), computed by the supplier.
+    required: false
+    key: [ VECTOR_ID ]
+    columns: [ VECTOR_ID, SCENARIO_SET_ID, TRADE_ID, POSITION_ID, TRADE_STATUS, CURRENCY, TRADE_CURRENCY, PV, QUANTITY,
+               LEGAL_ENTITY, DIVISION, DESK, TT_BOOK, LIMIT_LETTER, PORTFOLIO, STRATEGY, PRODUCT_GROUP, PRODUCT_TYPE, COUNTERPARTY,
+               DIRECTION, SECURITY_ID, INSTRUMENT, INSTRUMENT_ID, ISIN, TICKER, CONTRACT, TAGS, PNL ]
+    vector: PNL
+    scope-columns: [ LEGAL_ENTITY, DIVISION, DESK, TT_BOOK, LIMIT_LETTER, PORTFOLIO ]
+  scenario-set:
+    contract: risk/scenario-set@1
+    about: The date's scenario sets; SCENARIO_DATES lists the scenario dates oldest first.
+    key: [ SCENARIO_SET_ID ]
+    columns: [ SCENARIO_SET_ID, SET_TYPE, SCENARIO_DATES ]
+  fx-scenario:
+    contract: risk/fx-scenario@1
+    about: USD per unit of each currency today (RATE) and under each scenario (RATES), per scenario set.
+    key: [ FX_SCENARIO_ID ]
+    columns: [ FX_SCENARIO_ID, SCENARIO_SET_ID, CURRENCY, RATE, RATES ]
+    vector: RATES
+  var-limit:
+    contract: risk/var-limit@1
+    about: VaR limits in USD by hierarchy and node id; hierarchy PORTFOLIO holds the system baskets' limits.
+    required: false
+    key: [ LIMIT_ID ]
+    columns: [ LIMIT_ID, HIERARCHY, NODE_ID, LIMIT_VAR ]
+  system-basket:
+    contract: risk/system-basket@1
+    about: The system baskets, each as a scope over positions, trades and nodes (SCOPE in the scope grammar).
+    required: false
+    key: [ PORTFOLIO_ID ]
+    columns: [ PORTFOLIO_ID, NAME, TYPE, OWNER, SCOPE ]
+options:
+  hierarchies:
+    type: records
+    label: Hierarchies
+    help: Any number of hierarchies, each built from promoted columns only (levels, top first, joined by ">").
+    fields:
+      id: { type: text, required: true }
+      title: { type: text }
+      levels: { type: text, required: true }
+      level-names: { type: text }
+      ids: { type: enum, options: [ path, leaf ], default: path }
+      root-id: { type: text }
+      root-name: { type: text }
+      word: { type: text }
+      empty-label: { type: text }
+    default: []
+  live-statuses: { type: list, items: text, default: [ NEW, VALIDATED, AMENDED ], label: Live trade statuses }
+  position-rules:
+    type: records
+    label: Position rules
+    help: How trades are grouped into positions (by product group and type, on the key columns); a trade no rule matches is its own position.
+    fields:
+      name: { type: text, required: true }
+      groups: { type: list, items: text }
+      types: { type: list, items: text }
+      key: { type: list, items: text }
+    default: []
+  confidence: { type: number, default: 0.99, min: 0.5, max: 0.9999, label: VaR confidence }
+  es-confidence: { type: number, default: 0.975, min: 0.5, max: 0.9999, label: ES confidence }
+  rank-rule: { type: enum, options: [ kth-worst, interpolated ], default: kth-worst, label: Rank rule }
+  component-window: { type: int, default: 5, min: 0, max: 50, label: Component VaR half-window, help: Ranks k - h to k + h are averaged. }
+  scale-to-var: { type: bool, default: true, label: Scale components to VaR }
+  threads: { type: int, default: 4, min: 1, max: 256, label: Summation threads, help: The sums are the same bits at any count. }
+  linear-algebra: { type: enum, options: [ native, java ], default: java, label: Linear algebra }
+params:
+  scenario-set: { type: text, default: "", label: Scenario set, help: "Empty: the date's one set that is not a stress set." }
+  window: { type: int, default: 0, min: 0, label: Window, help: "The newest N scenarios; 0: the whole set." }
+  currency: { type: text, default: USD, label: Reporting currency }
+outputs:
+  node-var:
+    title: VaR and ES by hierarchy node
+    about: One row per node of every hierarchy; members are the positions beneath the node; limit use is VaR over the node's limit.
+    params: [ scenario-set, window, currency ]
+    needs: [ scenario-set, fx-scenario ]
+    key: [ NODE_ID ]
+    columns:
+      - { name: NODE_ID, type: string, nullable: false, label: Node }
+      - { name: HIERARCHY, type: string, nullable: false, label: Hierarchy }
+      - { name: PARENT, type: string, nullable: true, label: Parent }
+      - { name: LEVEL, type: string, nullable: true, label: Level }
+      - { name: NAME, type: string, nullable: true, label: Name }
+      - { name: MEMBERS, type: integer, nullable: false, label: Members }
+      - { name: VAR, type: number, nullable: false, label: VaR, measure: true }
+      - { name: ES, type: number, nullable: false, label: Expected shortfall, measure: true }
+      - { name: VAR_UNITS, type: integer, nullable: false, label: VaR (whole units) }
+      - { name: ES_UNITS, type: integer, nullable: false, label: ES (whole units) }
+      - { name: VAR_SCENARIO, type: integer, nullable: true, label: VaR scenario }
+      - { name: LIMIT, type: number, nullable: true, label: Limit }
+      - { name: LIMIT_USE, type: number, nullable: true, label: Limit use }
+  node-components:
+    title: Component VaR of a node's children
+    about: For every node with children, each child's component VaR (Euler, averaged over ranks k ± h, scaled to the node's VaR) and its standalone VaR.
+    params: [ scenario-set, window, currency ]
+    needs: [ scenario-set, fx-scenario ]
+    key: [ NODE_ID, CHILD ]
+    columns:
+      - { name: NODE_ID, type: string, nullable: false, label: Node }
+      - { name: CHILD, type: string, nullable: false, label: Child }
+      - { name: COMPONENT_VAR, type: number, nullable: false, label: Component VaR, measure: true }
+      - { name: STANDALONE_VAR, type: number, nullable: false, label: Standalone VaR, measure: true }
+      - { name: INCREMENTAL_VAR, type: number, nullable: false, label: Incremental VaR, measure: true }
+  basket-var:
+    title: VaR and ES by system basket
+    about: One row per system basket; UNKNOWN lists the scope's names the date does not hold.
+    params: [ scenario-set, window, currency ]
+    needs: [ scenario-set, fx-scenario, system-basket ]
+    key: [ BASKET_ID ]
+    columns:
+      - { name: BASKET_ID, type: string, nullable: false, label: Basket }
+      - { name: NAME, type: string, nullable: true, label: Name }
+      - { name: TYPE, type: string, nullable: true, label: Type }
+      - { name: OWNER, type: string, nullable: true, label: Owner }
+      - { name: MEMBERS, type: integer, nullable: false, label: Members }
+      - { name: UNKNOWN, type: string, nullable: true, label: Unknown names }
+      - { name: VAR, type: number, nullable: false, label: VaR, measure: true }
+      - { name: ES, type: number, nullable: false, label: Expected shortfall, measure: true }
+      - { name: VAR_UNITS, type: integer, nullable: false, label: VaR (whole units) }
+      - { name: ES_UNITS, type: integer, nullable: false, label: ES (whole units) }
+      - { name: LIMIT, type: number, nullable: true, label: Limit }
+      - { name: LIMIT_USE, type: number, nullable: true, label: Limit use }
+  headline:
+    title: The bank's VaR and ES
+    about: One row per hierarchy root.
+    params: [ scenario-set, window, currency ]
+    needs: [ scenario-set, fx-scenario ]
+    key: [ HIERARCHY ]
+    columns:
+      - { name: HIERARCHY, type: string, nullable: false, label: Hierarchy }
+      - { name: NODE_ID, type: string, nullable: false, label: Root }
+      - { name: VAR, type: number, nullable: false, label: VaR, measure: true }
+      - { name: ES, type: number, nullable: false, label: Expected shortfall, measure: true }
+      - { name: VAR_UNITS, type: integer, nullable: false, label: VaR (whole units) }
+      - { name: ES_UNITS, type: integer, nullable: false, label: ES (whole units) }
+capabilities: [ explain, workbook ]
+limits:
+  memory: { fixed-bytes: 16777216, per-row-bytes: { scenario-pv: 4400, pnl-vector: 4400, fx-scenario: 4200 } }
+  cancel-latency: 1s
+ui: { group: Risk, words: [ VAR, ES ] }
