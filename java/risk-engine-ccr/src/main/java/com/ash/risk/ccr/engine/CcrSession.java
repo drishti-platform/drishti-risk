@@ -37,12 +37,15 @@ import com.ash.risk.ccr.calc.ExposureCalc;
 import com.ash.risk.ccr.calc.ExposureGrid;
 import com.ash.risk.ccr.calc.ExposureMath;
 import com.ash.risk.ccr.calc.ExposureScopes;
+import com.ash.risk.kernel.workbook.AnswerBook;
 import com.ash.tools.xlsx.Sheet;
 import com.ash.tools.xlsx.Workbook;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Set;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -84,43 +87,135 @@ final class CcrSession implements Session, Explaining {
         return engine.meter().measure(() -> answer(request, control), day.paths.size(), 0);
     }
 
+    /** The outputs answered from the exposure book (they need the run and the paths). */
+    static final Set<String> PATHS = Set.of("exposure-summary", "exposure-profile", "netting-set-summary", "netting-set-collateral", "pre-deal",
+            "pre-deal-buckets");
+    /** The inputs each output cannot be answered without, beyond the run and the paths. */
+    static final Map<String, List<String>> NEEDS = Map.of(
+            "pre-deal", List.of(CcrExtras.LIMIT, CcrExtras.BUCKET),
+            "pre-deal-buckets", List.of(CcrExtras.LIMIT, CcrExtras.BUCKET),
+            "simm", List.of(CcrExtras.SENSITIVITY, CcrExtras.FACTOR, CcrExtras.SIMM),
+            "simm-total", List.of(CcrExtras.SENSITIVITY, CcrExtras.FACTOR, CcrExtras.SIMM));
+
+    /** What the outputs asked need and the date does not have, one per input, naming every output it stops. */
+    private List<Missing> missing(Request request) {
+        Map<String, Missing> out = new LinkedHashMap<>();
+        for (String o : request.outputs()) {
+            List<String> needs = new ArrayList<>();
+            if (PATHS.contains(o)) {
+                needs.add(CcrDay.RUN);
+                needs.add(CcrDay.PATH);
+            }
+            needs.addAll(NEEDS.getOrDefault(o, List.of()));
+            for (String input : needs) {
+                Missing m = day.missing.get(input);
+                if (m == null && input.equals(CcrDay.RUN) && day.run == null) {
+                    m = new Missing(CcrDay.RUN, CcrDay.CONTRACT.get(CcrDay.RUN), snapshot, List.of(), List.of());
+                }
+                if (m == null) {
+                    continue;
+                }
+                Missing was = out.get(input);
+                List<String> outs = new ArrayList<>(was == null ? List.of() : was.outputs());
+                outs.add(o);
+                out.put(input, new Missing(m.input(), m.contract(), m.snapshot(), m.columns(), outs));
+            }
+        }
+        return List.copyOf(out.values());
+    }
+
+    /** What one request computed, kept for its explanation and workbook. */
+    private final class Computed {
+        final Request request;
+        final Control control;
+        CcrPreDeal.Check check;
+        List<CcrSimm.Run> simm;
+        List<CcrCollateral.View> collateral;
+
+        Computed(Request request, Control control) {
+            this.request = request;
+            this.control = control;
+        }
+
+        ExposureBook book() throws EngineException {
+            return CcrSession.this.book(request, control);
+        }
+
+        CcrPreDeal.Check check() throws EngineException {
+            if (check == null) {
+                ExposureBook b = book();
+                check = new CcrPreDeal(engine.descriptor(), engine.options(), day).check(request, b, new CcrPreDeal.Scopes() {
+                    @Override
+                    public ExposureCalc.Result evaluate(String scope) throws EngineException {
+                        return CcrSession.this.evaluate(b, scope, false);
+                    }
+
+                    @Override
+                    public Map<String, double[]> paths(java.util.Collection<String> trades) {
+                        return CcrSession.this.paths(trades);
+                    }
+                });
+            }
+            return check;
+        }
+
+        List<CcrSimm.Run> simm() throws EngineException {
+            if (simm == null) {
+                simm = new CcrSimm(engine.descriptor(), engine.options(), day).runs(request, see(request, CcrExtras.SENSITIVITY));
+            }
+            return simm;
+        }
+
+        List<CcrCollateral.View> collateral() throws EngineException {
+            if (collateral == null) {
+                ExposureBook b = book();
+                collateral = new CcrCollateral(engine.descriptor(), engine.options()).views(b, scope -> CcrSession.this.evaluate(b, scope, false), control);
+            }
+            return collateral;
+        }
+    }
+
     private Answer answer(Request request, Control control) throws EngineException {
-        List<Missing> missing = new ArrayList<>();
-        for (String name : List.of(CcrDay.RUN, CcrDay.PATH)) {
-            Missing m = day.missing.get(name);
-            if (m != null) {
-                missing.add(new Missing(m.input(), m.contract(), m.snapshot(), m.columns(), request.outputs()));
-            }
-        }
-        if (!missing.isEmpty() || day.run == null) {
-            if (missing.isEmpty()) {
-                missing.add(new Missing(CcrDay.RUN, CcrDay.CONTRACT.get(CcrDay.RUN), snapshot, List.of(), request.outputs()));
-            }
-            return Answers.notFound(engine.context(), this, request, missing);
-        }
-        ExposureBook b = book(request, control);
+        List<Missing> missing = missing(request);
+        Computed c = new Computed(request, control);
         List<Table> tables = new ArrayList<>();
         for (String out : request.outputs()) {
             control.check();
+            if (missing.stream().anyMatch(m -> m.outputs().contains(out))) {
+                continue;
+            }
             tables.add(switch (out) {
-                case "exposure-summary" -> summary(b, request);
-                case "exposure-profile" -> profile(b, request);
-                case "netting-set-summary" -> sets(b, control);
+                case "exposure-summary" -> summary(c.book(), request);
+                case "exposure-profile" -> profile(c.book(), request);
+                case "netting-set-summary" -> sets(c.book(), control);
+                case "netting-set-collateral" -> new CcrCollateral(engine.descriptor(), engine.options()).table(c.collateral());
+                case "pre-deal" -> new CcrPreDeal(engine.descriptor(), engine.options(), day).table(c.check());
+                case "pre-deal-buckets" -> new CcrPreDeal(engine.descriptor(), engine.options(), day).buckets(c.check());
+                case "simm" -> new CcrSimm(engine.descriptor(), engine.options(), day).classes(c.simm());
+                case "simm-total" -> new CcrSimm(engine.descriptor(), engine.options(), day).totals(c.simm());
                 default -> throw new EngineException("ENG-3003", Kind.REFUSED, "ccr has no output " + out);
             });
         }
-        return Answers.complete(engine.context(), this, request, tables);
+        if (tables.isEmpty()) {
+            return Answers.notFound(engine.context(), this, request, missing);
+        }
+        return missing.isEmpty() ? Answers.complete(engine.context(), this, request, tables) : Answers.of(engine.context(), this, request, tables, missing);
     }
 
-    private static Filter visibility(Request request) throws EngineException {
+    /** The rows of one input the request may read (ENGINE_SPEC 8.6 rule 1). */
+    static Filter see(Request request, String input) throws EngineException {
         if (request.visibility() == null) {
             throw new EngineException("ENG-4001", Kind.NOT_PERMITTED, "the request has no visibility");
         }
-        Filter f = request.visibility().rows().get(CcrDay.PATH);
+        Filter f = request.visibility().rows().get(input);
         if (f == null) {
-            throw new EngineException("ENG-4002", Kind.NOT_PERMITTED, "the request names no rows of exposure-path it may read");
+            throw new EngineException("ENG-4002", Kind.NOT_PERMITTED, "the request names no rows of " + input + " it may read");
         }
         return f;
+    }
+
+    private static Filter visibility(Request request) throws EngineException {
+        return see(request, CcrDay.PATH);
     }
 
     private ExposureBook book(Request request, Control control) throws EngineException {
@@ -151,7 +246,7 @@ final class CcrSession implements Session, Explaining {
     }
 
     /** The scope's evaluation, by Drishti's scope words and calculator. */
-    private ExposureCalc.Result evaluate(ExposureBook b, String scope, boolean standalone) throws EngineException {
+    ExposureCalc.Result evaluate(ExposureBook b, String scope, boolean standalone) throws EngineException {
         ExposureScopes.Resolution r = new ExposureScopes(b, g -> Optional.empty()).resolve(scope == null || scope.isBlank() ? "BANK" : scope);
         if (!r.unknown().isEmpty() && r.trades().size() == 0) {
             throw new EngineException("RSK-3101", Kind.REFUSED, "the scope names what the date does not hold: " + String.join(", ", r.unknown()));
@@ -167,7 +262,7 @@ final class CcrSession implements Session, Explaining {
     private record Evaluated(String scope, ExposureCalc.Result result) {}
 
     /** The trades' full paths (grid points × paths), for pieces that are part of a netting set. */
-    private Map<String, double[]> paths(java.util.Collection<String> ids) {
+    Map<String, double[]> paths(java.util.Collection<String> ids) {
         ExposureGrid g;
         try {
             g = day.grid();
@@ -224,6 +319,23 @@ final class CcrSession implements Session, Explaining {
     @Override
     public Explanation explain(Request request, Cell cell, Control control) throws EngineException {
         engine.running();
+        if (missing(request).stream().anyMatch(m -> m.outputs().contains(cell.output()))) {
+            throw new EngineException("ENG-3005", Kind.REFUSED, "the cell is not in this request's answer: an input it needs is missing");
+        }
+        Computed c = new Computed(request, control);
+        switch (cell.output()) {
+            case "netting-set-collateral" -> {
+                return new CcrCollateral(engine.descriptor(), engine.options()).explain(c.collateral(), cell);
+            }
+            case "pre-deal", "pre-deal-buckets" -> {
+                return new CcrPreDeal(engine.descriptor(), engine.options(), day).explain(c.check(), cell);
+            }
+            case "simm", "simm-total" -> {
+                return new CcrSimm(engine.descriptor(), engine.options(), day).explain(c.simm(), cell);
+            }
+            default -> {
+            }
+        }
         Answer a = ask(request, control);
         Table t = a.table(cell.output());
         if (t == null) {
@@ -249,28 +361,74 @@ final class CcrSession implements Session, Explaining {
     public void workbook(Request request, OutputStream out, Control control) throws EngineException, IOException {
         engine.running();
         Answer a = ask(request, control);
-        try (Workbook wb = Workbook.to(out)) {
-            Sheet data = wb.sheet("Data");
-            if (a.tables().isEmpty()) {
-                data.row(1).text(0, "No data", "header");
-                wb.sheet("Main").row(1).text(0, String.join("; ", a.missing().stream().map(Missing::words).toList()), "normal");
-                return;
+        Computed c = new Computed(request, control);
+        List<AnswerBook.Part> parts = new ArrayList<>();
+        boolean exposure = false;
+        boolean preDeal = false;
+        boolean simm = false;
+        for (String name : request.outputs()) {
+            if (a.table(name) == null) {
+                continue;
             }
-            Table p = profile(book(request, control), request);
-            data.row(1).text(0, "POINT", "header").text(1, "DATE", "header").text(2, "EE", "header").text(3, "PFE", "header");
-            for (int i = 0; i < p.rows(); i++) {
-                data.next().number(0, (long) i, "int").text(1, p.texts("DATE")[i], "normal").number(2, p.numbers("EE")[i], "decimal")
-                        .number(3, p.numbers("PFE")[i], "decimal");
+            switch (name) {
+                case "exposure-summary", "exposure-profile" -> {
+                    if (!exposure) {
+                        exposure = true;
+                        parts.add(exposurePart(c.book(), request));
+                    }
+                }
+                case "netting-set-collateral" -> parts.add(new CcrCollateral(engine.descriptor(), engine.options()).part(c.collateral()));
+                case "pre-deal", "pre-deal-buckets" -> {
+                    if (!preDeal) {
+                        preDeal = true;
+                        parts.add(new CcrPreDeal(engine.descriptor(), engine.options(), day).part(c.check()));
+                    }
+                }
+                case "simm", "simm-total" -> {
+                    if (!simm) {
+                        simm = true;
+                        parts.add(new CcrSimm(engine.descriptor(), engine.options(), day).part(c.simm()));
+                    }
+                }
+                default -> {
+                }
             }
-            int last = Math.max(2, p.rows() + 1);
-            Table s = summary(book(request, control), request);
-            Sheet main = wb.sheet("Main");
-            main.row(1).text(0, "Peak EE", "bold").formula(1, "MAX(Data!$C$2:$C$" + last + ")", s.numbers("PEAK_EE")[0], "decimal");
-            main.row(2).text(0, "Peak PFE", "bold").formula(1, "MAX(Data!$D$2:$D$" + last + ")", s.numbers("PEAK_PFE")[0], "decimal");
-            main.row(3).text(0, "EPE", "bold").number(1, s.numbers("EPE")[0], "decimal");
-            main.row(4).text(0, "Effective EPE", "bold").number(1, s.numbers("EEPE")[0], "decimal");
-            main.row(5).text(0, "Current exposure", "bold").number(1, s.numbers("CE")[0], "decimal");
         }
+        AnswerBook.write(out, parts, String.join("; ", a.missing().stream().map(Missing::words).toList()));
+    }
+
+    /** The exposure part: the scope's EE and PFE profile as values; the peaks as MAX formulas, EPE, EEPE and CE the engine's. */
+    private AnswerBook.Part exposurePart(ExposureBook b, Request request) throws EngineException {
+        Table p = profile(b, request);
+        Table s = summary(b, request);
+        return new AnswerBook.Part() {
+            private int first;
+            private int last;
+
+            @Override
+            public int data(Sheet data, int at) {
+                data.row(at).text(0, "POINT", "header").text(1, "DATE", "header").text(2, "EE", "header").text(3, "PFE", "header");
+                for (int i = 0; i < p.rows(); i++) {
+                    data.row(at + 1 + i).number(0, (long) i, "int").text(1, p.texts("DATE")[i], "normal").number(2, p.numbers("EE")[i], "decimal")
+                            .number(3, p.numbers("PFE")[i], "decimal");
+                }
+                first = at + 1;
+                last = Math.max(first, at + p.rows());
+                return last;
+            }
+
+            @Override
+            public int main(Workbook wb, Sheet main, int at) {
+                main.row(at).text(0, "Peak EE", "bold").formula(1, "MAX(" + AnswerBook.range(2, first, last) + ")", s.numbers("PEAK_EE")[0], "decimal");
+                main.row(at + 1).text(0, "Peak PFE", "bold").formula(1, "MAX(" + AnswerBook.range(3, first, last) + ")", s.numbers("PEAK_PFE")[0], "decimal");
+                main.row(at + 2).text(0, "EPE", "bold").number(1, s.numbers("EPE")[0], "decimal");
+                main.row(at + 3).text(0, "Effective EPE", "bold").number(1, s.numbers("EEPE")[0], "decimal");
+                main.row(at + 4).text(0, "Current exposure", "bold").number(1, s.numbers("CE")[0], "decimal");
+                wb.name(AnswerBook.name("exposure-summary", "PEAK_EE"), main.name(), "$B$" + at);
+                wb.name(AnswerBook.name("exposure-summary", "PEAK_PFE"), main.name(), "$B$" + (at + 1));
+                return at + 4;
+            }
+        };
     }
 
     @Override
