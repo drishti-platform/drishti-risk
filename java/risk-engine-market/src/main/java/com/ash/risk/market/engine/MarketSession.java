@@ -1,5 +1,5 @@
 /*
- * Drishti Risk · market and counterparty risk as engines.
+ * Project Drishti · Any data. Any domain. One grammar.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -32,19 +32,41 @@ import com.ash.engine.Session;
 import com.ash.engine.Snapshot;
 import com.ash.engine.Table;
 import com.ash.engine.Visibility;
+import com.ash.risk.kernel.workbook.AnswerBook;
+import com.ash.risk.market.calc.VarLens;
+import com.ash.risk.market.frtb.calc.FrtbSa;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * A market-risk session: one business date's inputs and the books built from them, one per (scenario set, window, currency,
  * visibility). A book is built at its first ask and kept for the session; a viewer's book is built from the rows that viewer may see,
- * so an answer never depends on rows outside the visibility (filter equivalence holds by construction).
+ * so an answer never depends on rows outside the visibility (filter equivalence holds by construction). The outputs over earlier dates
+ * and over the sensitivities read their own inputs under their own filters; each output that lacks an input it needs is answered
+ * NOT_FOUND by name while the others are answered (a partial answer).
  */
 final class MarketSession implements Session, Explaining {
+
+    /** The outputs answered from a book of scenario vectors. */
+    static final Set<String> BOOK = Set.of("node-var", "node-components", "basket-var", "headline", "node-pvar", "node-pvar-components",
+            "node-var-horizon", "what-if");
+    /** The inputs each other output cannot be answered without. */
+    static final Map<String, List<String>> NEEDS = Map.of(
+            "backtest", List.of(MarketExtras.HISTORY, MarketExtras.DESK_PNL),
+            "backtest-days", List.of(MarketExtras.HISTORY, MarketExtras.DESK_PNL),
+            "period-stats", List.of(MarketExtras.HISTORY),
+            "regulatory-report", List.of(MarketExtras.HISTORY, MarketExtras.REPORT_ROW),
+            "stress-window", List.of(MarketExtras.PNL_HISTORY),
+            "sensitivity-sum", List.of(MarketExtras.SENSITIVITY, MarketExtras.FACTOR),
+            "sensitivity-ladder", List.of(MarketExtras.SENSITIVITY, MarketExtras.FACTOR),
+            "frtb-sa", List.of(MarketExtras.SENSITIVITY, MarketExtras.FACTOR),
+            "frtb-contributions", List.of(MarketExtras.SENSITIVITY, MarketExtras.FACTOR));
 
     private final MarketRiskEngine engine;
     private final Snapshot snapshot;
@@ -82,75 +104,238 @@ final class MarketSession implements Session, Explaining {
         return engine.meter().measure(() -> answer(request, control), day.pv.size() + day.pnl.size(), 0);
     }
 
-    private Answer answer(Request request, Control control) throws EngineException {
-        List<Missing> missing = missing(request);
-        if (!missing.isEmpty()) {
-            return Answers.notFound(engine.context(), this, request, missing);
+    /** What one request computed, kept for the explanation and the workbook of the same request. */
+    private final class Computed {
+        final Request request;
+        final Control control;
+        final Map<String, Object> made = new LinkedHashMap<>();
+        MarketBooks.Built built;
+        MarketBooks.Built horizonBook;
+        boolean noFx;
+
+        Computed(Request request, Control control) {
+            this.request = request;
+            this.control = control;
         }
-        MarketBooks.Built built = book(request, control);
-        if (built == null) {
-            String cur = String.valueOf(request.param("currency"));
-            return Answers.notFound(engine.context(), this, request, List.of(new Missing(MarketDay.FX, MarketDay.CONTRACT.get(MarketDay.FX),
-                    snapshot, List.of("RATES of " + cur), request.outputs())));
+
+        MarketBooks.Built book() throws EngineException {
+            if (built == null) {
+                built = MarketSession.this.book(request, control, null);
+                noFx = built == null;
+            }
+            return built;
         }
-        List<Table> tables = new ArrayList<>();
-        MarketTables t = new MarketTables(engine.descriptor(), engine.options(), engine.sums());
-        for (String out : request.outputs()) {
-            control.check();
-            tables.add(switch (out) {
-                case "node-var" -> t.nodeVar(built.book());
-                case "node-components" -> t.nodeComponents(built.book(), control);
-                case "basket-var" -> t.basketVar(built.book(), day);
-                case "headline" -> t.headline(built.book());
-                default -> throw new EngineException("ENG-3003", Kind.REFUSED, "market-risk has no output " + out);
-            });
+
+        MarketBooks.Built horizon() throws EngineException {
+            if (horizonBook == null) {
+                if (Boolean.TRUE.equals(request.param("stressed"))) {
+                    horizonBook = MarketSession.this.book(request, control, day.stressSet(engine.options().stressedPrefix()));
+                } else {
+                    horizonBook = book();
+                }
+            }
+            return horizonBook;
         }
-        return Answers.complete(engine.context(), this, request, tables);
+
+        @SuppressWarnings("unchecked")
+        <T> T get(String key, Make<T> make) throws EngineException {
+            Object have = made.get(key);
+            if (have == null) {
+                have = make.make();
+                made.put(key, have);
+            }
+            return (T) have;
+        }
     }
 
-    /** What the outputs asked need and the date does not have: the answer names it; nothing is substituted. */
-    private List<Missing> missing(Request request) {
-        List<Missing> out = new ArrayList<>();
-        for (String name : List.of(MarketDay.SCENARIO_SET, MarketDay.FX)) {
-            Missing m = day.missing.get(name);
-            if (m != null) {
-                out.add(new Missing(m.input(), m.contract(), m.snapshot(), m.columns(), request.outputs()));
+    @FunctionalInterface
+    private interface Make<T> {
+        T make() throws EngineException;
+    }
+
+    private Answer answer(Request request, Control control) throws EngineException {
+        Map<String, Missing> missing = missing(request);
+        Computed c = new Computed(request, control);
+        List<Table> tables = new ArrayList<>();
+        for (String out : request.outputs()) {
+            control.check();
+            if (missing.values().stream().anyMatch(m -> m.outputs().contains(out))) {
+                continue;
+            }
+            Table t = table(c, out);
+            if (t == null) {                                                // the reporting currency has no FX on the set
+                String cur = String.valueOf(request.param("currency"));
+                missing.put(MarketDay.FX + "|" + out, new Missing(MarketDay.FX, MarketDay.CONTRACT.get(MarketDay.FX), snapshot, List.of("RATES of " + cur),
+                        List.of(out)));
+                continue;
+            }
+            tables.add(t);
+        }
+        List<Missing> named = merge(missing);
+        if (tables.isEmpty()) {
+            return Answers.notFound(engine.context(), this, request, named);
+        }
+        return named.isEmpty() ? Answers.complete(engine.context(), this, request, tables) : Answers.of(engine.context(), this, request, tables, named);
+    }
+
+    /** One table of a request; null when its book cannot be built (no FX for the reporting currency). */
+    private Table table(Computed c, String out) throws EngineException {
+        Request request = c.request;
+        MarketOptions o = engine.options();
+        MarketTables t = new MarketTables(engine.descriptor(), o, engine.sums());
+        if (BOOK.contains(out)) {
+            MarketBooks.Built b = out.equals("node-var-horizon") ? c.horizon() : c.book();
+            if (b == null) {
+                return null;
+            }
+            return switch (out) {
+                case "node-var" -> t.nodeVar(b.book());
+                case "node-components" -> t.nodeComponents(b.book(), c.control);
+                case "basket-var" -> t.basketVar(b.book(), day);
+                case "headline" -> t.headline(b.book());
+                case "node-pvar" -> new MarketParametric(engine.descriptor(), o).nodes(b.book());
+                case "node-pvar-components" -> new MarketParametric(engine.descriptor(), o).components(b.book(), c.control);
+                case "node-var-horizon" -> {
+                    MarketHorizon h = new MarketHorizon(engine.descriptor(), o);
+                    VarLens lens = h.lens(request);
+                    yield h.nodes(b, b.scenarios().isEmpty() ? "" : setOf(request), lens);
+                }
+                default -> {
+                    MarketWhatIf w = new MarketWhatIf(engine.descriptor(), o);
+                    yield w.table(c.get("what-if", () -> w.ask(b, request)));
+                }
+            };
+        }
+        MarketHistory h = new MarketHistory(engine.descriptor(), o, day);
+        MarketSensitivities s = new MarketSensitivities(engine.descriptor(), o, day);
+        return switch (out) {
+            case "backtest" -> h.backtest(backtests(c, h));
+            case "backtest-days" -> h.backtestDays(backtests(c, h));
+            case "period-stats" -> h.periodTable(c.get("period-stats", () -> h.periodStats(request, see(request, MarketExtras.HISTORY))));
+            case "regulatory-report" -> h.reportTable(c.get("regulatory-report", () -> h.reports(request, see(request, MarketExtras.HISTORY))));
+            case "stress-window" -> h.windowTable(c.get("stress-window", () -> h.windows(request, see(request, MarketExtras.PNL_HISTORY))));
+            case "sensitivity-sum" -> s.sumTable(c.get("sensitivity-sum", () -> s.sums(scoped(c, s), String.valueOf(request.param("by")))));
+            case "sensitivity-ladder" -> s.ladderTable(c.get("sensitivity-ladder", () -> s.ladder(scoped(c, s), request)));
+            case "frtb-sa" -> s.frtbTable(frtb(c, s));
+            case "frtb-contributions" -> s.contributionTable(frtb(c, s), String.valueOf(request.param("attribute")));
+            default -> throw new EngineException("ENG-3003", Kind.REFUSED, "market-risk has no output " + out);
+        };
+    }
+
+    private String setOf(Request request) {
+        if (Boolean.TRUE.equals(request.param("stressed"))) {
+            MarketDay.ScenarioSet s = day.stressSet(engine.options().stressedPrefix());
+            return s == null ? "" : s.id();
+        }
+        MarketDay.ScenarioSet s = day.set(String.valueOf(request.param("scenario-set")));
+        return s == null ? "" : s.id();
+    }
+
+    private List<MarketHistory.Test> backtests(Computed c, MarketHistory h) throws EngineException {
+        return c.get("backtest", () -> h.backtests(c.request, see(c.request, MarketExtras.HISTORY), see(c.request, MarketExtras.DESK_PNL)));
+    }
+
+    private MarketSensitivities.Scoped scoped(Computed c, MarketSensitivities s) throws EngineException {
+        return c.get("scoped", () -> s.scoped(c.request, see(c.request, MarketExtras.SENSITIVITY)));
+    }
+
+    private FrtbSa.Result frtb(Computed c, MarketSensitivities s) throws EngineException {
+        return c.get("frtb", () -> {
+            try {
+                return s.frtb(scoped(c, s), c.request);
+            } catch (IllegalArgumentException e) {
+                throw new EngineException("RSK-3144", Kind.REFUSED, e.getMessage());
+            }
+        });
+    }
+
+    /** One missing input per name, naming every output it stops. */
+    private static List<Missing> merge(Map<String, Missing> missing) {
+        Map<String, Missing> byInput = new LinkedHashMap<>();
+        for (Missing m : missing.values()) {
+            Missing was = byInput.get(m.input());
+            if (was == null) {
+                byInput.put(m.input(), m);
+            } else {
+                List<String> outs = new ArrayList<>(was.outputs());
+                m.outputs().stream().filter(x -> !outs.contains(x)).forEach(outs::add);
+                List<String> cols = new ArrayList<>(was.columns());
+                m.columns().stream().filter(x -> !cols.contains(x)).forEach(cols::add);
+                byInput.put(m.input(), new Missing(was.input(), was.contract(), was.snapshot(), cols, outs));
             }
         }
-        if (day.pv.isEmpty() && day.pnl.isEmpty()) {
-            Missing m = day.missing.getOrDefault(MarketDay.SCENARIO_PV,
-                    new Missing(MarketDay.SCENARIO_PV, MarketDay.CONTRACT.get(MarketDay.SCENARIO_PV), snapshot, List.of(), List.of()));
-            out.add(new Missing(m.input(), m.contract(), m.snapshot(), m.columns(), request.outputs()));
+        return List.copyOf(byInput.values());
+    }
+
+    /** What the outputs asked need and the date does not have, by input and output: the answer names it; nothing is substituted. */
+    private Map<String, Missing> missing(Request request) {
+        Map<String, Missing> out = new LinkedHashMap<>();
+        List<String> book = request.outputs().stream().filter(BOOK::contains).toList();
+        if (!book.isEmpty()) {
+            for (String name : List.of(MarketDay.SCENARIO_SET, MarketDay.FX)) {
+                Missing m = day.missing.get(name);
+                if (m != null) {
+                    out.put(name, new Missing(m.input(), m.contract(), m.snapshot(), m.columns(), book));
+                }
+            }
+            if (day.pv.isEmpty() && day.pnl.isEmpty()) {
+                Missing m = day.missing.getOrDefault(MarketDay.SCENARIO_PV,
+                        new Missing(MarketDay.SCENARIO_PV, MarketDay.CONTRACT.get(MarketDay.SCENARIO_PV), snapshot, List.of(), List.of()));
+                out.put(MarketDay.SCENARIO_PV, new Missing(m.input(), m.contract(), m.snapshot(), m.columns(), book));
+            }
+            if (request.outputs().contains("basket-var") && day.missing.containsKey(MarketDay.BASKET)) {
+                Missing m = day.missing.get(MarketDay.BASKET);
+                out.put(MarketDay.BASKET, new Missing(m.input(), m.contract(), m.snapshot(), m.columns(), List.of("basket-var")));
+            }
+            if (!out.containsKey(MarketDay.SCENARIO_SET)) {
+                List<String> normal = book.stream().filter(x -> !x.equals("node-var-horizon") || !Boolean.TRUE.equals(request.param("stressed"))).toList();
+                if (!normal.isEmpty() && day.set(String.valueOf(request.param("scenario-set"))) == null) {
+                    out.put(MarketDay.SCENARIO_SET + "|normal", new Missing(MarketDay.SCENARIO_SET, MarketDay.CONTRACT.get(MarketDay.SCENARIO_SET),
+                            snapshot, List.of("SCENARIO_SET_ID " + request.param("scenario-set")), normal));
+                }
+                if (book.contains("node-var-horizon") && Boolean.TRUE.equals(request.param("stressed"))
+                        && day.stressSet(engine.options().stressedPrefix()) == null) {
+                    out.put(MarketDay.SCENARIO_SET + "|stress", new Missing(MarketDay.SCENARIO_SET, MarketDay.CONTRACT.get(MarketDay.SCENARIO_SET),
+                            snapshot, List.of("SET_TYPE STRESS"), List.of("node-var-horizon")));
+                }
+            }
         }
-        if (request.outputs().contains("basket-var") && day.missing.containsKey(MarketDay.BASKET)) {
-            Missing m = day.missing.get(MarketDay.BASKET);
-            out.add(new Missing(m.input(), m.contract(), m.snapshot(), m.columns(), List.of("basket-var")));
-        }
-        if (out.isEmpty() && day.set(String.valueOf(request.param("scenario-set"))) == null) {
-            out.add(new Missing(MarketDay.SCENARIO_SET, MarketDay.CONTRACT.get(MarketDay.SCENARIO_SET), snapshot,
-                    List.of("SCENARIO_SET_ID " + request.param("scenario-set")), request.outputs()));
+        for (String o : request.outputs()) {
+            for (String input : NEEDS.getOrDefault(o, List.of())) {
+                Missing m = day.missing.get(input);
+                if (m != null) {
+                    out.put(input + "|" + o, new Missing(m.input(), m.contract(), m.snapshot(), m.columns(), List.of(o)));
+                }
+            }
         }
         return out;
     }
 
     /** The visibility over the two vector inputs, each its own filter (a request without them is refused, ENG-4001, ENG-4002). */
     static Filter[] visibility(Request request) throws EngineException {
+        return new Filter[] {see(request, MarketDay.SCENARIO_PV), see(request, MarketDay.PNL_VECTOR)};
+    }
+
+    /** The rows of one input the request may read (ENGINE_SPEC 8.6 rule 1: nothing is read as "all" by default). */
+    static Filter see(Request request, String input) throws EngineException {
         Visibility v = request.visibility();
         if (v == null) {
             throw new EngineException("ENG-4001", Kind.NOT_PERMITTED, "the request has no visibility");
         }
-        Filter pv = v.rows().get(MarketDay.SCENARIO_PV);
-        Filter pnl = v.rows().get(MarketDay.PNL_VECTOR);
-        if (pv == null || pnl == null) {
-            throw new EngineException("ENG-4002", Kind.NOT_PERMITTED, "the request names no rows of scenario-pv and pnl-vector it may read");
+        Filter f = v.rows().get(input);
+        if (f == null) {
+            throw new EngineException("ENG-4002", Kind.NOT_PERMITTED, "the request names no rows of " + input + " it may read");
         }
-        return new Filter[] {pv, pnl};
+        return f;
     }
 
-    MarketBooks.Built book(Request request, Control control) throws EngineException {
+    /** The book of a request (of {@code over} when given: the stress set), built once per key. Null when the reporting currency has no FX. */
+    MarketBooks.Built book(Request request, Control control, MarketDay.ScenarioSet over) throws EngineException {
         Filter[] see = visibility(request);
-        String setName = String.valueOf(request.param("scenario-set"));
-        MarketDay.ScenarioSet set = day.set(setName);
+        MarketDay.ScenarioSet set = over != null ? over : day.set(String.valueOf(request.param("scenario-set")));
+        if (set == null) {
+            throw new EngineException("ENG-3005", Kind.REFUSED, "the date has no such scenario set");
+        }
         int window = ((Number) request.param("window")).intValue();
         String currency = String.valueOf(request.param("currency")).toUpperCase(java.util.Locale.ROOT);
         MarketBooks.Key key = new MarketBooks.Key(set.id(), window, currency, request.visibility().signature());
@@ -188,19 +373,116 @@ final class MarketSession implements Session, Explaining {
     @Override
     public Explanation explain(Request request, Cell cell, Control control) throws EngineException {
         engine.running();
-        MarketBooks.Built built = book(request, control);
-        if (built == null) {
-            throw new EngineException("ENG-3005", Kind.REFUSED, "the cell is not in this request's answer: the reporting currency has no FX");
+        Computed c = new Computed(request, control);
+        if (!missing(request).values().stream().filter(m -> m.outputs().contains(cell.output())).toList().isEmpty()) {
+            throw new EngineException("ENG-3005", Kind.REFUSED, "the cell is not in this request's answer: an input it needs is missing");
         }
-        return new MarketExplain(engine.options(), engine.sums()).explain(built, day, cell);
+        MarketOptions o = engine.options();
+        MarketExplain historical = new MarketExplain(o, engine.sums());
+        String out = cell.output();
+        if (BOOK.contains(out)) {
+            MarketBooks.Built b = out.equals("node-var-horizon") ? c.horizon() : c.book();
+            if (b == null) {
+                throw new EngineException("ENG-3005", Kind.REFUSED, "the cell is not in this request's answer: the reporting currency has no FX");
+            }
+            return switch (out) {
+                case "node-pvar", "node-pvar-components" -> new MarketParametric(engine.descriptor(), o).explain(b, cell, historical);
+                case "node-var-horizon" -> {
+                    MarketHorizon h = new MarketHorizon(engine.descriptor(), o);
+                    yield h.explain(b, cell, h.lens(request), historical);
+                }
+                case "what-if" -> {
+                    MarketWhatIf w = new MarketWhatIf(engine.descriptor(), o);
+                    yield w.explain(w.ask(b, request), b, cell);
+                }
+                default -> historical.explain(b, day, cell);
+            };
+        }
+        MarketHistory h = new MarketHistory(engine.descriptor(), o, day);
+        MarketSensitivities s = new MarketSensitivities(engine.descriptor(), o, day);
+        return switch (out) {
+            case "backtest" -> h.explainBacktest(backtests(c, h), cell);
+            case "period-stats" -> h.explainStats(h.periodStats(request, see(request, MarketExtras.HISTORY)), cell);
+            case "regulatory-report" -> h.explainReport(h.reports(request, see(request, MarketExtras.HISTORY)), cell);
+            case "stress-window" -> h.explainWindow(h.windows(request, see(request, MarketExtras.PNL_HISTORY)), cell);
+            case "sensitivity-sum" -> s.explainSum(s.sums(scoped(c, s), String.valueOf(request.param("by"))), cell, "ROW_KEY", "COLUMN_KEY");
+            case "sensitivity-ladder" -> s.explainSum(s.ladder(scoped(c, s), request), cell, "QUALIFIER", "BUCKET");
+            case "frtb-sa", "frtb-contributions" -> s.explainFrtb(frtb(c, s), cell,
+                    request.params().containsKey("attribute") ? String.valueOf(request.param("attribute")) : "DESK");
+            default -> throw new EngineException("ENG-3005", Kind.REFUSED, out + " has no measure cells to explain");
+        };
     }
 
     @Override
     public void workbook(Request request, OutputStream out, Control control) throws EngineException, IOException {
         engine.running();
         Answer a = ask(request, control);
-        MarketBooks.Built built = a.tables().isEmpty() ? null : book(request, control);
-        MarketWorkbook.write(out, built, engine.options(), engine.sums(), a);
+        Computed c = new Computed(request, control);
+        MarketOptions o = engine.options();
+        List<AnswerBook.Part> parts = new ArrayList<>();
+        boolean varDone = false;
+        for (String name : request.outputs()) {
+            if (a.table(name) == null) {
+                continue;
+            }
+            switch (name) {
+                case "node-var", "node-components", "basket-var", "headline" -> {
+                    if (!varDone) {
+                        varDone = true;
+                        parts.add(new MarketWorkbook(c.book(), o, request.outputs().contains("headline")));
+                    }
+                }
+                case "node-pvar" -> parts.add(new MarketParametric(engine.descriptor(), o).part(c.book(), request.outputs().contains("node-pvar-components")));
+                case "node-pvar-components" -> {
+                    if (!request.outputs().contains("node-pvar")) {
+                        parts.add(new MarketParametric(engine.descriptor(), o).part(c.book(), true));
+                    }
+                }
+                case "node-var-horizon" -> {
+                    MarketHorizon h = new MarketHorizon(engine.descriptor(), o);
+                    parts.add(h.part(c.horizon(), h.lens(request)));
+                }
+                case "what-if" -> {
+                    MarketWhatIf w = new MarketWhatIf(engine.descriptor(), o);
+                    parts.add(w.part(w.ask(c.book(), request), c.book()));
+                }
+                case "backtest", "backtest-days" -> {
+                    if (name.equals("backtest") || !request.outputs().contains("backtest")) {
+                        MarketHistory h = new MarketHistory(engine.descriptor(), o, day);
+                        parts.add(h.backtestPart(backtests(c, h)));
+                    }
+                }
+                case "period-stats" -> {
+                    MarketHistory h = new MarketHistory(engine.descriptor(), o, day);
+                    parts.add(h.statsPart(h.periodStats(request, see(request, MarketExtras.HISTORY))));
+                }
+                case "regulatory-report" -> {
+                    MarketHistory h = new MarketHistory(engine.descriptor(), o, day);
+                    parts.add(h.reportPart(h.reports(request, see(request, MarketExtras.HISTORY))));
+                }
+                case "stress-window" -> {
+                    MarketHistory h = new MarketHistory(engine.descriptor(), o, day);
+                    parts.add(h.windowPart(h.windows(request, see(request, MarketExtras.PNL_HISTORY))));
+                }
+                case "sensitivity-sum" -> {
+                    MarketSensitivities s = new MarketSensitivities(engine.descriptor(), o, day);
+                    parts.add(s.sumPart(s.sums(scoped(c, s), String.valueOf(request.param("by"))), name));
+                }
+                case "sensitivity-ladder" -> {
+                    MarketSensitivities s = new MarketSensitivities(engine.descriptor(), o, day);
+                    parts.add(s.sumPart(s.ladder(scoped(c, s), request), name));
+                }
+                case "frtb-sa", "frtb-contributions" -> {
+                    if (name.equals("frtb-sa") || !request.outputs().contains("frtb-sa")) {
+                        MarketSensitivities s = new MarketSensitivities(engine.descriptor(), o, day);
+                        parts.add(s.frtbPart(frtb(c, s)));
+                    }
+                }
+                default -> {
+                }
+            }
+        }
+        AnswerBook.write(out, parts, String.join("; ", a.missing().stream().map(Missing::words).toList()));
     }
 
     @Override

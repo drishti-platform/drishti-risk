@@ -15,6 +15,9 @@
  */
 package com.ash.risk.market.var;
 
+import com.ash.risk.market.calc.Periods;
+import com.ash.risk.market.calc.Periods.Period;
+
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.MonthDay;
@@ -22,8 +25,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Period statistics over the official records (VAR_GUIDE.md section 18.10; REGULATORY_VAR_REPORTING.md section 4.4): a node's period end,
@@ -33,11 +34,6 @@ import java.util.regex.Pattern;
  */
 final class VarPeriodStats {
 
-    /** A period: its name and its first and last day. */
-    record Period(String name, LocalDate from, LocalDate to) {}
-
-    private static final Pattern FY = Pattern.compile("(?i)^FY(\\d{4})(?:Q([1-4]))?$");
-    private static final Pattern RANGE = Pattern.compile("^(\\d{4}-\\d{2}-\\d{2})\\.\\.(\\d{4}-\\d{2}-\\d{2})$");
     /** The measures of an official record a statistic may read. */
     static final List<String> MEASURES = List.of("var", "es", "svar", "ses");
 
@@ -54,51 +50,19 @@ final class VarPeriodStats {
         this.pnl = pnl;
     }
 
-    /**
-     * {@code FY2026} (the fiscal year ending in 2026 on the configured year end: 2025-11-01 to 2026-10-31 with {@code 10-31}),
-     * {@code FY2026Q1} (its first quarter), or {@code 2026-01-01..2026-03-31}. IllegalArgumentException in words otherwise.
-     */
+    /** {@code FY2026}, {@code FY2026Q1} or {@code 2026-01-01..2026-03-31} ({@link Periods#period}). */
     static Period period(String text, MonthDay yearEnd) {
-        String t = text == null ? "" : text.strip();
-        Matcher m = FY.matcher(t);
-        if (m.matches()) {
-            int y = Integer.parseInt(m.group(1));
-            LocalDate end = yearEnd.atYear(y);
-            LocalDate start = yearEnd.atYear(y - 1).plusDays(1);
-            if (m.group(2) != null) {
-                int q = Integer.parseInt(m.group(2));
-                LocalDate qs = start.plusMonths(3L * (q - 1));
-                return new Period("FY" + y + "Q" + q, qs, qs.plusMonths(3).minusDays(1));
-            }
-            return new Period("FY" + y, start, end);
-        }
-        Matcher r = RANGE.matcher(t);
-        if (r.matches()) {
-            LocalDate a = LocalDate.parse(r.group(1));
-            LocalDate b = LocalDate.parse(r.group(2));
-            if (b.isBefore(a)) {
-                throw new IllegalArgumentException("the period " + t + " ends before it starts");
-            }
-            return new Period(t, a, b);
-        }
-        throw new IllegalArgumentException("a period is FY2026 (the fiscal year), FY2026Q1 (a fiscal quarter) or 2026-01-01..2026-03-31, not '"
-                + t + "'");
+        return Periods.period(text, yearEnd);
     }
 
-    /** The fiscal year a date is in ({@code FY2026}). */
+    /** The fiscal year a date is in ({@link Periods#fiscalYear}). */
     static String fiscalYear(LocalDate d, MonthDay yearEnd) {
-        LocalDate end = yearEnd.atYear(d.getYear());
-        return "FY" + (d.isAfter(end) ? d.getYear() + 1 : d.getYear());
+        return Periods.fiscalYear(d, yearEnd);
     }
 
-    /** The same period one year earlier (the comparative of a report). */
+    /** The same period one year earlier ({@link Periods#priorYear}). */
     static Period priorYear(Period p, MonthDay yearEnd) {
-        Matcher m = FY.matcher(p.name());
-        if (m.matches()) {
-            int y = Integer.parseInt(m.group(1)) - 1;
-            return period("FY" + y + (m.group(2) == null ? "" : "Q" + m.group(2)), yearEnd);
-        }
-        return new Period(p.from().minusYears(1) + ".." + p.to().minusYears(1), p.from().minusYears(1), p.to().minusYears(1));
+        return Periods.priorYear(p, yearEnd);
     }
 
     /** One value of a node on an official date, with the record it came from. */
