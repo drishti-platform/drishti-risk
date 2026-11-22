@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Drishti Risk · market and counterparty risk as engines.
+
+  Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
+  All rights reserved.
+
+  PROPRIETARY AND CONFIDENTIAL.
+
+  This file is the confidential and proprietary property of Ashutosh Sinha.
+  Unauthorised copying, use, modification, distribution or disclosure of this
+  file, via any medium, is strictly prohibited except with the express prior
+  written permission of the copyright holder.
+
+  See the LICENSE file in the root of this repository for the full terms.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.ash.risk</groupId>
+    <artifactId>risk-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>risk-kernel</artifactId>
+  <name>Drishti Risk: risk-kernel</name>
+  <description>What every line of business shares: scenario-vector stores and deterministic sums, linear algebra (pure Java always, OpenBLAS when it loads), scopes and hierarchies from promoted columns, limits, method choices, the playground workbook framework. Moved with history from Drishti (K3); com.ash.risk.hostcompat holds the parked host types until K4 to K6 remove them (SPLIT_EXEMPTIONS.md).</description>
+  <properties>
+    <automatic.module.name>com.ash.risk.kernel</automatic.module.name>
+  </properties>
+  <dependencies>
+    <dependency><groupId>com.ash.risk</groupId><artifactId>risk-api</artifactId></dependency>
+    <!-- provided by the host (platform packages, ENGINE_SPEC 17.1) -->
+    <dependency><groupId>com.ash.engine</groupId><artifactId>engine-api</artifactId><scope>provided</scope></dependency>
+    <dependency><groupId>com.ash.tools</groupId><artifactId>tools-xlsx</artifactId><scope>provided</scope></dependency>
+    <dependency><groupId>com.ash.tools</groupId><artifactId>tools-codec</artifactId><scope>provided</scope></dependency>
+    <dependency><groupId>com.ash.tools</groupId><artifactId>tools-files</artifactId><scope>provided</scope></dependency>
+    <!-- private: merged into each engine JAR -->
+    <dependency><groupId>org.apache.arrow</groupId><artifactId>arrow-vector</artifactId></dependency>
+    <dependency><groupId>org.apache.arrow</groupId><artifactId>arrow-memory-unsafe</artifactId><scope>runtime</scope></dependency>
+    <dependency><groupId>org.bytedeco</groupId><artifactId>javacpp</artifactId></dependency>
+    <dependency><groupId>org.bytedeco</groupId><artifactId>javacpp</artifactId><classifier>linux-x86_64</classifier></dependency>
+    <dependency><groupId>org.bytedeco</groupId><artifactId>javacpp</artifactId><classifier>windows-x86_64</classifier></dependency>
+    <dependency><groupId>org.bytedeco</groupId><artifactId>openblas</artifactId></dependency>
+    <dependency><groupId>org.bytedeco</groupId><artifactId>openblas</artifactId><classifier>linux-x86_64</classifier></dependency>
+    <dependency><groupId>org.bytedeco</groupId><artifactId>openblas</artifactId><classifier>windows-x86_64</classifier></dependency>
+    <dependency><groupId>org.slf4j</groupId><artifactId>slf4j-api</artifactId></dependency>
+    <!-- K3 exemption: the moved code's Jackson; K4/K5 remove it (SPLIT_EXEMPTIONS.md) -->
+    <dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-databind</artifactId></dependency>
+    <dependency><groupId>com.fasterxml.jackson.dataformat</groupId><artifactId>jackson-dataformat-yaml</artifactId></dependency>
+    <dependency><groupId>com.fasterxml.jackson.datatype</groupId><artifactId>jackson-datatype-jsr310</artifactId></dependency>
+    <dependency><groupId>com.ash.lake</groupId><artifactId>lake-tck</artifactId><scope>test</scope></dependency>
+  </dependencies>
+</project>

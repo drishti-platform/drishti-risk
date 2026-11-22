@@ -1,4 +1,4 @@
-# Project Drishti · Any data. Any domain. One grammar.
+# Drishti Risk · market and counterparty risk as engines.
 #
 # Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
 # All rights reserved.
