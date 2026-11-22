@@ -19,11 +19,11 @@ import com.ash.risk.hostcompat.api.AsOf;
 import com.ash.risk.hostcompat.api.DataNode;
 import com.ash.risk.hostcompat.api.EntityDocument;
 import com.ash.risk.hostcompat.api.compute.Viewer;
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.hostcompat.kernel.api.view.ViewAugmenter;
 import com.ash.risk.hostcompat.server.net.NetCaller;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -63,7 +63,7 @@ final class ExposureFigures implements ViewAugmenter {
         }
         String scope = (doc.ref().kind().equals(svc.props().kinds().nettingSet()) ? "NSET:" : "CPTY:") + doc.ref().id();
         Map<String, Object> figures;
-        Optional<Principal> who = caller();
+        Optional<Caller> who = caller();
         LocalDate date = asOf == null ? null : asOf.businessDate();
         if (date == null) {
             date = doc.provenance().businessDate();
@@ -73,9 +73,9 @@ final class ExposureFigures implements ViewAugmenter {
         } else {
             try {
                 figures = figures(who.get(), scope, date);
-            } catch (DrishtiException e) {
+            } catch (RiskFailure e) {
                 String why = String.valueOf(e.getMessage()).replaceFirst("^DRS-\\d{4} ", "");
-                boolean none = e.errorCode() == ErrorCode.ENTITY_NOT_FOUND && why.startsWith("no exposure paths for");
+                boolean none = e.errorCode() == RiskCode.ENTITY_NOT_FOUND && why.startsWith("no exposure paths for");
                 figures = note(none ? "no-paths" : "unavailable", scope, why);
             } catch (IllegalArgumentException e) {
                 figures = note("unavailable", scope, String.valueOf(e.getMessage()));
@@ -95,12 +95,12 @@ final class ExposureFigures implements ViewAugmenter {
         return m;
     }
 
-    private static Optional<Principal> caller() {
-        Optional<Principal> p = NetCaller.current().map(NetCaller.Caller::principal).filter(java.util.Objects::nonNull);
-        return p.isPresent() ? p : Viewer.current().map(v -> new Principal(v.user(), v.roles()));
+    private static Optional<Caller> caller() {
+        Optional<Caller> p = NetCaller.current().map(NetCaller.Caller::principal).filter(java.util.Objects::nonNull);
+        return p.isPresent() ? p : Viewer.current().map(v -> new Caller(v.user(), String.join(",", v.roles())));
     }
 
-    private Map<String, Object> figures(Principal p, String scope, LocalDate date) {
+    private Map<String, Object> figures(Caller p, String scope, LocalDate date) {
         ExposureService.Ask ask = ExposureService.Ask.of(svc.props(), null, null, null, null);
         Map<String, Object> h = views.scope(p, scope, date, ask);
         Map<String, Object> m = new LinkedHashMap<>();

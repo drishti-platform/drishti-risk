@@ -18,15 +18,15 @@ package com.ash.risk.market.frtb;
 import com.ash.tools.codec.Hashes;
 import com.ash.risk.hostcompat.api.AsOf;
 import com.ash.risk.hostcompat.api.DataNode;
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.market.frtb.calc.FactorDictionary;
 import com.ash.risk.market.frtb.calc.FrtbChoices;
 import com.ash.risk.market.frtb.calc.FrtbExamples;
 import com.ash.risk.market.frtb.calc.FrtbInput;
 import com.ash.risk.market.frtb.calc.FrtbParams;
 import com.ash.risk.market.frtb.calc.FrtbSa;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import com.ash.risk.market.var.VarService;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -61,7 +61,7 @@ public final class FrtbService {
     /** How a scope's members are found: the VaR engine's resolver as the person (null: the records' own attributes). */
     @FunctionalInterface
     public interface Scopes {
-        VarService.ScopeMembers members(Principal p, String scope, LocalDate date);
+        VarService.ScopeMembers members(Caller p, String scope, LocalDate date);
     }
 
     /** One run and what it was made of. */
@@ -78,7 +78,7 @@ public final class FrtbService {
             .expireAfterWrite(Duration.ofMinutes(10)).<String, Run>build().asMap();
 
     public FrtbService(FrtbData data, Scopes scopes, FrtbProperties props) {
-        this(data, scopes, props, Path.of(props.parametersDir()));
+        this(data, scopes, props, props.parametersDir().isBlank() ? null : Path.of(props.parametersDir()));
     }
 
     /**
@@ -94,8 +94,8 @@ public final class FrtbService {
         FrtbParams prm = null;
         String why = null;
         try {
-            s = Files.readAllBytes(dir.resolve("frtb-sa-sbm.yaml"));
-            d = Files.readAllBytes(dir.resolve("frtb-sa-drc-rrao.yaml"));
+            s = dir == null ? FrtbParams.builtIn(FrtbParams.SBM_RESOURCE) : Files.readAllBytes(dir.resolve("frtb-sa-sbm.yaml"));
+            d = dir == null ? FrtbParams.builtIn(FrtbParams.DRC_RESOURCE) : Files.readAllBytes(dir.resolve("frtb-sa-drc-rrao.yaml"));
             prm = FrtbParams.parse(s, d, Map.of());
         } catch (IOException e) {
             why = "DRS-5329 the FRTB-SA parameter files are not in " + dir.toAbsolutePath() + " (drishti.module.banking.frtb.parameters-dir)";
@@ -162,16 +162,16 @@ public final class FrtbService {
     void sensitivities() {
         java.util.function.BooleanSupplier r = sensitivitiesRunning;
         if (r != null && !r.getAsBoolean()) {
-            throw new com.ash.risk.hostcompat.server.engines.EngineOffException("sensitivities", "Sensitivities");
+            throw new com.ash.risk.kernel.RiskFailure(com.ash.risk.kernel.RiskCode.ENGINE_OFF, "Sensitivities is off (the host's engine switch for sensitivities)");
         }
     }
 
     void enabled() {
         if (!running()) {
-            throw new com.ash.risk.hostcompat.server.engines.EngineOffException("frtb-sa", "FRTB-SA");
+            throw new com.ash.risk.kernel.RiskFailure(com.ash.risk.kernel.RiskCode.ENGINE_OFF, "FRTB-SA is off (the host's engine switch for frtb-sa)");
         }
         if (problem != null) {
-            throw new DrishtiException(ErrorCode.SOURCE_FAILED, problem);
+            throw new RiskFailure(RiskCode.SOURCE_FAILED, problem);
         }
     }
 
@@ -183,15 +183,15 @@ public final class FrtbService {
         try {
             return FrtbParams.parse(sbm, drc, c.overrides());
         } catch (IllegalArgumentException e) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, e.getMessage());
+            throw new RiskFailure(RiskCode.BAD_REQUEST, e.getMessage());
         }
     }
 
     /** The records of a scope on a date, as the person may see them. */
-    Scoped scoped(Principal p, String scope, AsOf asOf) {
+    Scoped scoped(Caller p, String scope, AsOf asOf) {
         sensitivities();                                                // FRTB-SA itself is checked by run()
         if (scope == null || scope.isBlank()) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "give a scope (scope=DESK:RATES, BANK, POS:<id>, or EXAMPLE for the hand-built cases)");
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "give a scope (scope=DESK:RATES, BANK, POS:<id>, or EXAMPLE for the hand-built cases)");
         }
         VarService.ScopeMembers early = null;
         if (asOf.businessDate() == null && scopes != null) {
@@ -200,7 +200,7 @@ public final class FrtbService {
         }
         FrtbData.Day day = data.day(asOf);
         if (!day.sensitivitiesRead()) {
-            throw new DrishtiException(ErrorCode.NO_SOURCE_FOR_KIND, "no connector serves " + props.sensitivityKind() + ": load the position sensitivities first");
+            throw new RiskFailure(RiskCode.NO_SOURCE_FOR_KIND, "no connector serves " + props.sensitivityKind() + ": load the position sensitivities first");
         }
         VarService.ScopeMembers members = null;
         Set<String> keep;
@@ -229,65 +229,19 @@ public final class FrtbService {
 
     /** The records' own scope words, when no VaR engine resolves scopes: BANK, DESK:, BOOK:, LE:, DIV:, LL:, FDESK:, POS:, TRD:, joined by + and −. */
     public static boolean matches(String scope, FrtbData.Record r) {
-        boolean in = false;
-        String s = scope.strip().replace(" - ", " -").replace(" + ", " +");
-        for (String term : s.split("\\s+")) {
-            boolean minus = term.startsWith("-");
-            String t = term.replaceFirst("^[+-]", "");
-            if (t.isEmpty()) {
-                continue;
-            }
-            boolean hit = termMatches(t, r);
-            if (minus && hit) {
-                return false;
-            }
-            in |= !minus && hit;
+        try {
+            return com.ash.risk.market.frtb.calc.FrtbScope.matches(scope, r.positionKey(), r.tradeId(), r.tradeIds(), r.attributes()::get);
+        } catch (IllegalArgumentException e) {
+            throw new RiskFailure(RiskCode.BAD_REQUEST, e.getMessage() + " (scope words beyond these need the VaR engine on this server)");
         }
-        return in;
-    }
-
-    private static boolean termMatches(String t, FrtbData.Record r) {
-        String u = t.toUpperCase(Locale.ROOT);
-        if (u.equals("BANK")) {
-            return true;
-        }
-        int c = t.indexOf(':');
-        if (c < 0) {
-            return false;
-        }
-        String word = u.substring(0, c);
-        List<String> vals = List.of(t.substring(c + 1).split(","));
-        String field = switch (word) {
-            case "DESK" -> "DESK";
-            case "BOOK" -> "TT_BOOK";
-            case "LE" -> "LEGAL_ENTITY";
-            case "DIV" -> "DIVISION";
-            case "LL" -> "LIMIT_LETTER";
-            case "FDESK" -> "FRTB_DESK";
-            case "POS" -> "#POS";
-            case "TRD" -> "#TRD";
-            default -> null;
-        };
-        if (field == null) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "the scope word " + word + " needs the VaR engine on this server; without it a scope is "
-                    + "BANK, DESK:, BOOK:, LE:, DIV:, LL:, FDESK:, POS: or TRD:");
-        }
-        if (field.equals("#POS")) {
-            return vals.contains(r.positionKey());
-        }
-        if (field.equals("#TRD")) {
-            return vals.contains(r.tradeId()) || r.tradeIds().stream().anyMatch(vals::contains);
-        }
-        String v = r.attributes().get(field);
-        return v != null && vals.stream().anyMatch(x -> x.equalsIgnoreCase(v));
     }
 
     /** FRTB-SA of a scope with the choices (cached per scope, date, viewer, choices and parameter bytes). */
-    public Run run(Principal p, String scope, LocalDate date, Instant knownAt, String ccy, FrtbChoices choices) {
+    public Run run(Caller p, String scope, LocalDate date, Instant knownAt, String ccy, FrtbChoices choices) {
         return run(p, scope, date, knownAt, ccy, choices, sbmBytes, drcBytes);
     }
 
-    Run run(Principal p, String scope, LocalDate date, Instant knownAt, String ccy, FrtbChoices choices, byte[] sbm, byte[] drc) {
+    Run run(Caller p, String scope, LocalDate date, Instant knownAt, String ccy, FrtbChoices choices, byte[] sbm, byte[] drc) {
         enabled();
         String reporting = ccy == null || ccy.isBlank() ? "USD" : ccy.strip().toUpperCase(Locale.ROOT);
         FrtbParams prm = params(choices, sbm, drc);
@@ -299,7 +253,7 @@ public final class FrtbService {
             return new Run(r, EXAMPLE, EXAMPLE, null, null, "USD", prov, digest(in), List.of());
         }
         AsOf asOf = new AsOf(date, knownAt);
-        String key = date + "|" + knownAt + "|" + scope + "|" + reporting + "|" + choices.key() + "|" + (p == null ? "" : p.user() + p.roles()) + "|"
+        String key = date + "|" + knownAt + "|" + scope + "|" + reporting + "|" + choices.key() + "|" + (p == null ? "" : p.user() + "|" + p.visibility()) + "|"
                 + java.util.Arrays.hashCode(sbm) + java.util.Arrays.hashCode(drc);
         Run hit = cache.get(key);
         if (hit != null) {
@@ -323,7 +277,7 @@ public final class FrtbService {
         FrtbData.Day day = s.day();
         Double rep = day.usdPer().get(reporting);
         if (rep == null) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "no FX for the reporting currency " + reporting + " on " + day.date());
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "no FX for the reporting currency " + reporting + " on " + day.date());
         }
         List<FrtbInput.Position> positions = new ArrayList<>();
         List<FrtbInput.Element> elements = new ArrayList<>();
@@ -499,12 +453,12 @@ public final class FrtbService {
             Map<String, Integer> refusals, Object proxied) {}
 
     /** Every sensitivity element of a scope as the person sees it, in the reporting currency (an element in a currency without FX: left out). */
-    public Elements elements(Principal p, String scope, LocalDate date, String ccy) {
+    public Elements elements(Caller p, String scope, LocalDate date, String ccy) {
         String reporting = ccy == null || ccy.isBlank() ? "USD" : ccy.strip().toUpperCase(Locale.ROOT);
         Scoped s = scoped(p, scope, new AsOf(date, null));
         Double rep = s.day().usdPer().get(reporting);
         if (rep == null) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "no FX for the reporting currency " + reporting);
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "no FX for the reporting currency " + reporting);
         }
         List<Element> out = new ArrayList<>();
         for (FrtbData.Record r : s.records()) {
@@ -520,12 +474,12 @@ public final class FrtbService {
     }
 
     /** Sensitivities of a scope summed by {@code by} (RISK_FACTOR, BUCKET, RISK_CLASS, MEASURE, TENOR or a record attribute), in the reporting currency. */
-    public Map<String, Object> sums(Principal p, String scope, LocalDate date, String by, String ccy) {
+    public Map<String, Object> sums(Caller p, String scope, LocalDate date, String by, String ccy) {
         String reporting = ccy == null || ccy.isBlank() ? "USD" : ccy.strip().toUpperCase(Locale.ROOT);
         Scoped s = scoped(p, scope, new AsOf(date, null));
         Double rep = s.day().usdPer().get(reporting);
         if (rep == null) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "no FX for the reporting currency " + reporting);
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "no FX for the reporting currency " + reporting);
         }
         List<String> keys = List.of((by == null || by.isBlank() ? "RISK_FACTOR" : by).toUpperCase(Locale.ROOT).split("\\s*,\\s*"));
         Map<String, double[]> sums = new TreeMap<>();

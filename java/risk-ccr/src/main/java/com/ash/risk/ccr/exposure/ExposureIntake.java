@@ -15,7 +15,7 @@
  */
 package com.ash.risk.ccr.exposure;
 
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.ccr.calc.ExposureBook;
 import com.ash.risk.ccr.calc.ExposureGrid;
 import java.time.LocalDate;
@@ -126,7 +126,7 @@ final class ExposureIntake {
         if (why != null) {
             rejected++;
             if (rejections.size() < LISTED) {
-                rejections.add(ErrorCode.EXPOSURE_ROW_REJECTED.code() + " " + trade + " #" + k + ": " + why);
+                rejections.add(RiskCode.EXPOSURE_ROW_REJECTED.code() + " " + trade + " #" + k + ": " + why);
             }
             return;
         }

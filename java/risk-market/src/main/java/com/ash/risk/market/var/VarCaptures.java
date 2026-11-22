@@ -15,10 +15,10 @@
  */
 package com.ash.risk.market.var;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.market.calc.VarBook;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -45,12 +45,12 @@ final class VarCaptures {
         this.views = views;
     }
 
-    Map<String, Object> capture(Principal p, String scope, LocalDate date, String note) {
+    Map<String, Object> capture(Caller p, String scope, LocalDate date, String note) {
         return capture(p, scope, date, note, VarDate.USD);
     }
 
     /** A capture in a reporting currency: every amount in it, and {@code currency} says which (a compare with now reads it the same way). */
-    Map<String, Object> capture(Principal p, String scope, LocalDate date, String note, String ccy) {
+    Map<String, Object> capture(Caller p, String scope, LocalDate date, String note, String ccy) {
         return capture(p, scope, date, note, ccy, null);
     }
 
@@ -59,7 +59,7 @@ final class VarCaptures {
      * scenario (or window) dates are the lens's, and it names them ({@code horizon}, {@code method}, {@code confidence}); a compare with
      * now reads now through the same lens.
      */
-    Map<String, Object> capture(Principal p, String scope, LocalDate date, String note, String ccy, com.ash.risk.market.calc.VarLens lens) {
+    Map<String, Object> capture(Caller p, String scope, LocalDate date, String note, String ccy, com.ash.risk.market.calc.VarLens lens) {
         VarService.Scoped s = svc.scoped(p, scope, date, ccy, lens);
         String c0 = s.date().currency();
         VarBook b = s.date().book();
@@ -130,8 +130,8 @@ final class VarCaptures {
      * its own scope text and members, and says so: {@code deletedBaskets} lists the baskets it names that no longer exist, and
      * {@code basketNotice} says it in words.
      */
-    Map<String, Object> get(Principal p, String id) {
-        Map<String, Object> c = svc.saved().capture(p, id).orElseThrow(() -> new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no capture " + id + " you may read"));
+    Map<String, Object> get(Caller p, String id) {
+        Map<String, Object> c = svc.saved().capture(p, id).orElseThrow(() -> new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no capture " + id + " you may read"));
         List<String> gone = new ArrayList<>();
         try {
             Object text = c.get("canonical") != null ? c.get("canonical") : c.get("scope");
@@ -152,13 +152,13 @@ final class VarCaptures {
         return c;
     }
 
-    List<Map<String, Object>> list(Principal p, String scope) {
+    List<Map<String, Object>> list(Caller p, String scope) {
         String canonical = null;
         if (scope != null && !scope.isBlank()) {
             try {
                 canonical = com.ash.risk.kernel.scope.ScopeExpr.parse(scope, svc.words().keySet()).toString();
             } catch (IllegalArgumentException e) {
-                throw new DrishtiException(ErrorCode.BAD_REQUEST, e.getMessage());
+                throw new RiskFailure(RiskCode.BAD_REQUEST, e.getMessage());
             }
         }
         List<Map<String, Object>> out = new ArrayList<>(svc.saved().captures(p, canonical));
@@ -168,7 +168,7 @@ final class VarCaptures {
                 if (node != null) {
                     out.addAll(svc.official().captures(node));
                 }
-            } catch (DrishtiException e) {
+            } catch (RiskFailure e) {
                 // no date loaded: the people's captures only
             }
             out.sort((x, y) -> String.valueOf(y.get("capturedAt")).compareTo(String.valueOf(x.get("capturedAt"))));
@@ -181,7 +181,7 @@ final class VarCaptures {
      * figures, the members added and removed, and each component's change.
      */
     @SuppressWarnings("unchecked")
-    Map<String, Object> compare(Principal p, String a, String b) {
+    Map<String, Object> compare(Caller p, String a, String b) {
         Map<String, Object> ca = get(p, a);
         Map<String, Object> cb;
         String ccy = currency(ca);
@@ -207,7 +207,7 @@ final class VarCaptures {
         } else {
             cb = get(p, b);
             if (!currency(cb).equals(ccy)) {
-                throw new DrishtiException(ErrorCode.BAD_REQUEST, a + " is in " + ccy + " and " + b + " in " + currency(cb)
+                throw new RiskFailure(RiskCode.BAD_REQUEST, a + " is in " + ccy + " and " + b + " in " + currency(cb)
                         + ": a compare reads two captures in one currency (capture the scope again with ccy=" + ccy + ")");
             }
         }
@@ -285,7 +285,7 @@ final class VarCaptures {
 
     /** A capture as CSV: its provenance as comment lines, then the vector by scenario date, or its components. */
     @SuppressWarnings("unchecked")
-    String csv(Principal p, String id, String part) {
+    String csv(Caller p, String id, String part) {
         Map<String, Object> c = get(p, id);
         StringBuilder sb = new StringBuilder();
         for (String f : List.of("id", "scope", "label", "businessDate", "capturedAt", "owner", "note", "var", "es", "dataVersion", "scenarioSet",
@@ -323,7 +323,7 @@ final class VarCaptures {
      * {@code part=components}: the component rows). The capture's own fields are its JSON (GET /captures/{id}).
      */
     @SuppressWarnings("unchecked")
-    String jsonl(Principal p, String id, String part) {
+    String jsonl(Caller p, String id, String part) {
         Map<String, Object> c = get(p, id);
         StringBuilder sb = new StringBuilder();
         if ("components".equals(part)) {

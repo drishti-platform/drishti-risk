@@ -15,12 +15,12 @@
  */
 package com.ash.risk.market.var;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.hostcompat.identity.AuditLog;
 import com.ash.risk.hostcompat.identity.content.ContentDocs;
 import com.ash.risk.hostcompat.identity.content.ContentStore;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -54,7 +54,7 @@ final class VarStressProposals {
         this.audit = audit;
     }
 
-    private static String who(Principal p) {
+    private static String who(Caller p) {
         return p == null ? ANONYMOUS : p.user();
     }
 
@@ -63,7 +63,7 @@ final class VarStressProposals {
      * the day starts no window of the history.
      */
     @SuppressWarnings("unchecked")
-    Map<String, Object> propose(Principal p, String scope, String hierarchy, LocalDate date, Integer length, Double confidence, String first,
+    Map<String, Object> propose(Caller p, String scope, String hierarchy, LocalDate date, Integer length, Double confidence, String first,
             String note) {
         Map<String, Object> a = tool.analyse(p, scope, hierarchy, date, length, confidence);
         Map<String, Object> proposed = (Map<String, Object>) a.get("worst");
@@ -73,7 +73,7 @@ final class VarStressProposals {
             List<String> starts = (List<String>) series.get("starts");
             int at = starts.indexOf(first.strip());
             if (at < 0) {
-                throw new DrishtiException(ErrorCode.BAD_REQUEST, "no window of the history starts on " + first.strip()
+                throw new RiskFailure(RiskCode.BAD_REQUEST, "no window of the history starts on " + first.strip()
                         + ": give a business day between " + starts.get(0) + " and " + starts.get(starts.size() - 1));
             }
             for (Map<String, Object> c : (List<Map<String, Object>>) a.get("candidates")) {
@@ -91,7 +91,7 @@ final class VarStressProposals {
             }
         }
         if (proposed == null) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "nothing to propose: the history has no window of " + a.get("length") + " days");
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "nothing to propose: the history has no window of " + a.get("length") + " days");
         }
         long n = ContentDocs.next(docs.store(), SEQUENCE);
         String id = "SWP-" + ContentDocs.pad(n);
@@ -136,7 +136,7 @@ final class VarStressProposals {
 
     /** Every proposal, the newest first (at most {@code limit}). */
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> list(Principal p, int limit) {
+    List<Map<String, Object>> list(Caller p, int limit) {
         tool.check(p);
         List<String> keys = new ArrayList<>(docs.store().list(FOLDER));
         keys.sort(java.util.Comparator.reverseOrder());
@@ -151,35 +151,35 @@ final class VarStressProposals {
     }
 
     @SuppressWarnings("unchecked")
-    Map<String, Object> get(Principal p, String id) {
+    Map<String, Object> get(Caller p, String id) {
         tool.check(p);
         return docs.value(FOLDER + id + ".json", Map.class).map(m -> (Map<String, Object>) m)
-                .orElseThrow(() -> new DrishtiException(ErrorCode.PROPOSAL_NOT_FOUND, "no stress window proposal " + id));
+                .orElseThrow(() -> new RiskFailure(RiskCode.PROPOSAL_NOT_FOUND, "no stress window proposal " + id));
     }
 
     /**
      * Approves or rejects a proposal: only one still proposed, never by its proposer (with security on), with a note.
      */
     @SuppressWarnings("unchecked")
-    Map<String, Object> decide(Principal p, String id, String decision, String note) {
+    Map<String, Object> decide(Caller p, String id, String decision, String note) {
         tool.check(p);
         String d = decision == null ? "" : decision.strip().toUpperCase(Locale.ROOT);
         String status = switch (d) {
             case "APPROVE", "APPROVED" -> "APPROVED";
             case "REJECT", "REJECTED" -> "REJECTED";
-            default -> throw new DrishtiException(ErrorCode.BAD_REQUEST, "decision is approve or reject");
+            default -> throw new RiskFailure(RiskCode.BAD_REQUEST, "decision is approve or reject");
         };
         String key = FOLDER + id + ".json";
         if (docs.value(key, Map.class).isEmpty()) {
-            throw new DrishtiException(ErrorCode.PROPOSAL_NOT_FOUND, "no stress window proposal " + id);
+            throw new RiskFailure(RiskCode.PROPOSAL_NOT_FOUND, "no stress window proposal " + id);
         }
         Map<String, Object> out = docs.update(key, Map.class, m -> {
             Map<String, Object> rec = (Map<String, Object>) m;
             if (!"PROPOSED".equals(rec.get("status"))) {
-                throw new DrishtiException(ErrorCode.PROPOSAL_CONFLICT, "the proposal " + id + " is " + rec.get("status") + " already");
+                throw new RiskFailure(RiskCode.PROPOSAL_CONFLICT, "the proposal " + id + " is " + rec.get("status") + " already");
             }
             if (p != null && who(p).equals(rec.get("proposedBy"))) {
-                throw new DrishtiException(ErrorCode.FOUR_EYES, "the proposer may not decide the proposal " + id + ": another person "
+                throw new RiskFailure(RiskCode.FOUR_EYES, "the proposer may not decide the proposal " + id + ": another person "
                         + "approves or rejects it (maker-checker)");
             }
             rec.put("status", status);
@@ -210,7 +210,7 @@ final class VarStressProposals {
         return Optional.empty();
     }
 
-    private void audit(Principal p, String action, String id, String extra) {
+    private void audit(Caller p, String action, String id, String extra) {
         if (audit == null) {
             return;
         }

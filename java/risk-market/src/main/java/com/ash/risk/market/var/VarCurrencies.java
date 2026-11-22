@@ -15,8 +15,8 @@
  */
 package com.ash.risk.market.var;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.market.calc.CurrencyBook;
 import com.ash.risk.market.calc.ScenarioFx;
 import com.ash.risk.market.calc.VarBook;
@@ -55,7 +55,7 @@ final class VarCurrencies {
         }
         String c = ccy.trim().toUpperCase(Locale.ROOT);
         if (!c.matches("[A-Z]{3}")) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "ccy is a currency's ISO code (USD, EUR, CAD ...), not " + ccy);
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "ccy is a currency's ISO code (USD, EUR, CAD ...), not " + ccy);
         }
         return c;
     }
@@ -75,7 +75,7 @@ final class VarCurrencies {
         LocalDate date = usd.date();
         VarBook ub = usd.book().morning();                           // the morning run: the day's updates are applied after
         ScenarioFx fx = loader.fx(date, ub.scenarioDates());
-        ScenarioFx.Rates rep = fx.rates(ccy).orElseThrow(() -> new DrishtiException(ErrorCode.VAR_NO_FX, "no " + ccy + " FX for the scenarios of "
+        ScenarioFx.Rates rep = fx.rates(ccy).orElseThrow(() -> new RiskFailure(RiskCode.VAR_NO_FX, "no " + ccy + " FX for the scenarios of "
                 + date + ": " + fx.notes().stream().filter(n -> n.startsWith(ccy + ":")).findFirst().orElse(ccy + ": neither supplied ("
                 + props.kinds().fxScenario() + ") nor in the FX history (" + props.kinds().fxSpot() + ")") + "; the currencies with FX on the date: "
                 + String.join(", ", fx.currencies())));

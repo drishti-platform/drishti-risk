@@ -15,13 +15,13 @@
  */
 package com.ash.risk.ccr.exposure;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.ccr.calc.ExposureBook;
 import com.ash.risk.ccr.calc.ExposureCalc;
 import com.ash.risk.ccr.calc.ExposureGrid;
 import com.ash.risk.ccr.calc.ExposureMath;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -59,7 +59,7 @@ final class ExposureViews {
 
     // ---------------------------------------------------------------------------------------------------------------------- the scope
 
-    Map<String, Object> scope(Principal p, String scope, LocalDate date, ExposureService.Ask ask) {
+    Map<String, Object> scope(Caller p, String scope, LocalDate date, ExposureService.Ask ask) {
         ExposureService.Scoped s = svc.scoped(p, scope, date, ask);
         ExposureBook b = s.date().book();
         ExposureMath.Stats st = s.result().stats;
@@ -170,7 +170,7 @@ final class ExposureViews {
         return out;
     }
 
-    Map<String, Object> profile(Principal p, String scope, LocalDate date, ExposureService.Ask ask, String dates) {
+    Map<String, Object> profile(Caller p, String scope, LocalDate date, ExposureService.Ask ask, String dates) {
         ExposureService.Scoped s = svc.scoped(p, scope, date, ask);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("scope", scope);
@@ -185,7 +185,7 @@ final class ExposureViews {
     }
 
     /** The profile as CSV: {@code tenor,date,t,ee,ene,eee,pfe,pfe_99,ee_uncoll} (EXPOSURE_GUIDE.md section 19.3). */
-    String profileCsv(Principal p, String scope, LocalDate date, ExposureService.Ask ask) {
+    String profileCsv(Caller p, String scope, LocalDate date, ExposureService.Ask ask) {
         ExposureService.Scoped s = svc.scoped(p, scope, date, ask);
         StringBuilder sb = new StringBuilder("tenor,date,t,ee,ene,eee,pfe,pfe_99,ee_uncoll\n");
         for (Map<String, Object> r : profileRows(s, false)) {
@@ -198,7 +198,7 @@ final class ExposureViews {
     }
 
     /** The profile as JSON Lines (one grid date a line, the CSV's column names; docs/guides/DATA_GUIDE.md). */
-    String profileJsonl(Principal p, String scope, LocalDate date, ExposureService.Ask ask) {
+    String profileJsonl(Caller p, String scope, LocalDate date, ExposureService.Ask ask) {
         ExposureService.Scoped s = svc.scoped(p, scope, date, ask);
         String out = ExposureCaptures.profileJsonl(profileRows(s, false));
         svc.audit(p, "ccr-export", s, "profile.jsonl");
@@ -217,17 +217,17 @@ final class ExposureViews {
                 return i;
             }
         }
-        throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, "date " + date + " is not a primary grid date of the run (" + g.date(g.primaryAt(0))
+        throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, "date " + date + " is not a primary grid date of the run (" + g.date(g.primaryAt(0))
                 + " .. " + g.date(g.primaryAt(g.primaryCount() - 1)) + ", or a tenor such as 1Y)");
     }
 
     /** The exposure distribution at a grid date: a histogram, the quantiles, the mean and the share of paths with no exposure. */
-    Map<String, Object> distribution(Principal p, String scope, LocalDate asOf, ExposureService.Ask ask, String date, int bins) {
+    Map<String, Object> distribution(Caller p, String scope, LocalDate asOf, ExposureService.Ask ask, String date, int bins) {
         return distribution(p, scope, asOf, ask, date, bins, false);
     }
 
     /** The distribution at a date; with {@code bands}, also the path fan: the quantiles 5, 25, 50, 75 and 95% at every primary date. */
-    Map<String, Object> distribution(Principal p, String scope, LocalDate asOf, ExposureService.Ask ask, String date, int bins, boolean bands) {
+    Map<String, Object> distribution(Caller p, String scope, LocalDate asOf, ExposureService.Ask ask, String date, int bins, boolean bands) {
         ExposureService.Scoped s = svc.scoped(p, scope, asOf, ask);
         ExposureBook b = s.date().book();
         int i = primary(b.grid(), date);
@@ -285,7 +285,7 @@ final class ExposureViews {
         };
     }
 
-    Map<String, Object> contributions(Principal p, String scope, LocalDate date, ExposureService.Ask ask, String by, String figure, String at) {
+    Map<String, Object> contributions(Caller p, String scope, LocalDate date, ExposureService.Ask ask, String by, String figure, String at) {
         return contributions(p, scope, date, ask, by, figure, at, false, false);
     }
 
@@ -293,16 +293,16 @@ final class ExposureViews {
      * The contributions; by trade with {@code alone}, each trade's peak PFE alone (uncollateralised) too, and with {@code profile} each
      * part's EE contribution at every primary date (ExposureExplorer).
      */
-    Map<String, Object> contributions(Principal p, String scope, LocalDate date, ExposureService.Ask ask, String by, String figure, String at,
+    Map<String, Object> contributions(Caller p, String scope, LocalDate date, ExposureService.Ask ask, String by, String figure, String at,
             boolean alone, boolean profile) {
         ExposureService.Scoped s = svc.scoped(p, scope, date, ask);
         String mode = by == null || by.isBlank() || by.equalsIgnoreCase("child") ? childOf(s.kind()) : by.trim().toLowerCase(Locale.ROOT);
         String fig = figure == null || figure.isBlank() ? "PFE" : figure.trim().toUpperCase(Locale.ROOT);
         if (!List.of("EE", "EPE", "PFE").contains(fig)) {
-            throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, "figure is EE, EPE or PFE, not " + figure);
+            throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, "figure is EE, EPE or PFE, not " + figure);
         }
         if (!List.of("netting-set", "counterparty", "legal-entity", "trade", "asset", "none").contains(mode)) {
-            throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, "by is child, netting-set, counterparty, legal-entity, trade or asset, not " + by);
+            throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, "by is child, netting-set, counterparty, legal-entity, trade or asset, not " + by);
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("scope", scope);
@@ -351,7 +351,7 @@ final class ExposureViews {
         return out;
     }
 
-    private String name(ExposureService.Scoped s, String cpty, Principal p) {
+    private String name(ExposureService.Scoped s, String cpty, Caller p) {
         return svc.name(s.date(), cpty, p);
     }
 
@@ -366,7 +366,7 @@ final class ExposureViews {
     }
 
     /** For a counterparty or larger: each netting set's EPE, peaks and PFE contribution (rows the viewer may see). */
-    private List<Map<String, Object>> byNettingSet(Principal p, ExposureService.Scoped s) {
+    private List<Map<String, Object>> byNettingSet(Caller p, ExposureService.Scoped s) {
         List<Map<String, Object>> out = new ArrayList<>();
         if (s.result().pieces.size() < 2 && !List.of("counterparty", "group", "legal-entity", "bank").contains(s.kind())) {
             return out;
@@ -406,7 +406,7 @@ final class ExposureViews {
      * The groups, counterparties and netting sets of the date with each node's EPE and peak PFE (the explorer's left column): sets with
      * paths and sets the reference data knows without (marked {@code noPaths}); only what the viewer sees, at their level.
      */
-    Map<String, Object> tree(Principal p, LocalDate date, ExposureService.Ask ask) {
+    Map<String, Object> tree(Caller p, LocalDate date, ExposureService.Ask ask) {
         ExposureDate d = svc.date(date, ask.strict());
         ExposureAccess.View v = svc.access().view(p, d);
         ExposureBook b = d.book();
@@ -509,7 +509,7 @@ final class ExposureViews {
     }
 
     /** The bank's or a legal entity's node of the tree: its figures, or why an interactive answer cannot sum it (a batch job). */
-    private Map<String, Object> nodeFigures(Principal p, ExposureDate d, ExposureService.Ask ask, String scope, String label) {
+    private Map<String, Object> nodeFigures(Caller p, ExposureDate d, ExposureService.Ask ask, String scope, String label) {
         Map<String, Object> n = new LinkedHashMap<>();
         n.put("scope", scope);
         n.put("id", scope.contains(":") ? scope.substring(scope.indexOf(':') + 1) : scope);
@@ -518,7 +518,7 @@ final class ExposureViews {
             ExposureService.Scoped s = svc.scoped(p, scope, d.date(), ask);
             figures(n, s);
             n.put("nettingSets", s.result().pieces.size());
-        } catch (DrishtiException e) {
+        } catch (RiskFailure e) {
             n.put("note", e.getMessage().replaceFirst("^DRS-\\d{4} ", ""));
         }
         return n;

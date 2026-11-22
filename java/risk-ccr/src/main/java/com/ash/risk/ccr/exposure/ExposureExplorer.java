@@ -20,7 +20,7 @@ import com.ash.risk.ccr.calc.ExposureBook;
 import com.ash.risk.ccr.calc.ExposureCalc;
 import com.ash.risk.ccr.calc.ExposureGrid;
 import com.ash.risk.ccr.calc.ExposureMath;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -50,7 +50,7 @@ final class ExposureExplorer {
     // ---------------------------------------------------------------------------------------------------------------------- the scope
 
     /** Adds the explorer's fields to a scope's answer: {@code ancestors}, and by kind {@code limit}, {@code collateral}, {@code trade}. */
-    void augment(Principal p, ExposureService.Scoped s, Map<String, Object> out) {
+    void augment(Caller p, ExposureService.Scoped s, Map<String, Object> out) {
         ExposureBook b = s.date().book();
         String kind = s.kind();
         String id = s.res().id();

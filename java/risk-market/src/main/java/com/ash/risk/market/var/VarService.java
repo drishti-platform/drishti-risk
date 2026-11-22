@@ -15,8 +15,8 @@
  */
 package com.ash.risk.market.var;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.market.calc.CurrencyTotals;
 import com.ash.risk.market.calc.ScenarioFx;
 import com.ash.risk.kernel.scope.ScopeExpr;
@@ -26,7 +26,7 @@ import com.ash.risk.market.calc.VarCalc;
 import com.ash.risk.kernel.vector.OrdinalSet;
 import com.ash.risk.kernel.vector.ParallelSums;
 import com.ash.risk.hostcompat.identity.AuditLog;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -141,7 +141,7 @@ public final class VarService implements AutoCloseable {
         this.currencies = new VarCurrencies(loader, props, sums);
         this.loads = com.ash.risk.hostcompat.server.compute.LoadPools.named("drishti-var-load", props.loadThreads());
         this.watch = new com.ash.risk.hostcompat.server.compute.VersionWatch("VaR", props.versionCheck(), loader::version);
-        this.room = new com.ash.risk.hostcompat.server.caches.Refusals(java.util.Set.of(ErrorCode.VAR_CAPACITY, ErrorCode.DISK_GUARD),
+        this.room = new com.ash.risk.hostcompat.server.caches.Refusals(java.util.Set.of(RiskCode.VAR_CAPACITY, RiskCode.DISK_GUARD),
                 props::refusalTtlSeconds, System::currentTimeMillis);
         this.pins = new com.ash.risk.hostcompat.server.caches.PinKeeper("VaR", props.pinned(), props.fiscalYearEnd(), () -> calendar,
                 new com.ash.risk.hostcompat.server.caches.PinKeeper.Engine() {
@@ -331,11 +331,11 @@ public final class VarService implements AutoCloseable {
     /** The date asked (or the newest before it) with its intraday layer, whatever the thread. */
     private VarDate live(LocalDate asked) {
         if (!running()) {
-            throw new com.ash.risk.hostcompat.server.engines.EngineOffException("var", "VaR");
+            throw new com.ash.risk.kernel.RiskFailure(com.ash.risk.kernel.RiskCode.ENGINE_OFF, "VaR is off (the host's engine switch for var)");
         }
         LocalDate latest = loader.latest();
         if (latest == null) {
-            throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no P&L vectors in any connector (kind " + props.kinds().vector()
+            throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no P&L vectors in any connector (kind " + props.kinds().vector()
                     + "): build the demo lake (drishti.py lake demo) or point the market-risk pack's risk-store at your lake");
         }
         if (asked == null) {
@@ -358,8 +358,8 @@ public final class VarService implements AutoCloseable {
     private VarDate orBefore(LocalDate d) {
         try {
             return load(d, 0);
-        } catch (DrishtiException e) {
-            if (e.errorCode() == ErrorCode.ENTITY_NOT_FOUND && String.valueOf(e.getMessage()).contains("no scenario set for " + d)) {
+        } catch (RiskFailure e) {
+            if (e.errorCode() == RiskCode.ENTITY_NOT_FOUND && String.valueOf(e.getMessage()).contains("no scenario set for " + d)) {
                 return previous(d, e.getMessage(), 0);
             }
             throw e;
@@ -406,10 +406,10 @@ public final class VarService implements AutoCloseable {
             vd = f.join();
         } catch (java.util.concurrent.CompletionException e) {
             inCurrency.remove(key, f);                                  // asked again, tried again
-            if (e.getCause() instanceof DrishtiException de) {
+            if (e.getCause() instanceof RiskFailure de) {
                 throw de;
             }
-            throw new DrishtiException(ErrorCode.SOURCE_FAILED, "the VaR data of " + usd.date() + " in " + c + " could not be built: " + e.getCause());
+            throw new RiskFailure(RiskCode.SOURCE_FAILED, "the VaR data of " + usd.date() + " in " + c + " could not be built: " + e.getCause());
         }
         vd = MORNING.get() ? vd : layered(key, vd, usd);
         for (String w : usd.warnings()) {
@@ -460,7 +460,6 @@ public final class VarService implements AutoCloseable {
     private com.ash.risk.hostcompat.server.admission.AdmissionGate gate;
     private com.ash.risk.hostcompat.server.admission.AdmissionGate.Loads gateLoads;
 
-    @com.ash.risk.hostcompat.spring.Autowired(required = false)
     void admission(com.ash.risk.hostcompat.server.admission.AdmissionGate g) {
         this.gate = g;
         this.gateLoads = g.loads("var", props::loadThreads);
@@ -509,8 +508,8 @@ public final class VarService implements AutoCloseable {
             String w = watch.check(d, vd.version(), vd.intraday() != null && !vd.intraday().isEmpty(), () -> {
                 try {
                     swap(d, () -> sharded() ? shards.assemble(d) : loader.load(d));
-                } catch (DrishtiException e) {
-                    if (e.errorCode() == ErrorCode.ENTITY_NOT_FOUND) {
+                } catch (RiskFailure e) {
+                    if (e.errorCode() == RiskCode.ENTITY_NOT_FOUND) {
                         reload(d);                                       // its inputs are gone (deleted from the lake): dropped, never kept
                     }
                     throw e;
@@ -518,18 +517,18 @@ public final class VarService implements AutoCloseable {
             });
             return w == null ? vd : vd.warned(w);
         } catch (java.util.concurrent.CompletionException e) {
-            if (e.getCause() instanceof DrishtiException de && room.remembers(de)) {
+            if (e.getCause() instanceof RiskFailure de && room.remembers(de)) {
                 room.remember(d, roomStamp(d), de);                    // before the load is dropped: a request arriving now is refused at once
             }
             dates.remove(d, f);                                        // a failed load is tried again by the next request
-            if (e.getCause() instanceof DrishtiException de) {
-                if (de.errorCode() == ErrorCode.VAR_INCONSISTENT_DATE) {
+            if (e.getCause() instanceof RiskFailure de) {
+                if (de.errorCode() == RiskCode.VAR_INCONSISTENT_DATE) {
                     refused.put(d, new String[] {loader.version(d), de.getMessage()});
                     return previous(d, de.getMessage(), depth);
                 }
                 throw de;
             }
-            throw new DrishtiException(ErrorCode.SOURCE_FAILED, "the VaR data of " + d + " could not be loaded: " + e.getCause());
+            throw new RiskFailure(RiskCode.SOURCE_FAILED, "the VaR data of " + d + " could not be loaded: " + e.getCause());
         }
     }
 
@@ -705,7 +704,7 @@ public final class VarService implements AutoCloseable {
      * book, its vector in the answer's currency added to the scope's 1-day vector, the lens applied after. The official answer, its
      * records, captures and limits never come here.
      */
-    WithMatured withMatured(Principal p, Scoped s) {
+    WithMatured withMatured(Caller p, Scoped s) {
         if (s.lens() != null && s.lens().stressed()) {
             return new WithMatured(s, 0, 0, "stressed VaR revalues today's positions: matured items are not added to it");
         }
@@ -727,7 +726,7 @@ public final class VarService implements AutoCloseable {
             ScopeResolver.Resolution res = new ScopeResolver(m.book(), definitions(p, m), words()).resolve(s.res().canonical());
             VarAccess.View view = access.view(p, m);
             set = view.full() ? res.set() : res.set().and(view.visible());
-        } catch (IllegalArgumentException | DrishtiException e) {
+        } catch (IllegalArgumentException | RiskFailure e) {
             return new WithMatured(s, 0, 0, null);                      // the scope names nothing matured
         }
         if (set.isEmpty()) {
@@ -897,7 +896,7 @@ public final class VarService implements AutoCloseable {
     private VarDate previous(LocalDate d, String why, int depth) {
         LocalDate p = depth < 5 ? loader.previous(d) : null;
         if (p == null) {
-            throw new DrishtiException(ErrorCode.VAR_INCONSISTENT_DATE, why);
+            throw new RiskFailure(RiskCode.VAR_INCONSISTENT_DATE, why);
         }
         return load(p, depth + 1).warned(why + "; answered from " + p + " instead");
     }
@@ -1115,7 +1114,7 @@ public final class VarService implements AutoCloseable {
      */
     VarDate stressed(LocalDate asked) {
         if (!props.stress().enabled()) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "stressed VaR is switched off on this server (drishti.var.stress.enabled)");
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "stressed VaR is switched off on this server (drishti.var.stress.enabled)");
         }
         VarDate normal = live(asked);
         LocalDate d = normal.date();
@@ -1132,10 +1131,10 @@ public final class VarService implements AutoCloseable {
             vd = f.join();
         } catch (java.util.concurrent.CompletionException e) {
             stressDates.remove(d, f);                                  // asked again, tried again
-            if (e.getCause() instanceof DrishtiException de) {
+            if (e.getCause() instanceof RiskFailure de) {
                 throw de;
             }
-            throw new DrishtiException(ErrorCode.SOURCE_FAILED, "the stress set of " + d + " could not be loaded: " + e.getCause());
+            throw new RiskFailure(RiskCode.SOURCE_FAILED, "the stress set of " + d + " could not be loaded: " + e.getCause());
         }
         for (LocalDate s : new ArrayList<>(stressDates.keySet())) {    // only the open dates keep their stress books
             if (!dates.containsKey(s)) {
@@ -1241,7 +1240,7 @@ public final class VarService implements AutoCloseable {
         return java.util.Set.copyOf(dates.keySet());
     }
 
-    boolean tradeIdsMasked(Principal p) {
+    boolean tradeIdsMasked(Caller p) {
         return access.masked(p, "TRADE_ID");
     }
 
@@ -1316,7 +1315,7 @@ public final class VarService implements AutoCloseable {
     }
 
     /** Definitions of the system baskets, the caller's baskets and captures, for the resolver. */
-    ScopeResolver.Definitions definitions(Principal p, VarDate d) {
+    ScopeResolver.Definitions definitions(Caller p, VarDate d) {
         return new ScopeResolver.Definitions() {
             @Override
             public Optional<String> portfolio(String id) {
@@ -1378,12 +1377,12 @@ public final class VarService implements AutoCloseable {
     }
 
     /** Resolves and computes a scope as the viewer (cached); a null viewer is the server (every node at positions level). In USD. */
-    Scoped scoped(Principal p, String scope, LocalDate asked) {
+    Scoped scoped(Caller p, String scope, LocalDate asked) {
         return scoped(p, scope, asked, VarDate.USD);
     }
 
     /** The same in a reporting currency ({@code ccy}: null or blank is USD). */
-    Scoped scoped(Principal p, String scope, LocalDate asked, String ccy) {
+    Scoped scoped(Caller p, String scope, LocalDate asked, String ccy) {
         return scoped(p, scope, asked, ccy, null);
     }
 
@@ -1392,10 +1391,10 @@ public final class VarService implements AutoCloseable {
      * at the configured confidences). The 1-day vector is the default lens's (cached); the lens's vector and measures are computed from it
      * and cached beside it, so a 10-day sum is always the windowed sum of the same summed 1-day vector.
      */
-    Scoped scoped(Principal p, String scope, LocalDate asked, String ccy, com.ash.risk.market.calc.VarLens lens) {
+    Scoped scoped(Caller p, String scope, LocalDate asked, String ccy, com.ash.risk.market.calc.VarLens lens) {
         boolean stressed = lens != null && lens.stressed();
         if (stressed && !VarDate.USD.equals(VarCurrencies.normalise(ccy))) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "stressed VaR is answered in USD, the stress set's own currency (asked: "
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "stressed VaR is answered in USD, the stress set's own currency (asked: "
                     + VarCurrencies.normalise(ccy) + ")");
         }
         // stressed VaR (VAR_GUIDE.md section 18.8): the same scope on the date's stress-set book, then the same lens on its 1-day vector
@@ -1427,7 +1426,7 @@ public final class VarService implements AutoCloseable {
             Map<String, Double> notionals, int hidden) {}
 
     /** {@link ScopeMembers} of {@code scope} on the date asked (null: the latest), with the same refusals as a VaR answer. */
-    public ScopeMembers scopeMembers(Principal p, String scope, LocalDate asked) {
+    public ScopeMembers scopeMembers(Caller p, String scope, LocalDate asked) {
         VarDate d = date(asked);
         VarAccess.View view = access.view(p, d);
         ScopeResolver.Resolution res;
@@ -1437,15 +1436,15 @@ public final class VarService implements AutoCloseable {
             parsed = ScopeExpr.parse(scope, words.keySet());
             res = new ScopeResolver(d.book(), definitions(p, d), words).resolve(scope);
         } catch (IllegalArgumentException e) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, e.getMessage());
+            throw new RiskFailure(RiskCode.BAD_REQUEST, e.getMessage());
         }
         unknownSystemBasket(parsed, res, d);
         if (parsed.refs().stream().anyMatch(r -> r.word().equals("CPTY")) && access.masked(p, "COUNTERPARTY")) {
-            throw new DrishtiException(ErrorCode.FORBIDDEN, "the counterparty is masked for your role: a scope may not select trades by it");
+            throw new RiskFailure(RiskCode.FORBIDDEN, "the counterparty is masked for your role: a scope may not select trades by it");
         }
         OrdinalSet set = view.full() ? res.set() : res.set().and(view.visible());
         if (!view.seesPositions(set)) {
-            throw new DrishtiException(ErrorCode.FORBIDDEN, "your role sees this scope in aggregate only: FRTB-SA reads it position by position");
+            throw new RiskFailure(RiskCode.FORBIDDEN, "your role sees this scope in aggregate only: FRTB-SA reads it position by position");
         }
         VarBook b = d.book();
         java.util.Set<String> trades = new java.util.LinkedHashSet<>();
@@ -1474,16 +1473,16 @@ public final class VarService implements AutoCloseable {
     /** {@code PORT:<id>} of a system basket the date does not have: {@code 404} in words, never an empty figure (VAR_GUIDE.md section 5.7). */
     private static void unknownSystemBasket(ScopeExpr parsed, ScopeResolver.Resolution res, VarDate d) {
         if (parsed instanceof ScopeExpr.Ref one && one.word().equals("PORT") && res.unknown().contains(one.toString())) {
-            throw new DrishtiException(ErrorCode.VAR_SYSTEM_BASKET_UNKNOWN, "no system basket " + one.arg() + " on " + d.date()
+            throw new RiskFailure(RiskCode.VAR_SYSTEM_BASKET_UNKNOWN, "no system basket " + one.arg() + " on " + d.date()
                     + ": PORT <GO> lists the system baskets (VAR_GUIDE.md section 5.7)");
         }
     }
 
-    private Scoped scoped1d(Principal p, String scope, LocalDate asked, String ccy) {
+    private Scoped scoped1d(Caller p, String scope, LocalDate asked, String ccy) {
         return scoped1d(p, scope, date(asked, ccy));
     }
 
-    private Scoped scoped1d(Principal p, String scope, VarDate d) {
+    private Scoped scoped1d(Caller p, String scope, VarDate d) {
         long t0 = System.nanoTime();
         VarAccess.View view = access.view(p, d);
         ScopeResolver.Resolution res;
@@ -1493,15 +1492,15 @@ public final class VarService implements AutoCloseable {
             parsed = ScopeExpr.parse(scope, words.keySet());
             res = new ScopeResolver(d.book(), definitions(p, d), words).resolve(scope);
         } catch (IllegalArgumentException e) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, e.getMessage());
+            throw new RiskFailure(RiskCode.BAD_REQUEST, e.getMessage());
         }
         unknownSystemBasket(parsed, res, d);
         if (parsed.refs().stream().anyMatch(r -> r.word().equals("CPTY")) && access.masked(p, "COUNTERPARTY")) {
-            throw new DrishtiException(ErrorCode.FORBIDDEN, "the counterparty is masked for your role: a scope may not select trades by it");
+            throw new RiskFailure(RiskCode.FORBIDDEN, "the counterparty is masked for your role: a scope may not select trades by it");
         }
         boolean namesTrades = parsed.refs().stream().anyMatch(r -> NAMING.contains(r.word()) || r.word().equals("PORT") && basket(d, r.arg()));
         if (namesTrades && !view.seesPositions(res.set())) {
-            throw new DrishtiException(ErrorCode.FORBIDDEN, "a scope of positions, trades, a counterparty, a rule or a basket portfolio may only "
+            throw new RiskFailure(RiskCode.FORBIDDEN, "a scope of positions, trades, a counterparty, a rule or a basket portfolio may only "
                     + "name what you see position by position; your role sees some of these only in aggregate");
         }
         String key = d.date() + "|" + d.currency() + "|" + d.version() + "|i" + d.intradayStamp() + "|" + view.signature() + "|" + res.canonical() + "|" + res.set().digest()
@@ -1577,7 +1576,7 @@ public final class VarService implements AutoCloseable {
         return "adhoc";
     }
 
-    private String label(VarDate d, ScopeResolver.Resolution res, ScopeExpr e, String kind, Principal p) {
+    private String label(VarDate d, ScopeResolver.Resolution res, ScopeExpr e, String kind, Caller p) {
         VarBook b = d.book();
         return switch (kind) {
             case "node" -> b.node(res.node()).name();
@@ -1602,7 +1601,7 @@ public final class VarService implements AutoCloseable {
     }
 
     /** One audit entry per answer delivered (VAR_GUIDE.md section 9): who, what scope, which date and view, the result, the time. */
-    void audit(Principal p, String action, Scoped s, String extra) {
+    void audit(Caller p, String action, Scoped s, String extra) {
         if (audit == null) {
             return;
         }

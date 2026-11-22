@@ -15,12 +15,12 @@
  */
 package com.ash.risk.ccr.exposure;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.ccr.calc.ExposureBook;
 import com.ash.risk.ccr.calc.ExposureGrid;
 import com.ash.risk.ccr.calc.ExposureMath;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -94,16 +94,16 @@ final class ExposureWhatIf {
      * A what-if: {@code {scope, method: addon|paths, q, candidates: [{tradeId, nettingSet, assetClass, notional, maturityDate, mtm,
      * delta, paths: {runId, ...}}]}}.
      */
-    Map<String, Object> whatIf(Principal p, Map<String, Object> body, LocalDate date) {
+    Map<String, Object> whatIf(Caller p, Map<String, Object> body, LocalDate date) {
         return whatIf(p, body, date, true);
     }
 
     /** The same, audited as {@code ccr-whatif} or not (the pre-deal check audits its own answer, {@code ccr-predeal}). */
     @SuppressWarnings("unchecked")
-    Map<String, Object> whatIf(Principal p, Map<String, Object> body, LocalDate date, boolean audited) {
+    Map<String, Object> whatIf(Caller p, Map<String, Object> body, LocalDate date, boolean audited) {
         String scope = String.valueOf(body.getOrDefault("scope", "")).trim();
         if (scope.isEmpty()) {
-            throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, "a what-if names its scope: {\"scope\": \"CPTY:CP-ALDERSHOT\", ...}");
+            throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, "a what-if names its scope: {\"scope\": \"CPTY:CP-ALDERSHOT\", ...}");
         }
         String method = String.valueOf(body.getOrDefault("method", "addon")).trim().toLowerCase(Locale.ROOT);
         Object qq = body.get("q");
@@ -112,13 +112,13 @@ final class ExposureWhatIf {
                 null, null);
         List<Map<String, Object>> cands = body.get("candidates") instanceof List<?> l ? (List<Map<String, Object>>) l : List.of();
         if (cands.isEmpty()) {
-            throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, "a what-if has candidates: [{tradeId, assetClass, notional, maturityDate, mtm}]");
+            throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, "a what-if has candidates: [{tradeId, assetClass, notional, maturityDate, mtm}]");
         }
         ExposureService.Scoped base = svc.scoped(p, scope, date, ask);
         ExposureBook b = base.date().book();
         for (Map<String, Object> c : cands) {
             if (c.get("paths") instanceof Map<?, ?> pm && pm.get("runId") != null && !b.runId().equals(String.valueOf(pm.get("runId")))) {
-                throw new DrishtiException(ErrorCode.EXPOSURE_WHATIF_RUN, "the candidate's paths are not of the run " + b.runId() + " of " + b.businessDate()
+                throw new RiskFailure(RiskCode.EXPOSURE_WHATIF_RUN, "the candidate's paths are not of the run " + b.runId() + " of " + b.businessDate()
                         + ": they are of " + pm.get("runId"));
             }
         }
@@ -126,7 +126,7 @@ final class ExposureWhatIf {
             return paths.whatIf(p, scope, base, ask, cands, date, audited);
         }
         if (!method.equals("addon")) {
-            throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, "method is addon or paths, not " + method);
+            throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, "method is addon or paths, not " + method);
         }
         ExposureGrid g = b.grid();
         ExposureMath.Stats st = base.result().stats;
@@ -218,7 +218,7 @@ final class ExposureWhatIf {
         try {
             return Math.max(1 / 365.0, ChronoUnit.DAYS.between(bd, LocalDate.parse(String.valueOf(d).substring(0, 10))) / 365.0);
         } catch (RuntimeException e) {
-            throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, "a candidate's maturityDate is a date (YYYY-MM-DD), not " + d);
+            throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, "a candidate's maturityDate is a date (YYYY-MM-DD), not " + d);
         }
     }
 
@@ -232,7 +232,7 @@ final class ExposureWhatIf {
         try {
             return Double.parseDouble(String.valueOf(o));
         } catch (NumberFormatException e) {
-            throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, "a candidate's amount is a number, not " + o);
+            throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, "a candidate's amount is a number, not " + o);
         }
     }
 }

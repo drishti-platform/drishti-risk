@@ -15,12 +15,12 @@
  */
 package com.ash.risk.ccr.exposure;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.ccr.calc.ExposureBook;
 import com.ash.risk.ccr.calc.ExposureCalc;
 import com.ash.risk.kernel.vector.OrdinalSet;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -28,8 +28,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * The pre-deal check (EXPOSURE_GUIDE.md section 18.9): does a new trade with a counterparty fit its credit limit? A request
@@ -57,7 +55,6 @@ final class ExposurePreDeal {
     static final String APPROVE = "approve";
     static final String REFER = "refer";
     static final String DECLINE = "decline";
-    private static final Pattern PCT = Pattern.compile("(\\d{2}(?:\\.\\d+)?)");
     private final ExposureService svc;
     private final ExposureWhatIf whatIf;
 
@@ -69,40 +66,8 @@ final class ExposurePreDeal {
         this.whatIf = whatIf;
     }
 
-    /** The measure a limit is set on, and its confidence for a PFE. */
-    record Measure(String figure, double q, String text) {
-
-        /** {@code PFE 95 peak}, {@code peak PFE}, {@code EEPE}, {@code EPE}, {@code EE peak}; null: one the engine does not compute. */
-        static Measure of(String stored, double defaultQ) {
-            String m = stored == null || stored.isBlank() ? "PFE" : stored.trim().toUpperCase(Locale.ROOT);
-            if (m.contains("PFE")) {
-                Matcher x = PCT.matcher(m);
-                double q = x.find() ? Double.parseDouble(x.group(1)) / 100 : defaultQ;
-                return q > 0.5 && q < 1 ? new Measure("peakPfe", q, stored == null ? "peak PFE" : stored.trim()) : null;
-            }
-            if (m.contains("EEPE")) {
-                return new Measure("eepe", defaultQ, stored.trim());
-            }
-            if (m.matches(".*\\bEPE\\b.*")) {
-                return new Measure("epe", defaultQ, stored.trim());
-            }
-            if (m.matches(".*\\bEE\\b.*")) {
-                return new Measure("peakEe", defaultQ, stored.trim());
-            }
-            return null;
-        }
-
-        boolean profiled() {
-            return figure.equals("peakPfe") || figure.equals("peakEe");
-        }
-
-        String column() {
-            return figure.equals("peakPfe") ? "pfe" : "ee";
-        }
-    }
-
     /** One check, as the asker (audited). */
-    Map<String, Object> check(Principal p, Map<String, Object> body, LocalDate date) {
+    Map<String, Object> check(Caller p, Map<String, Object> body, LocalDate date) {
         return check(p, body, date, true);
     }
 
@@ -110,7 +75,7 @@ final class ExposurePreDeal {
      * One check, as the asker; {@code audit} false only for the one Explain, which shows how a check the screen made was computed (the
      * same request, the same numbers: the check itself was audited when it was made).
      */
-    Map<String, Object> check(Principal p, Map<String, Object> body, LocalDate date, boolean audit) {
+    Map<String, Object> check(Caller p, Map<String, Object> body, LocalDate date, boolean audit) {
         ExposurePreDealCommand cmd = ExposurePreDealCommand.of(body);
         String checkId = "PDC-" + UUID.randomUUID().toString().substring(0, 13).toUpperCase(Locale.ROOT);
         String scope = "CPTY:" + cmd.counterparty();
@@ -118,8 +83,8 @@ final class ExposurePreDeal {
         ExposureService.Scoped first;
         try {
             first = svc.scoped(p, scope, date, plain);
-        } catch (DrishtiException e) {
-            if (e.errorCode() != ErrorCode.ENTITY_NOT_FOUND) {
+        } catch (RiskFailure e) {
+            if (e.errorCode() != RiskCode.ENTITY_NOT_FOUND) {
                 throw e;
             }
             Map<String, Object> out = head(checkId, cmd, null);
@@ -141,12 +106,12 @@ final class ExposurePreDeal {
         ExposureBook b = d.book();
         String cp = first.res().id() == null ? cmd.counterparty() : first.res().id();
         ExposureDate.Limit limit = d.limits().get(cp);
-        Measure measure = limit == null ? null : Measure.of(limit.measure(), svc.props().limitConfidence());
+        com.ash.risk.ccr.calc.LimitMeasure measure = limit == null ? null : com.ash.risk.ccr.calc.LimitMeasure.of(limit.measure(), svc.props().limitConfidence());
         double q = measure == null ? svc.props().limitConfidence() : measure.q();
         ExposureService.Ask ask = ExposureService.Ask.of(svc.props(), String.valueOf(q), null, null, null);
         ExposureService.Scoped base = svc.scoped(p, scope, d.date(), ask);
         if (base.result().pieces.isEmpty() && base.hiddenSets() > 0) {
-            throw new DrishtiException(ErrorCode.FORBIDDEN, "you see none of " + cp + "'s netting sets: a pre-deal check is made by who sees the "
+            throw new RiskFailure(RiskCode.FORBIDDEN, "you see none of " + cp + "'s netting sets: a pre-deal check is made by who sees the "
                     + "counterparty");
         }
         List<String> reasons = new ArrayList<>();
@@ -167,17 +132,17 @@ final class ExposurePreDeal {
         if (cmd.exact()) {
             int t = b.tradeOrdinal(cmd.like());
             if (t < 0) {
-                throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no trade " + cmd.like() + " on the run " + b.runId() + " of " + d.date()
+                throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no trade " + cmd.like() + " on the run " + b.runId() + " of " + d.date()
                         + " to copy: a template is a booked trade with exposure paths");
             }
             if (!base.view().seesTrades(OrdinalSet.of(t))) {
-                throw new DrishtiException(ErrorCode.FORBIDDEN, "the trade " + cmd.like() + " is not one you see trade by trade: a template is a trade you see");
+                throw new RiskFailure(RiskCode.FORBIDDEN, "the trade " + cmd.like() + " is not one you see trade by trade: a template is a trade you see");
             }
             ExposureBook.TradeInfo ti = b.trade(t);
             double tn = Math.abs(ti.notional());
             double notional = cmd.notional() == null ? tn : cmd.notional();
             if (!(tn > 0) && cmd.notional() != null) {
-                throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, "the template " + ti.id() + " has no notional to scale from: leave the "
+                throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, "the template " + ti.id() + " has no notional to scale from: leave the "
                         + "notional out (a copy as it is)");
             }
             double factor = (cmd.reverse() ? -1 : 1) * (tn > 0 ? notional / tn : 1);
@@ -208,7 +173,7 @@ final class ExposurePreDeal {
         } else {
             LocalDate mat = cmd.maturityOn(d.date());
             if (!mat.isAfter(d.date())) {
-                throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, "the maturity " + mat + " is not after the business date " + d.date());
+                throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, "the maturity " + mat + " is not after the business date " + d.date());
             }
             template = proxyTemplate(cmd, mat);
             cand.put("label", cmd.assetClass() + " " + ExposurePreDealCommand.amount(cmd.notional()) + " to " + mat);
@@ -223,7 +188,7 @@ final class ExposurePreDeal {
         }
         if (set != null) {
             if (!sets.contains(set)) {
-                throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, "the netting set " + set + " is not one of " + cp + "'s that you see: "
+                throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, "the netting set " + set + " is not one of " + cp + "'s that you see: "
                         + (sets.isEmpty() ? "none" : String.join(", ", sets)));
             }
         } else if (sets.size() == 1) {
@@ -385,7 +350,7 @@ final class ExposurePreDeal {
      * The limit's use before and after, and each tenor bucket's (the profile's peak within the bucket against the bucket's limit), each
      * {@code within}, {@code near} (from {@code near} of its limit) or {@code breach}.
      */
-    static Map<String, Object> limitUse(ExposureDate.Limit limit, Measure m, Map<String, Object> w, double near) {
+    static Map<String, Object> limitUse(ExposureDate.Limit limit, com.ash.risk.ccr.calc.LimitMeasure m, Map<String, Object> w, double near) {
         Map<?, ?> base = (Map<?, ?>) w.get("base");
         Map<?, ?> with = (Map<?, ?>) w.get("with");
         double before = num(base.get(m.figure()));
@@ -412,7 +377,7 @@ final class ExposurePreDeal {
         if (m.profiled() && !limit.buckets().isEmpty() && w.get("incremental") instanceof Map<?, ?> inc && inc.get("profile") instanceof List<?> prof) {
             String col = m.column();
             String colBase = col + "Base";
-            for (ExposureDate.Bucket bk : limit.buckets()) {
+            for (com.ash.risk.ccr.calc.TenorBucket bk : limit.buckets()) {
                 double b0 = 0;
                 double b1 = 0;
                 int points = 0;

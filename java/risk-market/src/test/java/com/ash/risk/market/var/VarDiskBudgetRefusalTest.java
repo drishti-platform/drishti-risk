@@ -18,8 +18,8 @@ package com.ash.risk.market.var;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.market.calc.VarBook;
 import com.ash.risk.hostcompat.server.disk.DiskBudget;
 import com.ash.risk.hostcompat.server.disk.DiskProperties;
@@ -64,7 +64,7 @@ class VarDiskBudgetRefusalTest {
         disk.usable = 100L << 20;                                        // under the floor: refused before anything is written
         t.budget(disk);
         assertThatThrownBy(() -> t.target(LocalDate.of(2026, 9, 30), "0123456789abcdef0123"))
-                .isInstanceOfSatisfying(DrishtiException.class, e -> assertThat(e.errorCode()).isEqualTo(ErrorCode.DISK_GUARD));
+                .isInstanceOfSatisfying(RiskFailure.class, e -> assertThat(e.errorCode()).isEqualTo(RiskCode.DISK_GUARD));
         t.close();
     }
 
@@ -92,8 +92,8 @@ class VarDiskBudgetRefusalTest {
                 b.trade("T-" + i, row, row.length, texts, nums);
                 added[0]++;
             }
-        }).isInstanceOfSatisfying(DrishtiException.class, e -> {
-            assertThat(e.errorCode()).isEqualTo(ErrorCode.VAR_CAPACITY);
+        }).isInstanceOfSatisfying(RiskFailure.class, e -> {
+            assertThat(e.errorCode()).isEqualTo(RiskCode.VAR_CAPACITY);
             assertThat(e.getMessage()).contains("DRS-5204").contains("needs about").contains("GB free in").contains(hot.toString());
         });
         assertThat(added[0]).as("stopped at the first check").isLessThan(6000);

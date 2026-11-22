@@ -17,7 +17,7 @@ package com.ash.risk.ccr.exposure;
 
 import com.ash.risk.hostcompat.identity.content.ContentDocs;
 import com.ash.risk.hostcompat.identity.content.ContentStore;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -200,7 +200,7 @@ final class ExposureOfficialStore {
     }
 
     /** Writes a capture once; its id is {@code XCAP-<yyyymmdd>-<n>}. */
-    String capture(Principal p, Map<String, Object> capture, String businessDate) {
+    String capture(Caller p, Map<String, Object> capture, String businessDate) {
         long n = ContentDocs.next(docs.store(), "exposure/captures-seq");
         String id = "XCAP-" + businessDate.replace("-", "") + "-" + n;
         capture.put("id", id);
@@ -211,7 +211,7 @@ final class ExposureOfficialStore {
     }
 
     @SuppressWarnings("unchecked")
-    Optional<Map<String, Object>> capture(Principal p, String id) {
+    Optional<Map<String, Object>> capture(Caller p, String id) {
         for (String key : docs.store().list("exposure/captures/")) {
             if (key.endsWith("/" + id + ".json")) {
                 return docs.value(key, Map.class).map(m -> (Map<String, Object>) m).filter(m -> readable(p, m));
@@ -220,14 +220,14 @@ final class ExposureOfficialStore {
         return Optional.empty();
     }
 
-    private static boolean readable(Principal p, Map<String, Object> m) {
+    private static boolean readable(Caller p, Map<String, Object> m) {
         if (p.user().equals(m.get("owner"))) {
             return true;
         }
         if (m.get("sharedWith") instanceof List<?> l) {
             for (Object o : l) {
                 String who = String.valueOf(o);
-                if (who.equals(p.user()) || p.roles() != null && p.roles().contains(who.replaceFirst("^role:", ""))) {
+                if (who.equals(p.user()) || java.util.List.of(p.visibility().split(",")).contains(who.replaceFirst("^role:", ""))) {
                     return true;
                 }
             }
@@ -236,7 +236,7 @@ final class ExposureOfficialStore {
     }
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> captures(Principal p, String canonical) {
+    List<Map<String, Object>> captures(Caller p, String canonical) {
         List<Map<String, Object>> out = new ArrayList<>();
         for (String key : docs.store().list("exposure/captures/")) {
             docs.value(key, Map.class).map(m -> (Map<String, Object>) m).filter(m -> readable(p, m))

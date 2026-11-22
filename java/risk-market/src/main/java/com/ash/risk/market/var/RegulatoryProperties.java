@@ -17,7 +17,6 @@ package com.ash.risk.market.var;
 
 import java.time.MonthDay;
 import java.util.List;
-import com.ash.risk.hostcompat.spring.ConfigurationProperties;
 
 /**
  * Regulatory VaR (VAR_GUIDE.md sections 18.10, 18.11 and 18.14; REGULATORY_VAR_REPORTING.md section 4): the desk P&amp;L the backtest reads, the
@@ -31,7 +30,7 @@ import com.ash.risk.hostcompat.spring.ConfigurationProperties;
  * @param reportsDir the folder of the report definitions, one YAML per report
  * @param syntheticHistory a demo server may seed synthetic official records before its oldest one (never on a bank's server)
  */
-@ConfigurationProperties("drishti.regulatory")
+// the host binds its settings under drishti.regulatory to these values (the engine reads options, never a configuration file)
 public record RegulatoryProperties(String fiscalYearEnd, String pnlKind, Backtesting backtesting, Integer averageDays, String reportsDir,
         Boolean syntheticHistory) {
 

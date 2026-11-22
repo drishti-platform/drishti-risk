@@ -18,7 +18,6 @@ package com.ash.risk.market.var;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import com.ash.risk.hostcompat.spring.ConfigurationProperties;
 
 /**
  * Why VaR moved (VAR_GUIDE.md section 3.11; docs/architecture/LENSES.md section 4.1, RO1): the settings of the explanation of a VaR change between
@@ -39,7 +38,7 @@ import com.ash.risk.hostcompat.spring.ConfigurationProperties;
  * @param cacheMb the most memory the kept answers take (32 MB, weighed in bytes)
  * @param matrixMax the most child nodes the Matrix view explains (60)
  */
-@ConfigurationProperties("drishti.var.explain")
+// the host binds its settings under drishti.var.explain to these values (the engine reads options, never a configuration file)
 public record VarExplainProperties(Boolean enabled, List<String> order, String windowLines, Boolean splitAmendments, Integer top,
         Integer driversMax, Integer cacheMinutes, Integer cacheMb, Integer matrixMax) {
 

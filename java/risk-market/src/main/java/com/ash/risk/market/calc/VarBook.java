@@ -173,7 +173,7 @@ public final class VarBook {
      */
     private final Map<Integer, double[]> positionCache = new ConcurrentHashMap<>();
     private final java.util.concurrent.atomic.AtomicLong positionCached = new java.util.concurrent.atomic.AtomicLong();
-    @com.ash.risk.hostcompat.kernel.api.module.EngineWide("one memory limit for the heap-tier position vectors on this server, set by the server")
+    // engine-wide static state on purpose: one memory limit for the heap-tier position vectors on this server, set by the server (one of the two static fields K6 removes, SPLIT_EXEMPTIONS.md)
     private static volatile long positionCacheLimit = Runtime.getRuntime().maxMemory() / 16;
 
     /** The most bytes one date's heap-tier position vectors may keep (the server sets a quarter of the date's memory budget). */

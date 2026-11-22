@@ -15,8 +15,8 @@
  */
 package com.ash.risk.hostcompat.identity.content;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -138,8 +138,8 @@ public final class TxContentStore implements ContentStore {
         for (int attempt = 0; ; attempt++) {
             try {
                 return run(work);
-            } catch (DrishtiException e) {
-                if (e.errorCode() != ErrorCode.CONTENT_CONFLICT || attempt >= 9) {
+            } catch (RiskFailure e) {
+                if (e.errorCode() != RiskCode.CONTENT_CONFLICT || attempt >= 9) {
                     throw e;
                 }
             }
@@ -271,8 +271,8 @@ public final class TxContentStore implements ContentStore {
                 }
                 applied.add(apply(e.getKey(), e.getValue().base, e.getValue().bytes));
             }
-        } catch (DrishtiException ex) {
-            if (ex.errorCode() == ErrorCode.CONTENT_CONFLICT) {
+        } catch (RiskFailure ex) {
+            if (ex.errorCode() == RiskCode.CONTENT_CONFLICT) {
                 undo(writes, applied);
                 base.deleteLatest(intent);
             }
@@ -303,7 +303,7 @@ public final class TxContentStore implements ContentStore {
                 } else {
                     base.put(key, w.before, written);                      // an update or a delete: put the old bytes back
                 }
-            } catch (DrishtiException e) {
+            } catch (RiskFailure e) {
                 LOG.warn("content transaction: could not undo {}: {}", key, e.getMessage());
             }
         }
@@ -367,7 +367,7 @@ public final class TxContentStore implements ContentStore {
         }
         try {
             apply(key, expected, bytes);
-        } catch (DrishtiException e) {
+        } catch (RiskFailure e) {
             LOG.warn("content transaction: {} could not be rolled forward: {}", key, e.getMessage());
         }
     }

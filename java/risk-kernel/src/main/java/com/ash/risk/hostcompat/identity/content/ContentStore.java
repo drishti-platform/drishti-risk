@@ -15,8 +15,8 @@
  */
 package com.ash.risk.hostcompat.identity.content;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
@@ -48,14 +48,14 @@ public interface ContentStore extends AutoCloseable {
 
     /**
      * Compare-and-set write. {@code expectedVersion} null: the item must not exist (a create); otherwise it must still have that
-     * version. Returns the new version; throws {@link ErrorCode#CONTENT_CONFLICT} on a mismatch.
+     * version. Returns the new version; throws {@link RiskCode#CONTENT_CONFLICT} on a mismatch.
      */
     String put(String key, byte[] bytes, String expectedVersion);
 
     /** Every key starting with {@code prefix} (plain string prefix), sorted. */
     List<String> list(String prefix);
 
-    /** Compare-and-set delete: false when there was no item; {@link ErrorCode#CONTENT_CONFLICT} when its version is not {@code expectedVersion}. */
+    /** Compare-and-set delete: false when there was no item; {@link RiskCode#CONTENT_CONFLICT} when its version is not {@code expectedVersion}. */
     boolean delete(String key, String expectedVersion);
 
     /** Keys written or deleted after {@code since} (epoch milliseconds). At least once: a key may repeat. */
@@ -73,8 +73,8 @@ public interface ContentStore extends AutoCloseable {
             String v = get(key).map(Item::version).orElse(null);
             try {
                 return put(key, bytes, v);
-            } catch (DrishtiException e) {
-                if (e.errorCode() != ErrorCode.CONTENT_CONFLICT || attempt >= 8) {
+            } catch (RiskFailure e) {
+                if (e.errorCode() != RiskCode.CONTENT_CONFLICT || attempt >= 8) {
                     throw e;
                 }
             }
@@ -90,16 +90,16 @@ public interface ContentStore extends AutoCloseable {
             }
             try {
                 return delete(key, it.get().version());
-            } catch (DrishtiException e) {
-                if (e.errorCode() != ErrorCode.CONTENT_CONFLICT || attempt >= 8) {
+            } catch (RiskFailure e) {
+                if (e.errorCode() != RiskCode.CONTENT_CONFLICT || attempt >= 8) {
                     throw e;
                 }
             }
         }
     }
 
-    static DrishtiException conflict(String key) {
-        return new DrishtiException(ErrorCode.CONTENT_CONFLICT, "'" + key + "' was changed elsewhere (or already exists): reload and try again");
+    static RiskFailure conflict(String key) {
+        return new RiskFailure(RiskCode.CONTENT_CONFLICT, "'" + key + "' was changed elsewhere (or already exists): reload and try again");
     }
 
     /** Checks a key: 1 to 16 segments of 1 to 120 UTF-8 bytes, no empty, {@code .} or {@code ..} segment, no {@code \} or control characters. */
@@ -125,7 +125,7 @@ public interface ContentStore extends AutoCloseable {
         return key;
     }
 
-    private static DrishtiException bad(String key) {
-        return new DrishtiException(ErrorCode.CONTENT_BAD_KEY, "not a content key: '" + (key == null ? "" : key.replaceAll("\\p{Cntrl}", "?")) + "'");
+    private static RiskFailure bad(String key) {
+        return new RiskFailure(RiskCode.CONTENT_BAD_KEY, "not a content key: '" + (key == null ? "" : key.replaceAll("\\p{Cntrl}", "?")) + "'");
     }
 }

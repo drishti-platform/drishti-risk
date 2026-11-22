@@ -15,8 +15,8 @@
  */
 package com.ash.risk.market.var;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.market.calc.Cells;
 import com.ash.risk.kernel.scope.HierarchySpec;
 import com.ash.risk.hostcompat.packs.Pack;
@@ -104,7 +104,7 @@ public record Hierarchies(List<HierarchySpec> specs, String origin, Set<String> 
         try {
             return new Hierarchies(HierarchySpec.parse(m), origin);
         } catch (IllegalArgumentException e) {
-            throw new DrishtiException(ErrorCode.VAR_HIERARCHY_INVALID, "the hierarchies of " + origin + " are not valid: " + e.getMessage());
+            throw new RiskFailure(RiskCode.VAR_HIERARCHY_INVALID, "the hierarchies of " + origin + " are not valid: " + e.getMessage());
         }
     }
 
@@ -122,7 +122,7 @@ public record Hierarchies(List<HierarchySpec> specs, String origin, Set<String> 
      * The hierarchy warnings now, by engine, hierarchy, level column and kind ({@code var LL LIMIT_LETTER scenario-pv}) to the words: a
      * level column a source kind does not promote (its rows sit under (Blank) at that level), with the fix. Admin → Health lists them.
      */
-    @com.ash.risk.hostcompat.kernel.api.module.EngineWide("the hierarchy warnings of the engines on this server, which Health lists")
+    // engine-wide static state on purpose: the hierarchy warnings of the engines on this server, which Health lists (one of the two static fields K6 removes, SPLIT_EXEMPTIONS.md)
     private static final Map<String, String> WARNINGS = new java.util.concurrent.ConcurrentSkipListMap<>();
 
     /** Replaces an engine's hierarchy warnings ({@code key} without the engine's word, to the words). */
@@ -161,13 +161,13 @@ public record Hierarchies(List<HierarchySpec> specs, String origin, Set<String> 
                     }
                 }
                 if (refuse && known > 0 && missing.size() == known && !this.known.isEmpty() && !this.known.contains(c)) {
-                    throw new DrishtiException(ErrorCode.VAR_HIERARCHY_INVALID, "the hierarchy " + s.id() + " (" + s.title() + ", " + origin
+                    throw new RiskFailure(RiskCode.VAR_HIERARCHY_INVALID, "the hierarchy " + s.id() + " (" + s.title() + ", " + origin
                             + ") names the level column " + c + ", which no source promotes: check the name, or add " + c + " to "
                             + String.join(" and ", missing.stream().map(k -> "layout." + k + ".columns").toList())
                             + " of the connector (a hierarchy is built from promoted columns only)");
                 }
                 for (String k : missing) {
-                    out.put(s.id() + " " + c + " " + k, ErrorCode.VAR_HIERARCHY_COLUMN.code() + " the hierarchy " + s.id() + " (" + s.title()
+                    out.put(s.id() + " " + c + " " + k, RiskCode.VAR_HIERARCHY_COLUMN.code() + " the hierarchy " + s.id() + " (" + s.title()
                             + "): " + k + " does not promote its level column " + c + ", so every " + k + " row sits under "
                             + s.blankName() + " at the " + s.levelNames().get(i) + " level; fix: promote " + c + " in layout." + k
                             + ".columns of the connector and send it on every row");

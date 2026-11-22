@@ -15,8 +15,8 @@
  */
 package com.ash.risk.market.var;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.kernel.scope.ScopeExpr;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -129,7 +129,7 @@ final class VarBasketSheet {
     @SuppressWarnings("unchecked")
     static VarBasketSheet read(Object sheet, Set<String> configured) {
         if (!(sheet instanceof Map<?, ?> m)) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "a sheet is an object: {\"wholeBank\": false, \"op\": [...], \"TRD\": [...], ...}");
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "a sheet is an object: {\"wholeBank\": false, \"op\": [...], \"TRD\": [...], ...}");
         }
         Set<String> words = configured == null ? Set.of() : configured;
         List<String> cols = columns(words);
@@ -152,7 +152,7 @@ final class VarBasketSheet {
             }
             String col = k.toUpperCase(Locale.ROOT);
             if (!cols.contains(col)) {
-                throw new DrishtiException(ErrorCode.BAD_REQUEST, "the sheet has no column " + k + ": its columns are " + OP + ", "
+                throw new RiskFailure(RiskCode.BAD_REQUEST, "the sheet has no column " + k + ": its columns are " + OP + ", "
                         + String.join(", ", cols));
             }
             values.put(col, list);
@@ -171,10 +171,10 @@ final class VarBasketSheet {
             return List.of();
         }
         if (!(v instanceof List<?> l)) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "the column " + column + " is a list of ids, one a row");
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "the column " + column + " is a list of ids, one a row");
         }
         if (l.size() > MAX_ROWS) {
-            throw new DrishtiException(ErrorCode.PAYLOAD_TOO_LARGE, "the column " + column + " holds " + l.size() + " rows: a sheet holds at most "
+            throw new RiskFailure(RiskCode.PAYLOAD_TOO_LARGE, "the column " + column + " holds " + l.size() + " rows: a sheet holds at most "
                     + MAX_ROWS + " (split the basket in two)");
         }
         List<String> out = new ArrayList<>(l.size());
@@ -366,7 +366,7 @@ final class VarBasketSheet {
         int top = plus.values().stream().mapToInt(List::size).max().orElse(0);
         int low = minus.values().stream().mapToInt(List::size).max().orElse(0);
         if (top + low > MAX_ROWS) {
-            throw new DrishtiException(ErrorCode.PAYLOAD_TOO_LARGE, "the scope needs " + (top + low) + " rows: a sheet holds at most " + MAX_ROWS);
+            throw new RiskFailure(RiskCode.PAYLOAD_TOO_LARGE, "the scope needs " + (top + low) + " rows: a sheet holds at most " + MAX_ROWS);
         }
         Map<String, List<String>> values = new LinkedHashMap<>();
         for (String c : cols) {

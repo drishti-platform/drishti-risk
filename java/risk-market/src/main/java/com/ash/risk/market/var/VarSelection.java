@@ -15,13 +15,13 @@
  */
 package com.ash.risk.market.var;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
+import com.ash.risk.kernel.RiskFailure;
 import com.ash.risk.kernel.scope.ScopeExpr;
 import com.ash.risk.market.calc.ScopeResolver;
 import com.ash.risk.market.calc.VarBook;
 import com.ash.risk.market.calc.VarCalc;
 import com.ash.risk.kernel.vector.OrdinalSet;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -66,7 +66,7 @@ final class VarSelection {
     // ------------------------------------------------------------------------------------------------------------------- terms
 
     /** The scope's top-level terms with their sign; a single saved basket stands for its definition's terms. */
-    List<Term> terms(Principal p, String scope) {
+    List<Term> terms(Caller p, String scope) {
         ScopeExpr e = expanded(p, ScopeExpr.parse(scope, svc.words().keySet()));
         List<Term> out = new ArrayList<>();
         flatten(e, "+", out);
@@ -74,7 +74,7 @@ final class VarSelection {
     }
 
     /** The definition of a scope that is one saved basket (the caller may read), else the scope itself. */
-    ScopeExpr expanded(Principal p, ScopeExpr e) {
+    ScopeExpr expanded(Caller p, ScopeExpr e) {
         if (p != null && e instanceof ScopeExpr.Ref r && r.word().equals("BASKET")) {
             Optional<String> def = svc.saved().basket(p, r.arg()).map(b -> String.valueOf(b.get("scope")));
             if (def.isPresent()) {
@@ -118,7 +118,7 @@ final class VarSelection {
     }
 
     /** True when a scope's default parts are its terms: an ad-hoc scope or a basket with two terms or more to add. */
-    boolean byTerms(Principal p, VarService.Scoped s) {
+    boolean byTerms(Caller p, VarService.Scoped s) {
         if (!s.kind().equals("adhoc") && !s.kind().equals("basket")) {
             return false;
         }
@@ -135,7 +135,7 @@ final class VarSelection {
      * The scope's positive terms as its parts: each the term's trades inside the scope (so a term minus another is already taken out);
      * the vector of a part is its trades not in an earlier part (components add up), its standalone VaR that of the term alone.
      */
-    List<VarViews.Part> parts(Principal p, VarService.Scoped s) {
+    List<VarViews.Part> parts(Caller p, VarService.Scoped s) {
         VarDate d = s.date();
         VarBook b = d.book();
         ScopeResolver resolver = new ScopeResolver(b, svc.definitions(p, d), svc.words());
@@ -171,7 +171,7 @@ final class VarSelection {
     }
 
     /** A term's name: a portfolio's or basket's title, a node's name, else the term. */
-    String label(Principal p, VarDate d, ScopeExpr e) {
+    String label(Caller p, VarDate d, ScopeExpr e) {
         if (!(e instanceof ScopeExpr.Ref r)) {
             return e.toString();
         }
@@ -266,12 +266,12 @@ final class VarSelection {
     // ------------------------------------------------------------------------------------------------------------------- hints
 
     /** Up to {@code limit} things a typed text names, each with its trade count and standalone VaR as the viewer. */
-    List<Map<String, Object>> hints(Principal p, String q, int limit, java.time.LocalDate asked) {
+    List<Map<String, Object>> hints(Caller p, String q, int limit, java.time.LocalDate asked) {
         return hints(p, q, limit, asked, VarDate.USD);
     }
 
     /** The same with each standalone VaR in a reporting currency ({@code currency} on every hint). */
-    List<Map<String, Object>> hints(Principal p, String q, int limit, java.time.LocalDate asked, String ccy) {
+    List<Map<String, Object>> hints(Caller p, String q, int limit, java.time.LocalDate asked, String ccy) {
         String text = q == null ? "" : q.trim();
         if (text.isEmpty()) {
             return List.of();
@@ -337,7 +337,7 @@ final class VarSelection {
                     List<String> n = notices(s);
                     m.put("notice", n.isEmpty() ? "matches nothing" : n.get(0));
                 }
-            } catch (DrishtiException | IllegalArgumentException x) {
+            } catch (RiskFailure | IllegalArgumentException x) {
                 if (!"as typed".equals(e.name())) {
                     continue;                                          // not the viewer's to name one by one
                 }

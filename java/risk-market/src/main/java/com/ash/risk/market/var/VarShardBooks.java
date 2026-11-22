@@ -15,8 +15,8 @@
  */
 package com.ash.risk.market.var;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.market.calc.CurrencyBook;
 import com.ash.risk.market.calc.ScenarioFx;
 import com.ash.risk.market.calc.VarBook;
@@ -98,10 +98,10 @@ final class VarShardBooks {
             return b;
         } catch (CompletionException e) {
             books.remove(k, f);                                       // a failed build is tried again by the next request
-            if (e.getCause() instanceof DrishtiException de) {
+            if (e.getCause() instanceof RiskFailure de) {
                 throw de;
             }
-            throw new DrishtiException(ErrorCode.SOURCE_FAILED, "shard " + scope.shard().id() + " (" + scope.shard().range() + ") of "
+            throw new RiskFailure(RiskCode.SOURCE_FAILED, "shard " + scope.shard().id() + " (" + scope.shard().range() + ") of "
                     + scope.map().date() + " could not be built: " + e.getCause());
         }
     }
@@ -211,7 +211,7 @@ final class VarShardBooks {
     private VarBook convert(VarBook usd, String ccy, VarShardScope scope) {
         LocalDate date = scope.map().date();
         ScenarioFx fx = loader.fx(date, usd.scenarioDates());
-        ScenarioFx.Rates rep = fx.rates(ccy).orElseThrow(() -> new DrishtiException(ErrorCode.VAR_NO_FX, "no " + ccy + " FX for the scenarios of "
+        ScenarioFx.Rates rep = fx.rates(ccy).orElseThrow(() -> new RiskFailure(RiskCode.VAR_NO_FX, "no " + ccy + " FX for the scenarios of "
                 + date + "; the currencies with FX on the date: " + String.join(", ", fx.currencies())));
         VarTier tier = loader.tier();
         String digest = VarTier.digest(date, usd.hot().digest() + "|ccy=" + ccy + "|fx=" + loader.fxVersions(date), "", "", "");

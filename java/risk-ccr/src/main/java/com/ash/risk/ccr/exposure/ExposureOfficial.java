@@ -15,7 +15,7 @@
  */
 package com.ash.risk.ccr.exposure;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
+import com.ash.risk.kernel.RiskFailure;
 import com.ash.risk.ccr.calc.ExposureBook;
 import com.ash.risk.ccr.calc.ExposureCalc;
 import com.ash.risk.ccr.calc.ExposureGrid;
@@ -151,7 +151,7 @@ final class ExposureOfficial implements AutoCloseable {
         ExposureDate d;
         try {
             d = svc.date(date);
-        } catch (DrishtiException e) {
+        } catch (RiskFailure e) {
             out.put("status", "skipped");
             out.put("reason", e.getMessage());
             return out;
@@ -211,7 +211,7 @@ final class ExposureOfficial implements AutoCloseable {
                 Map<String, Object> f = figures(d, n.scope(), ask);
                 scopes.put(n.hierarchy() + ":" + n.id(), f);
                 nodeRows.add(published(d, n.hierarchy(), n.id(), n.name(), n.parent(), n.level(), null, null, f, version, computedAt, inputs));
-            } catch (DrishtiException e) {
+            } catch (RiskFailure e) {
                 // a node with no trade of the run: not published
             }
         }
@@ -419,7 +419,7 @@ final class ExposureOfficial implements AutoCloseable {
                             blank ? path.toString() : where.toString()));
                     parentOf.put(id, parent);
                 } else if (s.leafIds() && !parent.equals(parentOf.get(id))) {
-                    throw new DrishtiException(com.ash.risk.hostcompat.api.error.ErrorCode.VAR_HIERARCHY_INVALID, "the hierarchy " + s.id() + " names its nodes by their own value "
+                    throw new RiskFailure(com.ash.risk.kernel.RiskCode.VAR_HIERARCHY_INVALID, "the hierarchy " + s.id() + " names its nodes by their own value "
                             + "(ids: leaf), but " + v + " sits under both " + parentOf.get(id) + " and " + parent + ": use ids: path");
                 }
                 parent = id;

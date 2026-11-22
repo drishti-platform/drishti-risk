@@ -18,8 +18,8 @@ package com.ash.risk.market.var;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.hostcompat.server.disk.DiskBudget;
 import com.ash.risk.hostcompat.server.disk.DiskProperties;
 import java.nio.file.Files;
@@ -77,8 +77,8 @@ class VarTierDiskCapTest {
         file("2026-09-30", 10, 1_000);
         DiskBudget tight = new DiskBudget(new DiskProperties(0.0, 1e9, null, null, null), dir);        // a guard of 1,000 PB: never fits
         VarTier t = tier(1).budget(tight);
-        assertThatThrownBy(() -> t.target(LocalDate.of(2026, 10, 1), VarDate.USD, "ab".repeat(32))).isInstanceOf(DrishtiException.class)
-                .satisfies(e -> assertThat(((DrishtiException) e).errorCode()).isEqualTo(ErrorCode.DISK_GUARD))
+        assertThatThrownBy(() -> t.target(LocalDate.of(2026, 10, 1), VarDate.USD, "ab".repeat(32))).isInstanceOf(RiskFailure.class)
+                .satisfies(e -> assertThat(((RiskFailure) e).errorCode()).isEqualTo(RiskCode.DISK_GUARD))
                 .hasMessageContaining("not enough free disk to build the VaR hot file of 2026-10-01").hasMessageContaining("needed")
                 .hasMessageContaining("guard");
         assertThat(dir.resolve("2026-10-01")).as("nothing written").doesNotExist();

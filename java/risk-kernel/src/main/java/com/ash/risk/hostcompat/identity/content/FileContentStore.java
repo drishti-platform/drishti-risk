@@ -16,8 +16,8 @@
 package com.ash.risk.hostcompat.identity.content;
 
 import com.ash.tools.codec.Hashes;
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -201,7 +201,7 @@ public final class FileContentStore implements ContentStore {
                 } catch (FileAlreadyExistsException | AccessDeniedException e) {
                     breakIfStale(lock);
                     if (System.currentTimeMillis() > deadline) {
-                        throw new DrishtiException(ErrorCode.CONTENT_CONFLICT, "'" + f.getFileName() + "' is being written by another node: try again");
+                        throw new RiskFailure(RiskCode.CONTENT_CONFLICT, "'" + f.getFileName() + "' is being written by another node: try again");
                     }
                     sleep(Math.min(50, 2 + attempt));
                 } catch (NoSuchFileException e) {
@@ -229,8 +229,8 @@ public final class FileContentStore implements ContentStore {
     }
 
     /** On a filesystem a key cannot be both an item and the folder of other keys ({@code a} and {@code a/b}). */
-    private DrishtiException itemAndFolder(Path f) {
-        return new DrishtiException(ErrorCode.CONTENT_BAD_KEY, "'" + items.relativize(f) + "': a key cannot be both an item and a prefix of other keys");
+    private RiskFailure itemAndFolder(Path f) {
+        return new RiskFailure(RiskCode.CONTENT_BAD_KEY, "'" + items.relativize(f) + "': a key cannot be both an item and a prefix of other keys");
     }
 
     private static void breakIfStale(Path lock) {
@@ -295,7 +295,7 @@ public final class FileContentStore implements ContentStore {
             Thread.sleep(ms);
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
-            throw new DrishtiException(ErrorCode.CONTENT_CONFLICT, "interrupted while waiting for the content store");
+            throw new RiskFailure(RiskCode.CONTENT_CONFLICT, "interrupted while waiting for the content store");
         }
     }
 
@@ -318,7 +318,7 @@ public final class FileContentStore implements ContentStore {
         }
         try {
             return file(items, prefix.substring(0, slash));
-        } catch (DrishtiException e) {
+        } catch (RiskFailure e) {
             return items;
         }
     }

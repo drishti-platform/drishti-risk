@@ -15,9 +15,9 @@
  */
 package com.ash.risk.ccr.exposure;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
+import com.ash.risk.kernel.Caller;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -44,7 +44,7 @@ final class ExposureCaptures {
         this.views = views;
     }
 
-    Map<String, Object> capture(Principal p, String scope, LocalDate date, ExposureService.Ask ask, String note) {
+    Map<String, Object> capture(Caller p, String scope, LocalDate date, ExposureService.Ask ask, String note) {
         Map<String, Object> head = views.scope(p, scope, date, ask);
         ExposureService.Scoped s = svc.scoped(p, scope, date, ask);
         Map<String, Object> c = new LinkedHashMap<>();
@@ -79,18 +79,18 @@ final class ExposureCaptures {
         return out;
     }
 
-    Map<String, Object> get(Principal p, String id) {
-        return svc.official().capture(p, id).orElseThrow(() -> new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no exposure capture " + id
+    Map<String, Object> get(Caller p, String id) {
+        return svc.official().capture(p, id).orElseThrow(() -> new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no exposure capture " + id
                 + " you may read"));
     }
 
-    List<Map<String, Object>> list(Principal p, String scope) {
+    List<Map<String, Object>> list(Caller p, String scope) {
         String canonical = null;
         if (scope != null && !scope.isBlank()) {
             try {
                 canonical = com.ash.risk.kernel.scope.ScopeExpr.parse(scope, svc.loader().words()).toString();
             } catch (IllegalArgumentException e) {
-                throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, e.getMessage());
+                throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, e.getMessage());
             }
         }
         return svc.official().captures(p, canonical);
@@ -98,7 +98,7 @@ final class ExposureCaptures {
 
     /** Two captures side by side, or a capture and now ({@code b = now}): the figures, the profile and the members added and removed. */
     @SuppressWarnings("unchecked")
-    Map<String, Object> compare(Principal p, String a, String b) {
+    Map<String, Object> compare(Caller p, String a, String b) {
         Map<String, Object> ca = get(p, a);
         Map<String, Object> cb;
         if (b == null || b.isBlank() || b.equalsIgnoreCase("now")) {
@@ -162,7 +162,7 @@ final class ExposureCaptures {
     /** A capture as CSV: its fields as {@code # field: value} lines, then its profile (EXPOSURE_GUIDE.md section 19.3). */
     @SuppressWarnings("unchecked")
     /** A capture's profile as JSON Lines: one grid date a line, keyed as the CSV's header (the capture itself is GET /captures/{id}). */
-    String jsonl(Principal p, String id) {
+    String jsonl(Caller p, String id) {
         Map<String, Object> c = get(p, id);
         return profileJsonl(c.get("profile") instanceof List<?> l ? l : List.of());
     }
@@ -184,7 +184,7 @@ final class ExposureCaptures {
         return sb.toString();
     }
 
-    String csv(Principal p, String id) {
+    String csv(Caller p, String id) {
         Map<String, Object> c = get(p, id);
         StringBuilder sb = new StringBuilder();
         for (String f : List.of("id", "scope", "label", "businessDate", "runId", "capturedAt", "owner", "note", "confidence", "collateralModel", "ce",

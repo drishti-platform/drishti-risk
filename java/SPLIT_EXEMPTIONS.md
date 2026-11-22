@@ -25,7 +25,12 @@ merged with `--allow-unrelated-histories`; then one commit renaming the packages
 
 ## 1. Host types parked whole in `com.ash.risk.hostcompat` (risk-kernel)
 
-Copied unchanged but for the package; each is removed when the step named retires the code that uses it.
+Copied unchanged but for the package; each is removed when the step named retires the code that uses it. Removed so far (R1, branch
+`r1/outputs`): `DrishtiException` and `ErrorCode` (the moved code throws the kernel's `RiskFailure` with a `RiskCode`, `RSK-` and Drishti's
+number), `Principal` (the kernel's `Caller`: an actor for the audit line and the visibility signature), `ModuleHomes` (the FRTB parameters are
+the product's own resources unless an absolute folder is given), Spring's four stand-ins (the properties records are the values a host binds
+as options), `EngineWide` (a comment on the two static fields K6 removes), `EngineOffException` (`RiskFailure` with `ENGINE_OFF`; the switch is
+the host's), `Work`, `BusyRefusal`, `JvmTempDir` and `ModuleLoaders` (nothing named them).
 
 | Parked type | Drishti's type | Removed at |
 |---|---|---|
@@ -52,12 +57,7 @@ Copied unchanged but for the package; each is removed when the step named retire
 | `com.ash.risk.hostcompat.api.compute.EngineRequest` | `com.ash.drishti.api.compute.EngineRequest` | K6 |
 | `com.ash.risk.hostcompat.api.compute.EngineResult` | `com.ash.drishti.api.compute.EngineResult` | K6 |
 | `com.ash.risk.hostcompat.api.compute.Viewer` | `com.ash.drishti.api.compute.Viewer` | K6 |
-| `com.ash.risk.hostcompat.api.error.DrishtiException` | `com.ash.drishti.api.error.DrishtiException` | K4 |
-| `com.ash.risk.hostcompat.api.error.ErrorCode` | `com.ash.drishti.api.error.ErrorCode` | K4 |
-| `com.ash.risk.hostcompat.api.resolution.ModuleHomes` | `com.ash.drishti.api.resolution.ModuleHomes` | K4 |
 | `com.ash.risk.hostcompat.common.Branding` | `com.ash.drishti.common.Branding` | K4 |
-| `com.ash.risk.hostcompat.common.JvmTempDir` | `com.ash.drishti.common.JvmTempDir` | K6 |
-| `com.ash.risk.hostcompat.common.ModuleLoaders` | `com.ash.drishti.common.ModuleLoaders` | K6 |
 | `com.ash.risk.hostcompat.compute.arrow.ArrowIpc` | `com.ash.drishti.compute.arrow.ArrowIpc` | K7 |
 | `com.ash.risk.hostcompat.compute.arrow.ArrowMemory` | `com.ash.drishti.compute.arrow.ArrowMemory` | K7 |
 | `com.ash.risk.hostcompat.compute.arrow.ArrowTable` | `com.ash.drishti.compute.arrow.ArrowTable` | K7 |
@@ -68,13 +68,9 @@ Copied unchanged but for the package; each is removed when the step named retire
 | `com.ash.risk.hostcompat.identity.content.ContentStore` | `com.ash.drishti.identity.content.ContentStore` | K7 |
 | `com.ash.risk.hostcompat.identity.content.FileContentStore` | `com.ash.drishti.identity.content.FileContentStore` | K7 |
 | `com.ash.risk.hostcompat.identity.content.TxContentStore` | `com.ash.drishti.identity.content.TxContentStore` | K7 |
-| `com.ash.risk.hostcompat.kernel.api.module.EngineWide` | `com.ash.drishti.kernel.api.module.EngineWide` | K6 |
-| `com.ash.risk.hostcompat.kernel.api.security.Principal` | `com.ash.drishti.kernel.api.security.Principal` | K4 |
 | `com.ash.risk.hostcompat.kernel.api.shard.ShardGather` | `com.ash.drishti.kernel.api.shard.ShardGather` | K8 |
 | `com.ash.risk.hostcompat.kernel.api.view.ViewAugmenter` | `com.ash.drishti.kernel.api.view.ViewAugmenter` | K7 |
 | `com.ash.risk.hostcompat.packs.Pack` | `com.ash.drishti.packs.Pack` | K4 |
-| `com.ash.risk.hostcompat.server.admission.BusyRefusal` | `com.ash.drishti.server.admission.BusyRefusal` | K6 |
-| `com.ash.risk.hostcompat.server.admission.Work` | `com.ash.drishti.server.admission.Work` | K6 |
 | `com.ash.risk.hostcompat.server.caches.OpenDates` | `com.ash.drishti.server.caches.OpenDates` | K6 |
 | `com.ash.risk.hostcompat.server.caches.Refusals` | `com.ash.drishti.server.caches.Refusals` | K6 |
 | `com.ash.risk.hostcompat.server.caches.RefusedForNow` | `com.ash.drishti.server.caches.RefusedForNow` | K6 |
@@ -83,9 +79,7 @@ Copied unchanged but for the package; each is removed when the step named retire
 | `com.ash.risk.hostcompat.server.disk.HotFiles` | `com.ash.drishti.server.disk.HotFiles` | K6 |
 | `com.ash.risk.hostcompat.server.dist.ExportDoc` | `com.ash.drishti.server.dist.ExportDoc` | K7 |
 | `com.ash.risk.hostcompat.server.dist.JsonlWriter` | `com.ash.drishti.server.dist.JsonlWriter` | K7 |
-| `com.ash.risk.hostcompat.server.engines.EngineOffException` | `com.ash.drishti.server.engines.EngineOffException` | K6 |
 | `com.ash.risk.hostcompat.testkit.FeedFiles` | `com.ash.drishti.testkit.FeedFiles` | K9 |
-| `com.ash.risk.hostcompat.spring.ConfigurationProperties`, `Autowired`, `Order`, `stereotype.Component` | Spring's annotations (source-retention stand-ins, no behaviour) | K4 |
 
 ## 2. Host types named by the moved code and NOT parked (their own reach is the host: Spring, servlets, the cluster)
 

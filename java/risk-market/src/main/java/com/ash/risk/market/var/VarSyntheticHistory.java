@@ -15,8 +15,8 @@
  */
 package com.ash.risk.market.var;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.market.calc.VarMath;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -48,19 +48,19 @@ final class VarSyntheticHistory {
     @SuppressWarnings("unchecked")
     Map<String, Object> seed(int days) {
         if (!props.syntheticHistory()) {
-            throw new DrishtiException(ErrorCode.FORBIDDEN, "a synthetic official history is for demo servers only: it is off "
+            throw new RiskFailure(RiskCode.FORBIDDEN, "a synthetic official history is for demo servers only: it is off "
                     + "(drishti.regulatory.synthetic-history)");
         }
         VarOfficialStore store = svc.official();
         if (store.dates().isEmpty()) {
-            throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no official record yet: capture the newest date first, then seed the history before it");
+            throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no official record yet: capture the newest date first, then seed the history before it");
         }
         LocalDate newest = store.dates().last();
         LocalDate oldest = store.dates().first();
         Map<String, Object> rec = store.index(newest).orElseThrow();
         VarDate d = svc.date(newest);
         if (!d.date().equals(newest)) {
-            throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "the newest official date " + newest + " has no vectors loaded");
+            throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "the newest official date " + newest + " has no vectors loaded");
         }
         List<LocalDate> sd = d.book().scenarioDates();
         int n = sd.size();

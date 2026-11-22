@@ -15,10 +15,10 @@
  */
 package com.ash.risk.market.var;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.market.frtb.FrtbService;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -73,7 +73,7 @@ final class MrSensitivities {
     Map<String, double[]> grid(String name) {
         Map<String, String> g = props.grids().get(name == null ? "" : name.strip().toUpperCase(Locale.ROOT));
         if (g == null) {
-            throw new DrishtiException(ErrorCode.PIVOT_BAD_VIEW, "no sensitivity grid " + name + "; the grids: " + props.grids().keySet()
+            throw new RiskFailure(RiskCode.PIVOT_BAD_VIEW, "no sensitivity grid " + name + "; the grids: " + props.grids().keySet()
                     + " (drishti.cube.mr.grids)");
         }
         Map<String, double[]> out = new LinkedHashMap<>();
@@ -83,7 +83,7 @@ final class MrSensitivities {
             double from = Double.parseDouble(ft[0].strip());
             double to = ft.length < 2 || ft[1].isBlank() ? Double.POSITIVE_INFINITY : Double.parseDouble(ft[1].strip());
             if (Math.abs(from - at) > 1e-9 || to <= from) {
-                throw new DrishtiException(ErrorCode.PIVOT_BAD_VIEW, "the grid " + name + " has a gap or an overlap at " + e.getKey()
+                throw new RiskFailure(RiskCode.PIVOT_BAD_VIEW, "the grid " + name + " has a gap or an overlap at " + e.getKey()
                         + " (" + e.getValue() + "): each bucket starts where the last ended");
             }
             out.put(e.getKey(), new double[] {from, to});
@@ -97,11 +97,11 @@ final class MrSensitivities {
      * two-sided limit ({@code use = max(net / limit, -net / limit)}), within, near (drishti.risk.limit-near) or breach; or, with {@code by} two factor
      * parts, the factor heat map (the sums of one class and measure by the two parts).
      */
-    Map<String, Object> answer(Principal p, String scope, LocalDate date, String grid, String by, String riskClass, String measure,
+    Map<String, Object> answer(Caller p, String scope, LocalDate date, String grid, String by, String riskClass, String measure,
             String ccy) {
         FrtbService f = frtb.get();
         if (f == null) {
-            throw new DrishtiException(ErrorCode.ENGINE_OFF, "the sensitivities engine is off on this server: the ladder and the heat map need it");
+            throw new RiskFailure(RiskCode.ENGINE_OFF, "the sensitivities engine is off on this server: the ladder and the heat map need it");
         }
         String cls = riskClass == null || riskClass.isBlank() ? "GIRR" : riskClass.strip().toUpperCase(Locale.ROOT);
         String meas = measure == null || measure.isBlank() ? MrCubeExtras.deltaWord(cls) : measure.strip().toUpperCase(Locale.ROOT);
@@ -109,7 +109,7 @@ final class MrSensitivities {
         boolean heat = by != null && !by.isBlank();
         List<String> keys = heat ? List.of(by.toUpperCase(Locale.ROOT).split("\\s*,\\s*")) : List.of("QUALIFIER", "BUCKET");
         if (keys.size() != 2) {
-            throw new DrishtiException(ErrorCode.PIVOT_BAD_VIEW, "by names two factor parts, rows then columns: by=QUALIFIER,TENOR");
+            throw new RiskFailure(RiskCode.PIVOT_BAD_VIEW, "by names two factor parts, rows then columns: by=QUALIFIER,TENOR");
         }
         Map<String, double[]> buckets = heat ? null : grid(grid == null || grid.isBlank() ? "BANK-IR-TENOR" : grid);
         Map<String, Map<String, double[]>> sums = new TreeMap<>();
@@ -237,7 +237,7 @@ final class MrSensitivities {
             case "RISK_CLASS", "CLASS" -> e.factor().riskClass();
             case "RISK_FACTOR", "FACTOR" -> e.factor().name();
             case "MEASURE" -> e.measure();
-            default -> throw new DrishtiException(ErrorCode.PIVOT_BAD_VIEW, key + " is not a factor part: QUALIFIER, TENOR, CURVE, UNDERLYING, "
+            default -> throw new RiskFailure(RiskCode.PIVOT_BAD_VIEW, key + " is not a factor part: QUALIFIER, TENOR, CURVE, UNDERLYING, "
                     + "BUCKET, RISK_CLASS, RISK_FACTOR or MEASURE");
         };
         return v == null || v.isBlank() ? "—" : v;

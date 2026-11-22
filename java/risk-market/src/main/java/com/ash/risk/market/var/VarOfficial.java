@@ -15,7 +15,7 @@
  */
 package com.ash.risk.market.var;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
+import com.ash.risk.kernel.RiskFailure;
 import com.ash.risk.market.calc.Backtest;
 import com.ash.risk.market.calc.VarBook;
 import com.ash.risk.hostcompat.identity.content.ContentDocs;
@@ -227,7 +227,7 @@ final class VarOfficial implements AutoCloseable {
         VarDate d;
         try {
             d = svc.date(date, ccy);
-        } catch (DrishtiException e) {
+        } catch (RiskFailure e) {
             out.put("status", "skipped");
             out.put("reason", e.getMessage());
             return out;
@@ -261,7 +261,7 @@ final class VarOfficial implements AutoCloseable {
             try {
                 stressSet = svc.stressed(date).book().scenarioSet();
                 stressLens = svc.props().defaultLens().withStressed(true);
-            } catch (DrishtiException e) {
+            } catch (RiskFailure e) {
                 stressNote = e.getMessage();
             }
         }

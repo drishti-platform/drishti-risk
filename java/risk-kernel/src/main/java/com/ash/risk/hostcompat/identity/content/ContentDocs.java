@@ -16,8 +16,8 @@
 package com.ash.risk.hostcompat.identity.content;
 
 import com.ash.tools.codec.Hashes;
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -64,8 +64,8 @@ public final class ContentDocs {
         try {
             store.put(key, encode(value), null);
             return true;
-        } catch (DrishtiException e) {
-            if (e.errorCode() == ErrorCode.CONTENT_CONFLICT) {
+        } catch (RiskFailure e) {
+            if (e.errorCode() == RiskCode.CONTENT_CONFLICT) {
                 return false;
             }
             throw e;
@@ -96,8 +96,8 @@ public final class ContentDocs {
                     store.put(key, encode(next), cur.map(Doc::version).orElse(null));
                 }
                 return next;
-            } catch (DrishtiException e) {
-                if (tx || e.errorCode() != ErrorCode.CONTENT_CONFLICT || attempt >= 20) {
+            } catch (RiskFailure e) {
+                if (tx || e.errorCode() != RiskCode.CONTENT_CONFLICT || attempt >= 20) {
                     throw e;
                 }
             }
@@ -113,8 +113,8 @@ public final class ContentDocs {
             try {
                 base.put(key, Long.toString(n).getBytes(StandardCharsets.UTF_8), it.map(ContentStore.Item::version).orElse(null));
                 return n;
-            } catch (DrishtiException e) {
-                if (e.errorCode() != ErrorCode.CONTENT_CONFLICT || attempt >= 50) {
+            } catch (RiskFailure e) {
+                if (e.errorCode() != RiskCode.CONTENT_CONFLICT || attempt >= 50) {
                     throw e;
                 }
             }
@@ -138,8 +138,8 @@ public final class ContentDocs {
             try {
                 base.put(key, Long.toString(value).getBytes(StandardCharsets.UTF_8), it.map(ContentStore.Item::version).orElse(null));
                 return;
-            } catch (DrishtiException e) {
-                if (e.errorCode() != ErrorCode.CONTENT_CONFLICT || attempt >= 50) {
+            } catch (RiskFailure e) {
+                if (e.errorCode() != RiskCode.CONTENT_CONFLICT || attempt >= 50) {
                     throw e;
                 }
             }

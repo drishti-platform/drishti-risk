@@ -15,7 +15,6 @@
  */
 package com.ash.risk.market.var;
 
-import com.ash.risk.hostcompat.spring.ConfigurationProperties;
 
 /**
  * The stress window selection (VAR_GUIDE.md section 18.9): which 12-month period of a long P&amp;L history is worst for today's
@@ -28,7 +27,7 @@ import com.ash.risk.hostcompat.spring.ConfigurationProperties;
  * @param alertThreshold the alert is raised when the worst window's stressed VaR exceeds the current window's by more than this fraction
  *     (0.05: 5%)
  */
-@ConfigurationProperties("drishti.var.stress-window")
+// the host binds its settings under drishti.var.stress-window to these values (the engine reads options, never a configuration file)
 public record StressWindowProperties(Boolean enabled, String kind, Integer length, Integer top, Double alertThreshold) {
 
     /** The shortest window a request may ask for. */

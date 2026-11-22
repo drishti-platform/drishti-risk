@@ -16,11 +16,11 @@
 package com.ash.risk.market.var;
 
 import com.ash.risk.hostcompat.api.DataNode;
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.market.calc.StressWindows;
 import com.ash.risk.market.calc.VarMath;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -71,13 +71,13 @@ final class VarStressWindow {
     }
 
     /** The tool is on and the caller may read node-level P&amp;L of the whole bank; a 403 or 404 in words otherwise. */
-    void check(Principal p) {
+    void check(Caller p) {
         if (!props.enabled() || !svc.props().enabled()) {
-            throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "the stress window selection is switched off on this server "
+            throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "the stress window selection is switched off on this server "
                     + "(drishti.var.stress-window.enabled)");
         }
         if (!svc.access().seesAll(p)) {
-            throw new DrishtiException(ErrorCode.FORBIDDEN, "the stress window selection reads the long-history P&L of every node: it needs "
+            throw new RiskFailure(RiskCode.FORBIDDEN, "the stress window selection reads the long-history P&L of every node: it needs "
                     + "a role that sees every node of the VaR hierarchies");
         }
     }
@@ -87,7 +87,7 @@ final class VarStressWindow {
         if (asked != null) {
             return asked;
         }
-        return svc.loader().latestOf(props.kind()).orElseThrow(() -> new DrishtiException(ErrorCode.ENTITY_NOT_FOUND,
+        return svc.loader().latestOf(props.kind()).orElseThrow(() -> new RiskFailure(RiskCode.ENTITY_NOT_FOUND,
                 "no long-history P&L (kind " + props.kind() + ") on any date: the stress window selection needs the monthly batch's "
                         + "rows (VAR_GUIDE.md section 18.9)"));
     }
@@ -110,7 +110,7 @@ final class VarStressWindow {
             DataNode ds = d.get("HISTORY_DATES");
             DataNode pv = d.get("PNL");
             if (node == null || ds == null || pv == null || ds.size() == 0 || ds.size() != pv.size()) {
-                throw new DrishtiException(ErrorCode.BAD_REQUEST, "the long-history P&L row of " + node + " on " + date + " is refused: "
+                throw new RiskFailure(RiskCode.BAD_REQUEST, "the long-history P&L row of " + node + " on " + date + " is refused: "
                         + "HISTORY_DATES and PNL must have the same, non-zero length (contract pnl-history)");
             }
             String[] dates = new String[ds.size()];
@@ -119,7 +119,7 @@ final class VarStressWindow {
                 dates[i] = ds.get(i).asText();
                 pnl[i] = pv.get(i).asDouble();
                 if (i > 0 && dates[i].compareTo(dates[i - 1]) <= 0) {
-                    throw new DrishtiException(ErrorCode.BAD_REQUEST, "the long-history P&L row of " + node + " on " + date + " is refused: "
+                    throw new RiskFailure(RiskCode.BAD_REQUEST, "the long-history P&L row of " + node + " on " + date + " is refused: "
                             + "HISTORY_DATES must increase (" + dates[i - 1] + " then " + dates[i] + ")");
                 }
             }
@@ -129,7 +129,7 @@ final class VarStressWindow {
                     VarLoader.text(d, "SOURCE_BATCH")));
         }
         if (out.isEmpty()) {
-            throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no long-history P&L (kind " + props.kind() + ") on " + date
+            throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no long-history P&L (kind " + props.kind() + ") on " + date
                     + ": the stress window selection is not available for this date");
         }
         return out;
@@ -161,7 +161,7 @@ final class VarStressWindow {
                 }
             }
         }
-        throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no long-history P&L for " + s + " in hierarchy " + hierarchy
+        throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no long-history P&L for " + s + " in hierarchy " + hierarchy
                 + ": the rows name " + String.join(", ", hs.keySet()));
     }
 
@@ -231,7 +231,7 @@ final class VarStressWindow {
      * The analysis of one node: the history's facts, the rolling stressed VaR of every window start, the worst window, the current one
      * (the stress set's), today's VaR from the last days, the candidates, the alert, and every node of the hierarchy's own worst window.
      */
-    Map<String, Object> analyse(Principal p, String scope, String hierarchy, LocalDate asked, Integer lengthAsked, Double confidence) {
+    Map<String, Object> analyse(Caller p, String scope, String hierarchy, LocalDate asked, Integer lengthAsked, Double confidence) {
         check(p);
         LocalDate date = date(asked);
         Map<String, History> hs = histories(date);
@@ -241,7 +241,7 @@ final class VarStressWindow {
         hier = h.hierarchy() == null ? hier : h.hierarchy();
         int length = lengthAsked == null ? props.length() : lengthAsked;
         if (length < StressWindowProperties.MIN_LENGTH || length > h.pnl().length) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "a window of " + length + " days is refused: between "
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "a window of " + length + " days is refused: between "
                     + StressWindowProperties.MIN_LENGTH + " and the history's " + h.pnl().length + " days");
         }
         double alpha = confidence == null ? svc.props().confidence() : VarProperties.checkConfidence(confidence > 1 ? confidence / 100 : confidence,

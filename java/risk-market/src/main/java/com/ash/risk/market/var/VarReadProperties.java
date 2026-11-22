@@ -16,7 +16,6 @@
 package com.ash.risk.market.var;
 
 import com.ash.risk.hostcompat.api.VectorReads;
-import com.ash.risk.hostcompat.spring.ConfigurationProperties;
 
 /**
  * How a date's first open reads its vectors from the lake (VAR_GUIDE.md section 27a.6): the date's files decoded several at once, each
@@ -26,7 +25,7 @@ import com.ash.risk.hostcompat.spring.ConfigurationProperties;
  *     own thread)
  * @param bufferMb the most decoded rows waiting for one load, in MB (0: 64; never above a thirty-second of the heap)
  */
-@ConfigurationProperties("drishti.var.read")
+// the host binds its settings under drishti.var.read to these values (the engine reads options, never a configuration file)
 public record VarReadProperties(Integer threads, Integer bufferMb) {
 
     /** The most files decoded at once by default, however many cores. */
