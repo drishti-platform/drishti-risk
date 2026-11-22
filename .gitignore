@@ -2,3 +2,6 @@ target/
 build-tmp/
 __pycache__/
 *.pyc
+
+# the recorder writes the engines' input files here again from Drishti's test data (tens of MB; not committed)
+tck/data/
