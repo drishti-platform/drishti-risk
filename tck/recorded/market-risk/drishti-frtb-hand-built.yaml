@@ -1,0 +1,69 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Risk. Proprietary: see LICENSE.
+# Harvested from Drishti's FrtbHandBuiltCasesTest (3813b8735): FRTB_SA_GUIDE.md section 13.1's hand-built cases, to the cent, with the
+# market-risk pack's parameter files (now the engine JAR's com/ash/risk/market/frtb/params). Compared within 0.005 (the test's CENT), never
+# as bits; the elements are those of FrtbExamples, given here as the engine's inputs (risk/sensitivity-element@1, one row per element).
+suite: market-risk/drishti-frtb-hand-built
+engine: market-risk
+since: "0.1"
+source: "FrtbHandBuiltCasesTest and FrtbExamples, Drishti 3813b8735"
+tolerance: 0.005
+given:
+  snapshot: { date: "2026-01-13" }
+  inputs:
+    risk-factor:
+      rows:
+        - { RISK_FACTOR: IR/CURVE/USD/SOFR/5Y, RISK_CLASS: GIRR, FACTOR_TYPE: CURVE, QUALIFIER: USD, CURVE: SOFR, TENOR: 5Y, FRTB_BUCKET: USD }
+        - { RISK_FACTOR: IR/CURVE/USD/SOFR/10Y, RISK_CLASS: GIRR, FACTOR_TYPE: CURVE, QUALIFIER: USD, CURVE: SOFR, TENOR: 10Y, FRTB_BUCKET: USD }
+        - { RISK_FACTOR: IR/CURVE/EUR/ESTR/2Y, RISK_CLASS: GIRR, FACTOR_TYPE: CURVE, QUALIFIER: EUR, CURVE: ESTR, TENOR: 2Y, FRTB_BUCKET: EUR }
+        - { RISK_FACTOR: EQ/SPOT/SPX, RISK_CLASS: EQ, FACTOR_TYPE: SPOT, QUALIFIER: SPX, FRTB_BUCKET: "12" }
+cases:
+  - id: case1-girr-delta-one-bucket
+    inputs:
+      sensitivity-element:
+        rows:
+          - { SENSITIVITY_ID: CASE-POS-1, ELEMENT: 1, POSITION_ID: CASE-POS-1, DESK: DESK-A, RISK_FACTOR: IR/CURVE/USD/SOFR/5Y, MEASURE: DV01, VALUE: -1000, CURRENCY: USD }
+          - { SENSITIVITY_ID: CASE-POS-2, ELEMENT: 1, POSITION_ID: CASE-POS-2, DESK: DESK-B, RISK_FACTOR: IR/CURVE/USD/SOFR/10Y, MEASURE: DV01, VALUE: -500, CURRENCY: USD }
+    request: { outputs: [ frtb-sa ], params: { scope: BANK, currency: USD, scenario: binding, girr-correlation: table, curvature-source: revaluation }, visibility: { sensitivity-element: all } }
+    frtb-sa:
+      columns: [ COMPONENT, RISK_CLASS, MEASURE, BUCKET, CHARGE_LOW, CHARGE_MEDIUM, CHARGE_HIGH ]
+      rows:
+        - [ SBM-BUCKET, GIRR, DELTA, USD, 115106.47, 115892.19, 116672.62 ]
+  - id: case1-exact-correlation
+    inputs: same-as case1-girr-delta-one-bucket
+    request: { outputs: [ frtb-sa ], params: { scope: BANK, currency: USD, scenario: binding, girr-correlation: exact, curvature-source: revaluation }, visibility: { sensitivity-element: all } }
+    frtb-sa:
+      columns: [ COMPONENT, RISK_CLASS, MEASURE, BUCKET, CHARGE_LOW, CHARGE_MEDIUM, CHARGE_HIGH ]
+      rows:
+        - [ SBM-BUCKET, GIRR, DELTA, USD, 115129.89, 115903.82, 116672.62 ]
+  - id: case2-two-buckets-the-low-scenario-binds
+    inputs:
+      sensitivity-element:
+        rows:
+          - { SENSITIVITY_ID: CASE-POS-1, ELEMENT: 1, POSITION_ID: CASE-POS-1, DESK: DESK-A, RISK_FACTOR: IR/CURVE/USD/SOFR/5Y, MEASURE: DV01, VALUE: -1000, CURRENCY: USD }
+          - { SENSITIVITY_ID: CASE-POS-2, ELEMENT: 1, POSITION_ID: CASE-POS-2, DESK: DESK-B, RISK_FACTOR: IR/CURVE/USD/SOFR/10Y, MEASURE: DV01, VALUE: -500, CURRENCY: USD }
+          - { SENSITIVITY_ID: CASE-POS-3, ELEMENT: 1, POSITION_ID: CASE-POS-3, DESK: DESK-A, RISK_FACTOR: IR/CURVE/EUR/ESTR/2Y, MEASURE: DV01, VALUE: 800, CURRENCY: USD }
+    request: { outputs: [ frtb-sa ], params: { scope: BANK, currency: USD, scenario: binding, girr-correlation: table, curvature-source: revaluation }, visibility: { sensitivity-element: all } }
+    frtb-sa:
+      columns: [ COMPONENT, RISK_CLASS, MEASURE, BUCKET, CHARGE, CHARGE_LOW, CHARGE_MEDIUM, CHARGE_HIGH ]
+      rows:
+        - [ SBM, "*", "*", "*", 110555.42, 110555.42, 101286.72, 91079.64 ]
+  - id: case2-exact-correlation
+    inputs: same-as case2-two-buckets-the-low-scenario-binds
+    request: { outputs: [ frtb-sa ], params: { scope: BANK, currency: USD, scenario: binding, girr-correlation: exact, curvature-source: revaluation }, visibility: { sensitivity-element: all } }
+    frtb-sa:
+      columns: [ COMPONENT, RISK_CLASS, MEASURE, BUCKET, CHARGE, CHARGE_LOW, CHARGE_MEDIUM, CHARGE_HIGH ]
+      rows:
+        - [ SBM, GIRR, DELTA, "*", 110579.79, 110579.79, 101300.03, 91079.64 ]
+        - [ SBM-BUCKET, GIRR, DELTA, EUR, null, null, 73539.11, null ]
+  - id: case3-curvature-the-tie-goes-down
+    inputs:
+      sensitivity-element:
+        rows:
+          - { SENSITIVITY_ID: CASE-POS-1, ELEMENT: 1, POSITION_ID: CASE-POS-1, DESK: DESK-A, RISK_FACTOR: EQ/SPOT/SPX, MEASURE: DELTA, VALUE: 10000, CURRENCY: USD }
+          - { SENSITIVITY_ID: CASE-POS-1, ELEMENT: 2, POSITION_ID: CASE-POS-1, DESK: DESK-A, RISK_FACTOR: EQ/SPOT/SPX, MEASURE: CURVATURE_UP, VALUE: 120000, CURRENCY: USD }
+          - { SENSITIVITY_ID: CASE-POS-1, ELEMENT: 3, POSITION_ID: CASE-POS-1, DESK: DESK-A, RISK_FACTOR: EQ/SPOT/SPX, MEASURE: CURVATURE_DOWN, VALUE: -180000, CURRENCY: USD }
+    request: { outputs: [ frtb-sa ], params: { scope: BANK, currency: USD, scenario: binding, girr-correlation: table, curvature-source: revaluation }, visibility: { sensitivity-element: all } }
+    frtb-sa:
+      columns: [ COMPONENT, RISK_CLASS, MEASURE, BUCKET, CHARGE_LOW, CHARGE_MEDIUM, CHARGE_HIGH ]
+      rows:
+        - [ SBM, EQ, CURVATURE, "*", 30000, 30000, 30000 ]

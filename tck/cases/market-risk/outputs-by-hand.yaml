@@ -1,0 +1,219 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Risk. Proprietary: see LICENSE.
+# Hand cases of the market-risk engine's outputs beyond VaR: parametric VaR, the 10-day and stressed figures, what-if on a supplied vector,
+# backtesting, period statistics, a regulatory table, the stress window selection, the sensitivity sums and the ladder. The day is the one
+# of headline-by-hand (two positions, four scenarios, MGMT over DESK: nodes MGMT~BANK, MGMT~A, MGMT~B in id order, the root first), with a
+# stress set, four official records, three days of desk P&L, a 12-day P&L history and three rates sensitivities. Every value below was
+# worked by hand and checked in IEEE doubles in the same order of operations as the moved classes (ParametricVar, VarLens,
+# VarWhatIfMath, Backtest, StressWindows); z, PVAR and PES and the test statistics are compared within the descriptor's relative 1e-12.
+suite: market-risk/outputs-by-hand
+engine: market-risk
+since: "0.1"
+description: PVAR, node-var-horizon (stressed, 10-day by sqrt 10), what-if, backtest, backtest-days, period-stats, regulatory-report, stress-window, sensitivity-sum and sensitivity-ladder by hand; a missing input stops only the outputs that need it.
+given:
+  snapshot: { date: "2026-01-13" }
+  options:
+    hierarchies:
+      - { id: MGMT, title: Management, levels: DESK, level-names: desk, ids: leaf, root-id: BANK, root-name: Bank }
+    stress-window-length: 10
+    stress-window-top: 2
+  inputs:
+    scenario-pv: absent
+    pnl-vector:
+      rows:
+        - { VECTOR_ID: V1, SCENARIO_SET_ID: HS-4, POSITION_ID: P1, TRADE_STATUS: NEW, CURRENCY: USD, DESK: A, TT_BOOK: A1, PNL: [ -10, 5, 3, -2 ] }
+        - { VECTOR_ID: V2, SCENARIO_SET_ID: HS-4, POSITION_ID: P2, TRADE_STATUS: NEW, CURRENCY: USD, DESK: B, TT_BOOK: B1, PNL: [ 4, -8, 1, 6 ] }
+        - { VECTOR_ID: V3, SCENARIO_SET_ID: HS-STRESS-4, POSITION_ID: P1, TRADE_STATUS: NEW, CURRENCY: USD, DESK: A, TT_BOOK: A1, PNL: [ -20, 1, 1, 1 ] }
+        - { VECTOR_ID: V4, SCENARIO_SET_ID: HS-STRESS-4, POSITION_ID: P2, TRADE_STATUS: NEW, CURRENCY: USD, DESK: B, TT_BOOK: B1, PNL: [ 0, 0, 0, 0 ] }
+    scenario-set:
+      rows:
+        - { SCENARIO_SET_ID: HS-4, SET_TYPE: HISTORICAL, SCENARIO_DATES: "2026-01-07,2026-01-08,2026-01-09,2026-01-12" }
+        - { SCENARIO_SET_ID: HS-STRESS-4, SET_TYPE: STRESS, SCENARIO_DATES: "2008-09-15,2008-09-16,2008-09-17,2008-09-18" }
+    fx-scenario:
+      rows:
+        - { FX_SCENARIO_ID: FX-EUR, SCENARIO_SET_ID: HS-4, CURRENCY: EUR, RATE: 1.25, RATES: [ 1.25, 1.25, 1.25, 1.25 ] }
+    var-limit: absent
+    system-basket: absent
+    var-history:
+      rows:
+        - { BUSINESS_DATE: "2026-01-07", HIERARCHY: MGMT, NODE_ID: "MGMT~BANK", LEVEL: bank, RESULT_VERSION: 1, VAR: 5, ES: 6, CONFIDENCE: 0.99, SVAR: 8 }
+        - { BUSINESS_DATE: "2026-01-07", HIERARCHY: MGMT, NODE_ID: "MGMT~A", PARENT_ID: "MGMT~BANK", LEVEL: desk, RESULT_VERSION: 1, VAR: 5, ES: 6, CONFIDENCE: 0.99, SVAR: 8 }
+        - { BUSINESS_DATE: "2026-01-08", HIERARCHY: MGMT, NODE_ID: "MGMT~BANK", LEVEL: bank, RESULT_VERSION: 1, VAR: 5, ES: 6, CONFIDENCE: 0.99, SVAR: 8 }
+        - { BUSINESS_DATE: "2026-01-08", HIERARCHY: MGMT, NODE_ID: "MGMT~A", PARENT_ID: "MGMT~BANK", LEVEL: desk, RESULT_VERSION: 1, VAR: 5, ES: 6, CONFIDENCE: 0.99, SVAR: 8 }
+        - { BUSINESS_DATE: "2026-01-09", HIERARCHY: MGMT, NODE_ID: "MGMT~BANK", LEVEL: bank, RESULT_VERSION: 1, VAR: 5, ES: 6, CONFIDENCE: 0.99, SVAR: 8 }
+        - { BUSINESS_DATE: "2026-01-09", HIERARCHY: MGMT, NODE_ID: "MGMT~A", PARENT_ID: "MGMT~BANK", LEVEL: desk, RESULT_VERSION: 1, VAR: 5, ES: 6, CONFIDENCE: 0.99, SVAR: 8 }
+        - { BUSINESS_DATE: "2026-01-12", HIERARCHY: MGMT, NODE_ID: "MGMT~BANK", LEVEL: bank, RESULT_VERSION: 1, VAR: 7, ES: 6, CONFIDENCE: 0.99, SVAR: 8 }
+        - { BUSINESS_DATE: "2026-01-12", HIERARCHY: MGMT, NODE_ID: "MGMT~A", PARENT_ID: "MGMT~BANK", LEVEL: desk, RESULT_VERSION: 1, VAR: 7, ES: 6, CONFIDENCE: 0.99, SVAR: 8 }
+    desk-pnl:
+      rows:
+        - { DESK_PNL_ID: DPNL-A-2026-01-08, BUSINESS_DATE: "2026-01-08", DESK_ID: A, ACTUAL_PNL: -6, HYPOTHETICAL_PNL: -4 }
+        - { DESK_PNL_ID: DPNL-A-2026-01-09, BUSINESS_DATE: "2026-01-09", DESK_ID: A, ACTUAL_PNL: 2, HYPOTHETICAL_PNL: 1 }
+        - { DESK_PNL_ID: DPNL-A-2026-01-12, BUSINESS_DATE: "2026-01-12", DESK_ID: A, ACTUAL_PNL: -7, HYPOTHETICAL_PNL: -8 }
+    pnl-history:
+      rows:
+        - { HISTORY_ID: "PNLH-MGMT~BANK", HIERARCHY: MGMT, NODE_ID: "MGMT~BANK", NAME: Bank, LEVEL: bank, SYNTHETIC: false, HISTORY_DATES: "2025-12-01,2025-12-02,2025-12-03,2025-12-04,2025-12-05,2025-12-08,2025-12-09,2025-12-10,2025-12-11,2025-12-12,2025-12-15,2025-12-16", PNL: [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, -50, 11 ] }
+    report-row:
+      rows:
+        - { REPORT_ID: R1, ROW_ORDER: 1, LABEL: Desk A, CODE: "010", NODE_ID: "MGMT~A" }
+        - { REPORT_ID: R1, ROW_ORDER: 2, LABEL: Diversification, CODE: "020", COMPUTE: diversification }
+        - { REPORT_ID: R1, ROW_ORDER: 3, LABEL: Total, CODE: "030", NODE_ID: "MGMT~BANK", TOTAL: true }
+    sensitivity-element:
+      rows:
+        - { SENSITIVITY_ID: SENS-P1, ELEMENT: 1, POSITION_ID: P1, DESK: A, TT_BOOK: A1, RISK_FACTOR: IR/CURVE/USD/SOFR/5Y, MEASURE: DV01, VALUE: -1000, CURRENCY: USD }
+        - { SENSITIVITY_ID: SENS-P2, ELEMENT: 1, POSITION_ID: P2, DESK: B, TT_BOOK: B1, RISK_FACTOR: IR/CURVE/USD/SOFR/10Y, MEASURE: DV01, VALUE: -500, CURRENCY: USD }
+        - { SENSITIVITY_ID: SENS-P3, ELEMENT: 1, POSITION_ID: P3, DESK: A, TT_BOOK: A1, RISK_FACTOR: IR/CURVE/EUR/ESTR/2Y, MEASURE: DV01, VALUE: 800, CURRENCY: USD }
+    risk-factor:
+      rows:
+        - { RISK_FACTOR: IR/CURVE/USD/SOFR/5Y, RISK_CLASS: GIRR, FACTOR_TYPE: CURVE, QUALIFIER: USD, CURVE: SOFR, TENOR: 5Y, FRTB_BUCKET: USD }
+        - { RISK_FACTOR: IR/CURVE/USD/SOFR/10Y, RISK_CLASS: GIRR, FACTOR_TYPE: CURVE, QUALIFIER: USD, CURVE: SOFR, TENOR: 10Y, FRTB_BUCKET: USD }
+        - { RISK_FACTOR: IR/CURVE/EUR/ESTR/2Y, RISK_CLASS: GIRR, FACTOR_TYPE: CURVE, QUALIFIER: EUR, CURVE: ESTR, TENOR: 2Y, FRTB_BUCKET: EUR }
+    default-risk: absent
+    residual-risk: absent
+    fx-spot: absent
+cases:
+  - id: parametric-var
+    source: "by hand: mean and sample variance of each node's four P&Ls, z = inverse normal at 0.99, PVaR = z sigma - mean, PES = sigma phi(z_ES)/(1 - 0.975) - mean; HVAR the worst loss; ParametricVarTest's formulas"
+    reference: true
+    request: { outputs: [ node-pvar ], params: { scenario-set: "", window: 0, currency: USD }, visibility: { scenario-pv: all, pnl-vector: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        node-pvar:
+          columns: [ NODE_ID, HIERARCHY, SCENARIOS, MU, SIGMA, Z, PVAR, PES, HVAR, BEYOND, EXPECTED_BEYOND ]
+          rows:
+            - [ "MGMT~BANK", MGMT, 4, "0xbfd0000000000000", "0x40143b638eabdc88", 2.3263478740408408, 12.016660494569965, 12.074599435900543, "0x4018000000000000", 0, "0x3fa47ae147ae1480" ]
+            - [ "MGMT~A", MGMT, 4, "0xbff0000000000000", "0x401abbb6491dca58", 2.3263478740408408, 16.54770994671221, 16.62426674503601, "0x4024000000000000", 0, "0x3fa47ae147ae1480" ]
+            - [ "MGMT~B", MGMT, 4, "0x3fe8000000000000", "0x4018bd171a07e38a", 2.3263478740408408, 13.637667009902213, 13.708511766165495, "0x4020000000000000", 0, "0x3fa47ae147ae1480" ]
+
+  - id: stressed-ten-day-by-sqrt10
+    source: "by hand: on the stress set the bank and desk A lose 20 in the worst scenario (k = 1 of 4), desk B nothing (-0.0); times sqrt(10) (VarLens)"
+    request: { outputs: [ node-var-horizon ], params: { scenario-set: "", window: 0, currency: USD, stressed: true, horizon: 10d, ten-day-method: sqrt10 }, visibility: { scenario-pv: all, pnl-vector: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        node-var-horizon:
+          columns: [ NODE_ID, HIERARCHY, SET, HORIZON, METHOD, SCENARIOS, VAR, ES ]
+          rows:
+            - [ "MGMT~BANK", MGMT, HS-STRESS-4, 10D, SQRT10, 4, "0x404f9f6e4990f228", "0x404f9f6e4990f228" ]
+            - [ "MGMT~A", MGMT, HS-STRESS-4, 10D, SQRT10, 4, "0x404f9f6e4990f228", "0x404f9f6e4990f228" ]
+            - [ "MGMT~B", MGMT, HS-STRESS-4, 10D, SQRT10, 4, "0x8000000000000000", "0x8000000000000000" ]
+
+  - id: what-if-a-supplied-vector
+    source: "by hand after VarWhatIfMathTest: the bank [-6, -3, 4, 4] with T1 [0, 0, 0, -10] is [-6, -3, 4, -6]: VaR 6 before and after (incremental 0); T1 alone VaR and ES 10; its component over the tail ranks 1..3 (scenarios 0, 3, 1) is -(-10)/3 x 6/5 = 4; its component ES the worst scenario's 0, negated (-0.0); the stressed window is the whole set (length 10 > 4)"
+    request:
+      outputs: [ what-if ]
+      params: { scenario-set: "", window: 0, currency: USD, node: "", trades: [ { LABEL: T1, FACTOR: 1, PNL: [ 0, 0, 0, -10 ] } ] }
+      visibility: { scenario-pv: all, pnl-vector: all }
+      seed: 0
+    expect:
+      status: complete
+      tables:
+        what-if:
+          columns: [ ROW, FACTOR, VAR, ES, INCREMENTAL_VAR, INCREMENTAL_ALONE, COMPONENT_VAR, COMPONENT_ES, STRESSED_VAR ]
+          rows:
+            - [ BEFORE, null, 6, 6, null, null, null, null, 6 ]
+            - [ AFTER, null, 6, 6, 0, null, null, null, 6 ]
+            - [ "TRADE:T1", 1, 10, 10, 0, 0, 4, "0x8000000000000000", null ]
+
+  - id: backtest-three-days
+    source: "by hand after VarBacktesting: the official VaR of the day before (5) against desk A's P&L on 01-08, 01-09, 01-12 (-6, 2, -7; hypothetical -4, 1, -8): 2 actual and 1 hypothetical exceptions in 3 days; the zones scaled to 3 days (green 0, amber 0) make 2 red; the US multiplier of 2 is 3.0; Kupiec and Christoffersen as Backtest computes them"
+    request: { outputs: [ backtest, backtest-days ], params: { node: "" }, visibility: { var-history: all, desk-pnl: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        backtest:
+          columns: [ NODE_ID, HIERARCHY, CONFIDENCE, DAYS, EXCEPTIONS_ACTUAL, EXCEPTIONS_HYPOTHETICAL, EXCEPTIONS_RTPL, COUNTED, ZONE, MULTIPLIER, KUPIEC_LR, KUPIEC_P, CHRISTOFFERSEN_LR, CHRISTOFFERSEN_P ]
+          rows:
+            - [ "MGMT~A", MGMT, 0.99, 3, 2, 1, 0, 2, red, 3.0, 14.62169640589049, 0.00013139310703439537, 2.772588722239781, 0.0958909638340759 ]
+            - [ "MGMT~BANK", MGMT, 0.99, 3, 2, 1, 0, 2, red, 3.0, 14.62169640589049, 0.00013139310703439537, 2.772588722239781, 0.0958909638340759 ]
+        backtest-days:
+          columns: [ NODE_ID, CONFIDENCE, DATE, PRIOR, VAR, ACTUAL, HYPOTHETICAL, RTPL, EXCEPTION ]
+          rows:
+            - [ "MGMT~A", 0.99, "2026-01-08", "2026-01-07", 5, -6, -4, null, true ]
+            - [ "MGMT~A", 0.99, "2026-01-09", "2026-01-08", 5, 2, 1, null, false ]
+            - [ "MGMT~A", 0.99, "2026-01-12", "2026-01-09", 5, -7, -8, null, true ]
+            - [ "MGMT~BANK", 0.99, "2026-01-08", "2026-01-07", 5, -6, -4, null, true ]
+            - [ "MGMT~BANK", 0.99, "2026-01-09", "2026-01-08", 5, 2, 1, null, false ]
+            - [ "MGMT~BANK", 0.99, "2026-01-12", "2026-01-09", 5, -7, -8, null, true ]
+
+  - id: period-statistics-fy2026
+    source: "by hand after VarPeriodStats: FY2026 (year end 10-31) holds four official VaRs 5, 5, 5, 7: end 7, average 5.5, high 7 on 01-12, low 5 on 01-07 (the first); the 60-day average 5.5; stressed 8; 48 of the 52 weekdays from 2025-11-03 to 2026-01-13 have no record"
+    request: { outputs: [ period-stats ], params: { node: "", period: "", measure: var }, visibility: { var-history: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        period-stats:
+          columns: [ NODE_ID, HIERARCHY, PERIOD, FIRST_DAY, LAST_DAY, RECORDS, PERIOD_END, AVERAGE, HIGH, HIGH_DATE, LOW, LOW_DATE, AVERAGE_N, STRESSED_AVERAGE, MISSING_DAYS ]
+          rows:
+            - [ "MGMT~A", MGMT, FY2026, "2025-11-01", "2026-10-31", 4, 7, 5.5, 7, "2026-01-12", 5, "2026-01-07", 5.5, 8, 48 ]
+            - [ "MGMT~BANK", MGMT, FY2026, "2025-11-01", "2026-10-31", 4, 7, 5.5, 7, "2026-01-12", 5, "2026-01-07", 5.5, 8, 48 ]
+
+  - id: a-regulatory-table
+    source: "by hand after VarReports: desk A and the total both read 7 / 5.5 / 7 / 5; the diversification is the total less the rows (0 at the end and on average; a high or a low does not add up); FY2025 has no record (no prior, no movement)"
+    request: { outputs: [ regulatory-report ], params: { report: R1, period: FY2026, measure: var }, visibility: { var-history: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        regulatory-report:
+          columns: [ REPORT_ID, ROW_ORDER, LABEL, CODE, NODE_ID, PERIOD_END, AVERAGE, HIGH, LOW, PRIOR_PERIOD_END, MOVEMENT ]
+          rows:
+            - [ R1, 1, Desk A, "010", "MGMT~A", 7, 5.5, 7, 5, null, null ]
+            - [ R1, 2, Diversification, "020", null, 0, 0, null, null, null, null ]
+            - [ R1, 3, Total, "030", "MGMT~BANK", 7, 5.5, 7, 5, null, null ]
+
+  - id: the-stress-window
+    source: "by hand after StressWindowsTest: windows of 10 of the 12 days have VaR -1, 50, 50; the worst is the first 50 (start 1), the next overlaps; its worst day is the -50; the newest window is as bad (excess 0)"
+    request: { outputs: [ stress-window ], params: { node: "" }, visibility: { pnl-history: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        stress-window:
+          columns: [ NODE_ID, RANK, FIRST_DAY, LAST_DAY, WORST_DAY, SVAR, CURRENT_SVAR, EXCESS, SYNTHETIC ]
+          rows:
+            - [ "MGMT~BANK", 1, "2025-12-02", "2025-12-15", "2025-12-15", 50, 50, 0, false ]
+
+  - id: sensitivity-sums-and-the-ladder
+    source: "by hand: GIRR DV01 USD 5Y -1,000 and 10Y -500, EUR 2Y +800 (FRTB case 2's elements): by class and bucket EUR 800 and USD -1,500 (gross 1,500); on the ladder EUR 2-5Y 800, USD 5-10Y -1,000 and 10Y+ -500; no limit"
+    request: { outputs: [ sensitivity-sum, sensitivity-ladder ], params: { scope: BANK, by: "RISK_CLASS,BUCKET", currency: USD, risk-class: GIRR, sensitivity-measure: "" }, visibility: { sensitivity-element: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        sensitivity-sum:
+          columns: [ ROW_KEY, COLUMN_KEY, NET, GROSS, POSITIONS ]
+          rows:
+            - [ GIRR, EUR, 800, 800, 1 ]
+            - [ GIRR, USD, -1500, 1500, 2 ]
+        sensitivity-ladder:
+          columns: [ QUALIFIER, BUCKET, NET, GROSS, POSITIONS, LIMIT, LIMIT_USE, STATUS ]
+          rows:
+            - [ EUR, 2-5Y, 800, 800, 1, null, null, null ]
+            - [ USD, 5-10Y, -1000, 1000, 1, null, null, null ]
+            - [ USD, 10Y+, -500, 500, 1, null, null, null ]
+
+  - id: a-viewer-of-desk-a-sees-its-sensitivities
+    source: "ENGINE_SPEC 8.6 rule 2: only desk A's elements (USD 5Y -1,000 and EUR 2Y +800)"
+    request: { outputs: [ sensitivity-sum ], params: { scope: BANK, by: RISK_CLASS, currency: USD }, visibility: { sensitivity-element: { eq: [ DESK, A ] } }, seed: 0 }
+    expect:
+      status: complete
+      tables: { sensitivity-sum: { columns: [ ROW_KEY, COLUMN_KEY, NET, GROSS, POSITIONS ], rows: [ [ GIRR, "*", -200, 1800, 2 ] ] } }
+
+  - id: no-desk-pnl-stops-only-the-backtest
+    source: "ENGINE_SPEC 8.2: the backtest needs desk-pnl; the period statistics are answered beside it"
+    given: { inputs: { desk-pnl: absent } }
+    request: { outputs: [ backtest, period-stats ], params: { node: "MGMT~A", period: FY2026, measure: var }, visibility: { var-history: all, desk-pnl: all }, seed: 0 }
+    expect:
+      status: partial
+      tables:
+        period-stats:
+          columns: [ NODE_ID, HIERARCHY, PERIOD, FIRST_DAY, LAST_DAY, RECORDS, PERIOD_END, AVERAGE, HIGH, HIGH_DATE, LOW, LOW_DATE, AVERAGE_N, STRESSED_AVERAGE, MISSING_DAYS ]
+          rows:
+            - [ "MGMT~A", MGMT, FY2026, "2025-11-01", "2026-10-31", 4, 7, 5.5, 7, "2026-01-12", 5, "2026-01-07", 5.5, 8, 48 ]
+      missing: [ { input: desk-pnl, outputs: [ backtest ] } ]
+
+  - id: a-what-if-in-another-currency-is-refused
+    source: "the what-if's vectors are USD (RSK-3121)"
+    request:
+      outputs: [ what-if ]
+      params: { scenario-set: "", window: 0, currency: EUR, node: "", trades: [ { LABEL: T1, FACTOR: 1, PNL: [ 0, 0, 0, -10 ] } ] }
+      visibility: { scenario-pv: all, pnl-vector: all }
+      seed: 0
+    expect: { refused: RSK-3121 }

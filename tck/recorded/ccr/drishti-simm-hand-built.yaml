@@ -1,0 +1,74 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Risk. Proprietary: see LICENSE.
+# Harvested from Drishti's SimmHandBuiltCasesTest (3813b8735): SIMM.md section 15's worked netting set and FRTB_SA_GUIDE.md 13.1 cases 6
+# and 11, under the toy parameter file (round illustrative numbers, NOT ISDA's), given to the engine as its simm-parameters input from
+# simm-toy.jsonl beside this file (made from risk-ccr's test resource simm/simm-toy.yaml). Compared within 0.005 (the test's CENT).
+suite: ccr/drishti-simm-hand-built
+engine: ccr
+since: "0.1"
+source: "SimmHandBuiltCasesTest and SimmExamples, Drishti 3813b8735"
+tolerance: 0.005
+given:
+  snapshot: { date: "2026-07-08" }
+  inputs:
+    simm-parameters: { file: simm-toy.jsonl }
+    risk-factor:
+      rows:
+        - { RISK_FACTOR: IR/CURVE/USD/OIS/5Y, SIMM_RISK_CLASS: InterestRate, FACTOR_TYPE: CURVE, SIMM_BUCKET: "1", QUALIFIER: USD, SIMM_LABEL1: 5y, SIMM_LABEL2: OIS }
+        - { RISK_FACTOR: IR/CURVE/USD/OIS/10Y, SIMM_RISK_CLASS: InterestRate, FACTOR_TYPE: CURVE, SIMM_BUCKET: "1", QUALIFIER: USD, SIMM_LABEL1: 10y, SIMM_LABEL2: OIS }
+        - { RISK_FACTOR: IR/CURVE/USD/OIS/1Y, SIMM_RISK_CLASS: InterestRate, FACTOR_TYPE: CURVE, SIMM_BUCKET: "1", QUALIFIER: USD, SIMM_LABEL1: 1y, SIMM_LABEL2: OIS }
+        - { RISK_FACTOR: IR/CURVE/EUR/OIS/2Y, SIMM_RISK_CLASS: InterestRate, FACTOR_TYPE: CURVE, SIMM_BUCKET: "1", QUALIFIER: EUR, SIMM_LABEL1: 2y, SIMM_LABEL2: OIS }
+        - { RISK_FACTOR: FX/SPOT/EUR, SIMM_RISK_CLASS: FX, FACTOR_TYPE: SPOT, SIMM_BUCKET: "1", QUALIFIER: EUR }
+        - { RISK_FACTOR: CR/SPREAD/ISS-B/CDS/5Y, SIMM_RISK_CLASS: CreditQ, FACTOR_TYPE: SPREAD, SIMM_BUCKET: "2", QUALIFIER: ISS-B, SIMM_LABEL1: 5y, SIMM_LABEL2: CDS, SENIORITY: SENIOR }
+cases:
+  - id: the-worked-netting-set
+    inputs:
+      sensitivity-element:
+        rows:
+          - { SENSITIVITY_ID: S1, ELEMENT: 1, TRADE_ID: EX-SWAP-USD, NETTING_SET: NS-EX, COUNTERPARTY: CP-EX, PRODUCT_GROUP: Rates, RISK_FACTOR: IR/CURVE/USD/OIS/5Y, MEASURE: DV01, VALUE: 10000, CURRENCY: USD }
+          - { SENSITIVITY_ID: S1, ELEMENT: 2, TRADE_ID: EX-SWAP-USD, NETTING_SET: NS-EX, COUNTERPARTY: CP-EX, PRODUCT_GROUP: Rates, RISK_FACTOR: IR/CURVE/USD/OIS/10Y, MEASURE: DV01, VALUE: -6000, CURRENCY: USD }
+          - { SENSITIVITY_ID: S2, ELEMENT: 1, TRADE_ID: EX-SWAP-EUR, NETTING_SET: NS-EX, COUNTERPARTY: CP-EX, PRODUCT_GROUP: Rates, RISK_FACTOR: IR/CURVE/EUR/OIS/2Y, MEASURE: DV01, VALUE: 4000, CURRENCY: USD }
+          - { SENSITIVITY_ID: S3, ELEMENT: 1, TRADE_ID: EX-FXFWD-EUR, NETTING_SET: NS-EX, COUNTERPARTY: CP-EX, PRODUCT_GROUP: FX, RISK_FACTOR: FX/SPOT/EUR, MEASURE: DELTA, VALUE: 20000, CURRENCY: USD }
+    request: { outputs: [ simm, simm-total ], params: { simm-scope: "NSET:NS-EX", direction: collect, calculation-currency: USD, simm-version: TOY-1, concentration: "on", hvr: "on" }, visibility: { sensitivity-element: all } }
+    simm:
+      columns: [ SCOPE, PRODUCT_CLASS, RISK_CLASS, DELTA ]
+      rows:
+        - [ "NSET:NS-EX", RatesFX, InterestRate, 357483.43 ]
+        - [ "NSET:NS-EX", RatesFX, FX, 160000 ]
+    simm-total:
+      columns: [ SCOPE, VERSION, DIRECTION, SIMM, TOTAL ]
+      rows:
+        - [ "NSET:NS-EX", TOY-1, collect, 426606.46, 426606.46 ]
+  - id: the-worked-netting-set-posted
+    inputs: same-as the-worked-netting-set
+    request: { outputs: [ simm-total ], params: { simm-scope: "NSET:NS-EX", direction: post, calculation-currency: USD, simm-version: TOY-1, concentration: "on", hvr: "on" }, visibility: { sensitivity-element: all } }
+    simm-total:
+      columns: [ SCOPE, DIRECTION, TOTAL ]
+      rows:
+        - [ "NSET:NS-EX", post, 426606.46 ]
+  - id: case6-the-bucket
+    inputs:
+      sensitivity-element:
+        rows:
+          - { SENSITIVITY_ID: C6, ELEMENT: 1, TRADE_ID: C6-A, NETTING_SET: NS-C6, COUNTERPARTY: CP-C6, PRODUCT_GROUP: Rates, RISK_FACTOR: IR/CURVE/USD/OIS/5Y, MEASURE: DV01, VALUE: -1000, CURRENCY: USD }
+          - { SENSITIVITY_ID: C6, ELEMENT: 2, TRADE_ID: C6-A, NETTING_SET: NS-C6, COUNTERPARTY: CP-C6, PRODUCT_GROUP: Rates, RISK_FACTOR: IR/CURVE/USD/OIS/1Y, MEASURE: DV01, VALUE: 400, CURRENCY: USD }
+    request: { outputs: [ simm-total ], params: { simm-scope: "NSET:NS-C6", direction: collect, calculation-currency: USD, simm-version: TOY-1, concentration: "on", hvr: "on" }, visibility: { sensitivity-element: all } }
+    simm-total:
+      columns: [ SCOPE, SIMM ]
+      rows:
+        - [ "NSET:NS-C6", 34000 ]
+  - id: case6-the-product-class
+    inputs:
+      sensitivity-element:
+        rows:
+          - { SENSITIVITY_ID: C6B, ELEMENT: 1, TRADE_ID: C6-B, NETTING_SET: NS-C6B, COUNTERPARTY: CP-C6, PRODUCT_GROUP: Rates, RISK_FACTOR: IR/CURVE/USD/OIS/5Y, MEASURE: DV01, VALUE: 1000, CURRENCY: USD }
+          - { SENSITIVITY_ID: C6B, ELEMENT: 2, TRADE_ID: C6-B, NETTING_SET: NS-C6B, COUNTERPARTY: CP-C6, PRODUCT_GROUP: Rates, RISK_FACTOR: CR/SPREAD/ISS-B/CDS/5Y, MEASURE: CS01, VALUE: 375, CURRENCY: USD }
+    request: { outputs: [ simm, simm-total ], params: { simm-scope: "NSET:NS-C6B", direction: collect, calculation-currency: USD, simm-version: TOY-1, concentration: "on", hvr: "on" }, visibility: { sensitivity-element: all } }
+    simm:
+      columns: [ SCOPE, PRODUCT_CLASS, RISK_CLASS, IM ]
+      rows:
+        - [ "NSET:NS-C6B", RatesFX, InterestRate, 50000 ]
+        - [ "NSET:NS-C6B", RatesFX, CreditQ, 30000 ]
+    simm-total:
+      columns: [ SCOPE, SIMM ]
+      rows:
+        - [ "NSET:NS-C6B", 65574.39 ]

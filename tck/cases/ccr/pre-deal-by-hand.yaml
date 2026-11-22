@@ -1,0 +1,115 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Risk. Proprietary: see LICENSE.
+# Hand cases of the ccr engine's pre-deal check and collateral view: one path, three primary dates 91, 182 and 730 days ahead
+# (t = 91/365, 182/365, 2), one trade T1 in netting set NS-1 (no CSA) of CP-1 with MtM 40, 60, 30, a limit of 1,000 on PFE 95 peak with
+# buckets 0-1Y (100) and 1Y+ (1,000). With one path PFE is the path itself; EPE and EEPE integrate EE and its running maximum (from the
+# current exposure) over the first year. The values were worked in IEEE doubles in ExposureMath's order of operations.
+suite: ccr/pre-deal-by-hand
+engine: ccr
+since: "0.1"
+description: approve near a bucket's limit, decline over it, refer without a limit; the netting set's collateral view; a request without rows.
+given:
+  snapshot: { date: "2026-01-13" }
+  inputs:
+    simulation-run:
+      rows:
+        - { RUN_ID: XR-1, BATCH_ID: B1, BUSINESS_DATE: "2026-01-13", PATHS: 1, GRID_DATES: "2026-04-14,2026-07-14,2028-01-13", GRID_ROLE: "PRIMARY,PRIMARY,PRIMARY", LOOKBACK_OF: "-1,-1,-1" }
+    exposure-path:
+      rows:
+        - { TRADE_ID: T1, GRID_INDEX: 0, NETTING_SET: NS-1, COUNTERPARTY: CP-1, LEGAL_ENTITY: LE-1, DESK: D1, TT_BOOK: B1, ASSET_CLASS: IR, PRODUCT: SWAP, MATURITY_DATE: "2028-06-30", NOTIONAL: 100, MTM: [ 40 ] }
+        - { TRADE_ID: T1, GRID_INDEX: 1, NETTING_SET: NS-1, COUNTERPARTY: CP-1, LEGAL_ENTITY: LE-1, DESK: D1, TT_BOOK: B1, ASSET_CLASS: IR, PRODUCT: SWAP, MATURITY_DATE: "2028-06-30", NOTIONAL: 100, MTM: [ 60 ] }
+        - { TRADE_ID: T1, GRID_INDEX: 2, NETTING_SET: NS-1, COUNTERPARTY: CP-1, LEGAL_ENTITY: LE-1, DESK: D1, TT_BOOK: B1, ASSET_CLASS: IR, PRODUCT: SWAP, MATURITY_DATE: "2028-06-30", NOTIONAL: 100, MTM: [ 30 ] }
+    netting-set:
+      rows:
+        - { NETTING_SET_ID: NS-1, COUNTERPARTY: CP-1, LEGAL_ENTITY: LE-1 }
+    csa: absent
+    collateral-balance: absent
+    trade-valuation:
+      rows:
+        - { TRADE_ID: T1, MTM: 40 }
+    credit-limit:
+      rows:
+        - { LIMIT_ID: L1, COUNTERPARTY: CP-1, MEASURE: "PFE 95 peak", LIMIT: 1000 }
+    credit-limit-bucket:
+      rows:
+        - { LIMIT_ID: L1, BUCKET: 0-1Y, LIMIT: 100 }
+        - { LIMIT_ID: L1, BUCKET: 1Y+, LIMIT: 1000 }
+    sensitivity-element: absent
+    risk-factor: absent
+    simm-parameters: absent
+    fx-spot: absent
+cases:
+  - id: approve-near-a-bucket
+    source: "by hand after ExposurePreDealLimitTest.aBucketNearItsLimitMakesTheCheckNear: half of T1 (factor 0.5) in NS-1 makes the profile 60, 90, 45: peak 90 of 1,000 (9%) within, the 0-1Y bucket 90 of 100 (90%) near: approve, near; EEPE 55.0137 before and 82.5205 after, EAD 1.4 x EEPE"
+    reference: true
+    request: { outputs: [ pre-deal, pre-deal-buckets ], params: { counterparty: CP-1, template: T1, notional: 50, reverse: false, netting-set: "" }, visibility: { exposure-path: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        pre-deal:
+          columns: [ COUNTERPARTY, DECISION, REASONS, TEMPLATE, FACTOR, NETTING_SET, LIMIT_ID, MEASURE, LIMIT, BEFORE, AFTER, INCREMENT, USE_BEFORE, USE_AFTER, STATUS, EAD_BEFORE, EAD_AFTER ]
+          rows:
+            - [ CP-1, approve, "exact: with the trade, PFE 95 peak is 90 of the limit 1000; near the limit", T1, 0.5, NS-1, L1, "PFE 95 peak", 1000, 60, 90, 30, 0.06, 0.09, near, "0x4053413a36b4f414", "0x405ce1d7520f6e1e" ]
+        pre-deal-buckets:
+          columns: [ BUCKET, LIMIT, POINTS, BEFORE, AFTER, USE_AFTER, STATUS ]
+          rows:
+            - [ 0-1Y, 100, 2, 60, 90, 0.9, near ]
+            - [ 1Y+, 1000, 1, 30, 45, 0.045, within ]
+
+  - id: decline-over-a-bucket
+    source: "by hand: a whole T1 more (notional 100, factor 1) makes the profile 80, 120, 60: the 0-1Y bucket 120 over its 100: decline"
+    request: { outputs: [ pre-deal-buckets ], params: { counterparty: CP-1, template: T1, notional: 100, reverse: false, netting-set: "" }, visibility: { exposure-path: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        pre-deal-buckets:
+          columns: [ BUCKET, LIMIT, POINTS, BEFORE, AFTER, USE_AFTER, STATUS ]
+          rows:
+            - [ 0-1Y, 100, 2, 60, 120, 1.2, breach ]
+            - [ 1Y+, 1000, 1, 30, 60, 0.06, within ]
+
+  - id: refer-without-a-limit
+    source: "EXPOSURE_GUIDE.md 18.9: no credit limit on record for the counterparty (the limits hold CP-2's only): refer, credit decides; no bucket"
+    given:
+      inputs:
+        credit-limit: { rows: [ { LIMIT_ID: L2, COUNTERPARTY: CP-2, MEASURE: "PFE 95 peak", LIMIT: 1000 } ] }
+        credit-limit-bucket: { rows: [ { LIMIT_ID: L2, BUCKET: 0-1Y, LIMIT: 100 } ] }
+    request: { outputs: [ pre-deal, pre-deal-buckets ], params: { counterparty: CP-1, template: T1, notional: 50, reverse: false, netting-set: "" }, visibility: { exposure-path: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        pre-deal:
+          columns: [ COUNTERPARTY, DECISION, REASONS, TEMPLATE, FACTOR, NETTING_SET, LIMIT_ID, MEASURE, LIMIT, BEFORE, AFTER, INCREMENT, USE_BEFORE, USE_AFTER, STATUS, EAD_BEFORE, EAD_AFTER ]
+          rows:
+            - [ CP-1, refer, "no credit limit on record for CP-1 (credit-limit): credit decides", T1, 0.5, NS-1, null, null, null, 60, 90, 30, null, null, null, "0x4053413a36b4f414", "0x405ce1d7520f6e1e" ]
+        pre-deal-buckets:
+          columns: [ BUCKET, LIMIT, POINTS, BEFORE, AFTER, USE_AFTER, STATUS ]
+          rows: []
+
+  - id: no-limits-input-is-not-found
+    source: "ENGINE_SPEC 8.2: the check needs the limits' inputs; the collateral view is answered beside it"
+    given: { inputs: { credit-limit: absent, credit-limit-bucket: absent } }
+    request: { outputs: [ pre-deal, netting-set-collateral ], params: { counterparty: CP-1, template: T1, notional: 50, reverse: false, netting-set: "" }, visibility: { exposure-path: all }, seed: 0 }
+    expect:
+      status: partial
+      tables:
+        netting-set-collateral:
+          columns: [ NETTING_SET, COUNTERPARTY, CSA, MARGINED, THRESHOLD_THEM, THRESHOLD_US, MTA_THEM, INDEPENDENT_AMOUNT, MPOR_DAYS, COLLATERAL_HELD, IM_HELD, TRADES, MTM, CE_UNCOLLATERALISED, CE, EPE_UNCOLLATERALISED, EPE, PEAK_PFE_UNCOLLATERALISED, PEAK_PFE, COLLATERAL_BENEFIT ]
+          rows:
+            - [ NS-1, CP-1, null, false, 0, 0, 0, 0, 0, 0, 0, 1, 40, 40, 40, "0x4043fc7e3f1f8fc8", "0x4043fc7e3f1f8fc8", 60, 60, 0 ]
+      missing: [ { input: credit-limit, outputs: [ pre-deal ] }, { input: credit-limit-bucket, outputs: [ pre-deal ] } ]
+
+  - id: the-collateral-view
+    source: "by hand: NS-1 has no CSA, so with and without collateral are the same: CE 40, EPE 39.9726 (EE 40, 60, 30 over the first year), peak PFE 60, benefit 0"
+    request: { outputs: [ netting-set-collateral ], params: {}, visibility: { exposure-path: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        netting-set-collateral:
+          columns: [ NETTING_SET, COUNTERPARTY, CSA, MARGINED, THRESHOLD_THEM, THRESHOLD_US, MTA_THEM, INDEPENDENT_AMOUNT, MPOR_DAYS, COLLATERAL_HELD, IM_HELD, TRADES, MTM, CE_UNCOLLATERALISED, CE, EPE_UNCOLLATERALISED, EPE, PEAK_PFE_UNCOLLATERALISED, PEAK_PFE, COLLATERAL_BENEFIT ]
+          rows:
+            - [ NS-1, CP-1, null, false, 0, 0, 0, 0, 0, 0, 0, 1, 40, 40, 40, "0x4043fc7e3f1f8fc8", "0x4043fc7e3f1f8fc8", 60, 60, 0 ]
+
+  - id: a-template-the-request-does-not-see-is-refused
+    source: "a template is a booked trade the asker sees (RSK-3151); a viewer of desk D2 sees no T1"
+    request: { outputs: [ pre-deal ], params: { counterparty: CP-1, template: T1, notional: 50, reverse: false, netting-set: "" }, visibility: { exposure-path: { eq: [ DESK, D2 ] } }, seed: 0 }
+    expect: { refused: RSK-3151 }
