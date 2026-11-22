@@ -20,7 +20,7 @@ import com.ash.risk.market.calc.VarBook;
 import com.ash.risk.market.calc.VarCalc;
 import com.ash.risk.market.calc.VarLens;
 import com.ash.risk.kernel.vector.OrdinalSet;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -54,7 +54,7 @@ final class VarBasketCheck {
     }
 
     /** The checks and figures of {@code sheet} as {@code p} on the date asked (null: the latest), in {@code ccy} (null: USD). */
-    Map<String, Object> check(Principal p, VarBasketSheet sheet, LocalDate asked, String ccy) {
+    Map<String, Object> check(Caller p, VarBasketSheet sheet, LocalDate asked, String ccy) {
         long t0 = System.nanoTime();
         VarDate d = svc.date(asked, ccy);
         String date = d.date().toString();

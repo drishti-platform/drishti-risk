@@ -15,7 +15,7 @@
  */
 package com.ash.risk.market.var;
 
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskCode;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -68,7 +68,7 @@ final class VarInputs {
         if (blank(system)) {
             missing.add("SOURCE_SYSTEM");
         }
-        String bad = ErrorCode.VAR_RECORD_INVALID.code();
+        String bad = RiskCode.VAR_RECORD_INVALID.code();
         if (!missing.isEmpty()) {
             return new String[] {bad, "no " + String.join(", ", missing) + ": every PV record says what it is (VALUE_TYPE, GRAIN, the id, CURRENCY,"
                     + " SOURCE_SYSTEM); an older file gets them with drishti.py convert --set"};
@@ -97,7 +97,7 @@ final class VarInputs {
         boolean formOk = pin.form().equals("ANY") || pin.form().equals(vt);
         boolean grainOk = pin.grain().equals("ANY") || pin.grain().equals(gr);
         if (!formOk || !grainOk) {
-            return new String[] {ErrorCode.VAR_INPUT_PIN.code(), system + " is pinned to " + pin + " (drishti.var.inputs); the record says "
+            return new String[] {RiskCode.VAR_INPUT_PIN.code(), system + " is pinned to " + pin + " (drishti.var.inputs); the record says "
                     + vt.toLowerCase(Locale.ROOT) + ", " + gr.toLowerCase(Locale.ROOT)};
         }
         return null;

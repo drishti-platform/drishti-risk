@@ -59,6 +59,70 @@ inputs:
     required: false
     key: [ PORTFOLIO_ID ]
     columns: [ PORTFOLIO_ID, NAME, TYPE, OWNER, SCOPE ]
+  var-history:
+    contract: risk/var-official@1
+    about: The official VaR records of earlier business dates (stored outputs the host keeps), one row per node, date and result version; the latest version of a date is read. Backtesting, period statistics and the regulatory reports read them; they are never recomputed.
+    required: false
+    per: []
+    key: [ BUSINESS_DATE, NODE_ID, RESULT_VERSION ]
+    columns: [ BUSINESS_DATE, HIERARCHY, NODE_ID, NODE_NAME, PARENT_ID, LEVEL, RESULT_VERSION, VAR, ES, CONFIDENCE, SVAR, SES, HYPO_PNL ]
+    scope-columns: [ HIERARCHY, NODE_ID ]
+  desk-pnl:
+    contract: risk/desk-pnl@1
+    about: Each desk's actual and hypothetical P&L of each business date (USD); the backtest compares the official VaR of the day before with it.
+    required: false
+    per: []
+    key: [ DESK_PNL_ID ]
+    columns: [ DESK_PNL_ID, BUSINESS_DATE, DESK_ID, LEGAL_ENTITY, ACTUAL_PNL, HYPOTHETICAL_PNL ]
+    scope-columns: [ DESK_ID, LEGAL_ENTITY ]
+  pnl-history:
+    contract: risk/pnl-history@1
+    about: Each node's long history of the P&L of today's portfolio (PNL, oldest first, on HISTORY_DATES); the stress window selection reads it.
+    required: false
+    key: [ HISTORY_ID ]
+    columns: [ HISTORY_ID, HIERARCHY, NODE_ID, NAME, LEVEL, HISTORY_DATES, SYNTHETIC, PNL ]
+    vector: PNL
+    scope-columns: [ HIERARCHY, NODE_ID ]
+  sensitivity-element:
+    contract: risk/sensitivity-element@1
+    about: The position sensitivities one element a row (the SENSITIVITIES of risk/position-sensitivity with their record's columns), in the element's own currency; FRTB-SA, the ladders and the sensitivity sums read them.
+    required: false
+    key: [ SENSITIVITY_ID, ELEMENT ]
+    columns: [ SENSITIVITY_ID, ELEMENT, POSITION_ID, TRADE_ID, PRODUCT_GROUP, PRODUCT_TYPE, LEGAL_ENTITY, DIVISION, DESK, TT_BOOK, RISK_FACTOR,
+               MEASURE, VALUE, CURRENCY, SHOCK_SIZE, IMPLIED_VOL, NOTIONAL ]
+    scope-columns: [ LEGAL_ENTITY, DIVISION, DESK, TT_BOOK ]
+  risk-factor:
+    contract: risk/risk-factor@1
+    about: The factor dictionary (risk class, type, qualifier, curve, underlying, tenor, FRTB bucket) the sensitivity elements name.
+    required: false
+    key: [ RISK_FACTOR ]
+    columns: [ RISK_FACTOR, RISK_CLASS, FACTOR_TYPE, QUALIFIER, CURVE, UNDERLYING, TENOR, UNDERLYING_TENOR, FRTB_BUCKET, SIMM_BUCKET ]
+  default-risk:
+    contract: risk/default-risk@1
+    about: The default-risk positions of the DRC (obligor, bucket, seniority, credit quality, notional, market value); a row counts when its position or trade is one the request sees. Absent, the DRC is missing, never 0.
+    required: false
+    key: [ DEFAULT_RISK_ID ]
+    columns: [ DEFAULT_RISK_ID, POSITION_ID, TRADE_ID, OBLIGOR, DRC_BUCKET, SENIORITY, CREDIT_QUALITY, NOTIONAL, MARKET_VALUE, CURRENCY,
+               MATURITY_DATE, CASH_EQUITY_MATURITY, RECOVERY_INDEPENDENT ]
+  residual-risk:
+    contract: risk/residual-risk@1
+    about: The residual-risk instruments of the RRAO (class, gross notional, back-to-back, listed); a row counts when its trade is one the request sees. Absent, the RRAO is missing, never 0.
+    required: false
+    key: [ RESIDUAL_RISK_ID ]
+    columns: [ RESIDUAL_RISK_ID, TRADE_ID, POSITION_ID, RRAO_CLASS, GROSS_NOTIONAL, CURRENCY, BACK_TO_BACK_OF, LISTED_OR_CLEARABLE ]
+  fx-spot:
+    contract: market/fx-spot@1
+    about: The date's FX mid rates (PAIR as EURUSD or USDJPY) that turn sensitivities into the reporting currency; without it only USD elements are used.
+    required: false
+    key: [ PAIR ]
+    columns: [ PAIR, MID ]
+  report-row:
+    contract: risk/report-definition@1
+    about: The rows of the regulatory and management VaR tables (a report's official nodes in order, its diversification row and its total).
+    required: false
+    per: []
+    key: [ REPORT_ID, ROW_ORDER ]
+    columns: [ REPORT_ID, ROW_ORDER, LABEL, CODE, NODE_ID, COMPUTE, TOTAL ]
 options:
   hierarchies:
     type: records
@@ -93,10 +157,62 @@ options:
   scale-to-var: { type: bool, default: true, label: Scale components to VaR }
   threads: { type: int, default: 4, min: 1, max: 256, label: Summation threads, help: The sums are the same bits at any count. }
   linear-algebra: { type: enum, options: [ native, java ], default: java, label: Linear algebra }
+  pvar-weighting: { type: enum, options: [ equal, ewma ], default: equal, label: Parametric weighting, help: "equal: 1/N with the sample variance (N - 1); ewma: RiskMetrics decay." }
+  pvar-lambda: { type: number, default: 0.94, min: 0.51, max: 0.9999, label: EWMA decay }
+  stressed-prefix: { type: text, default: HS-STRESS-, label: Stress set prefix, help: "A set is the stress set when its SET_TYPE is STRESS, or (no SET_TYPE) its id starts with this." }
+  backtest-window: { type: int, default: 250, min: 10, max: 2000, label: Backtest window (days) }
+  backtest-count: { type: enum, options: [ actual, hypothetical, higher ], default: actual, label: Exceptions counted, help: The count the zone and the multiplier read. }
+  backtest-multipliers: { type: list, items: number, default: [ 3.0, 3.0, 3.0, 3.0, 3.0, 3.4, 3.5, 3.65, 3.75, 3.85, 4.0 ], label: Capital multipliers, help: "By exceptions, the last for that many or more (12 CFR 217.204 Table 1)." }
+  stress-window-length: { type: int, default: 250, min: 10, max: 2000, label: Stress window (days) }
+  stress-window-top: { type: int, default: 3, min: 1, max: 20, label: Stress window candidates }
+  fiscal-year-end: { type: text, default: "10-31", label: Fiscal year end (MM-DD) }
+  average-days: { type: int, default: 60, min: 1, max: 250, label: VaR average (business days) }
+  stress-weeks: { type: int, default: 12, min: 1, max: 52, label: Stressed VaR average (weeks) }
+  ladder-grid:
+    type: records
+    label: Sensitivity ladder buckets
+    help: The ladder's tenor buckets in years, from (inclusive) to (exclusive; empty for open-ended), without gaps or overlaps.
+    fields:
+      bucket: { type: text, required: true }
+      from: { type: number, required: true }
+      to: { type: number }
+    default: [ { bucket: 0-2Y, from: 0, to: 2 }, { bucket: 2-5Y, from: 2, to: 5 }, { bucket: 5-10Y, from: 5, to: 10 }, { bucket: 10Y+, from: 10 } ]
+  ladder-limits:
+    type: records
+    label: Sensitivity ladder limits
+    help: Two-sided net limits per qualifier and bucket ("USD 2-5Y").
+    fields:
+      cell: { type: text, required: true }
+      limit: { type: number, required: true }
+    default: []
+  limit-near: { type: number, default: 0.8, min: 0.01, max: 1, label: Near share of a limit }
+  frtb-parameters: { type: enum, options: [ basel-2019 ], default: basel-2019, label: FRTB-SA parameters, help: The SBM and DRC/RRAO parameter files carried in the engine JAR. }
+  rrao-from-positions: { type: bool, default: true, label: RRAO from product types, help: "Without residual-risk rows, derive the RRAO from each position's PRODUCT_TYPE and notional." }
 params:
   scenario-set: { type: text, default: "", label: Scenario set, help: "Empty: the date's one set that is not a stress set." }
   window: { type: int, default: 0, min: 0, label: Window, help: "The newest N scenarios; 0: the whole set." }
   currency: { type: text, default: USD, label: Reporting currency }
+  stressed: { type: bool, default: false, label: Stressed, help: "True: the date's stress scenario set (stressed VaR)." }
+  horizon: { type: enum, options: [ 1d, 10d ], default: 1d, label: Horizon }
+  ten-day-method: { type: enum, options: [ sqrt10, sum ], default: sqrt10, label: 10-day method, help: "sqrt10: the 1-day figures times the square root of 10; sum: overlapping windows of 10 scenario days." }
+  node: { type: text, default: "", label: Node, help: "A node id; empty: every hierarchy's root (or every node the output covers)." }
+  period: { type: text, default: "", label: Period, help: "FY2026, FY2026Q1 or 2026-01-01..2026-03-31; empty: the fiscal year of the date." }
+  measure: { type: enum, options: [ var, es, svar, ses ], default: var, label: Official measure }
+  report: { type: text, default: "", label: Report, help: "A report id of report-row; empty: every report." }
+  risk-class: { type: text, default: GIRR, label: Risk class }
+  sensitivity-measure: { type: text, default: "", label: Sensitivity measure, help: "DV01, CS01, DELTA, VEGA, ...; empty: the class's delta." }
+  by: { type: text, default: "RISK_CLASS,BUCKET", label: Group by, help: "One or two of RISK_FACTOR, RISK_CLASS, MEASURE, BUCKET, QUALIFIER, TENOR or a record column, joined by a comma." }
+  scope: { type: text, default: BANK, label: Scope, help: "BANK, or terms over the record columns (DESK:RATES, TT_BOOK:X1, LEGAL_ENTITY:LE-LDN) joined by spaces." }
+  scenario: { type: enum, options: [ binding, low, medium, high ], default: binding, label: Correlation scenario }
+  girr-correlation: { type: enum, options: [ table, exact ], default: table, label: GIRR correlation }
+  curvature-source: { type: enum, options: [ revaluation, gamma ], default: revaluation, label: Curvature source }
+  attribute: { type: text, default: DESK, label: Contribution attribute }
+  trades:
+    type: table
+    contract: risk/what-if-vector@1
+    max-rows: 200
+    label: Hypothetical trades
+    help: Each a label, a factor and its scenario P&L in USD on the scenario set asked (oldest first), supplied by whoever prices it.
 outputs:
   node-var:
     title: VaR and ES by hierarchy node
@@ -162,6 +278,216 @@ outputs:
       - { name: ES, type: number, nullable: false, label: Expected shortfall, measure: true }
       - { name: VAR_UNITS, type: integer, nullable: false, label: VaR (whole units) }
       - { name: ES_UNITS, type: integer, nullable: false, label: ES (whole units) }
+  node-pvar:
+    title: Parametric VaR and ES by hierarchy node
+    about: For every node, the normal (variance-covariance) VaR z sigma - mu (z, PVAR and PES within relative 1e-12, as the normal quantile is computed with the platform's exp and log, whose last bit may differ between JVMs) and ES sigma phi(z_ES)/(1 - c_ES) - mu from the node's scenario P&L (equal or EWMA weights), with the historical VaR beside it and the scenarios beyond the parametric VaR.
+    params: [ scenario-set, window, currency ]
+    needs: [ scenario-set, fx-scenario ]
+    key: [ NODE_ID ]
+    columns:
+      - { name: NODE_ID, type: string, nullable: false, label: Node }
+      - { name: HIERARCHY, type: string, nullable: false, label: Hierarchy }
+      - { name: SCENARIOS, type: integer, nullable: false, label: Scenarios }
+      - { name: MU, type: number, nullable: false, label: Mean P&L }
+      - { name: SIGMA, type: number, nullable: false, label: Standard deviation, measure: true }
+      - { name: Z, type: number, nullable: false, label: z at the VaR confidence, exact: "relative:1e-12" }
+      - { name: PVAR, type: number, nullable: false, label: Parametric VaR, measure: true, exact: "relative:1e-12" }
+      - { name: PES, type: number, nullable: false, label: Parametric ES, measure: true, exact: "relative:1e-12" }
+      - { name: HVAR, type: number, nullable: false, label: Historical VaR, measure: true }
+      - { name: BEYOND, type: integer, nullable: false, label: Scenarios beyond }
+      - { name: EXPECTED_BEYOND, type: number, nullable: false, label: Expected beyond }
+  node-pvar-components:
+    title: Parametric component VaR of a node's children
+    about: For every node with children (the figures within relative 1e-12, as node-pvar), each child's parametric component VaR z cov/sigma - mu_i (the parts add up to the node's PVAR exactly), component ES, standalone and incremental parametric VaR and its correlation with the node.
+    params: [ scenario-set, window, currency ]
+    needs: [ scenario-set, fx-scenario ]
+    key: [ NODE_ID, CHILD ]
+    columns:
+      - { name: NODE_ID, type: string, nullable: false, label: Node }
+      - { name: CHILD, type: string, nullable: false, label: Child }
+      - { name: RHO, type: number, nullable: false, label: Correlation, exact: "relative:1e-12" }
+      - { name: COMPONENT_PVAR, type: number, nullable: false, label: Component PVaR, measure: true, exact: "relative:1e-12" }
+      - { name: COMPONENT_PES, type: number, nullable: false, label: Component PES, measure: true, exact: "relative:1e-12" }
+      - { name: STANDALONE_PVAR, type: number, nullable: false, label: Standalone PVaR, measure: true, exact: "relative:1e-12" }
+      - { name: INCREMENTAL_PVAR, type: number, nullable: false, label: Incremental PVaR, measure: true, exact: "relative:1e-12" }
+  node-var-horizon:
+    title: VaR and ES by node at a horizon, normal or stressed
+    about: Every node's VaR and ES on the normal or the stress scenario set, 1-day or 10-day (the 1-day figures times the square root of 10, or overlapping sums of 10 scenario days).
+    params: [ scenario-set, window, currency, stressed, horizon, ten-day-method ]
+    needs: [ scenario-set, fx-scenario ]
+    key: [ NODE_ID ]
+    columns:
+      - { name: NODE_ID, type: string, nullable: false, label: Node }
+      - { name: HIERARCHY, type: string, nullable: false, label: Hierarchy }
+      - { name: SET, type: string, nullable: false, label: Scenario set }
+      - { name: HORIZON, type: string, nullable: false, label: Horizon }
+      - { name: METHOD, type: string, nullable: true, label: 10-day method }
+      - { name: SCENARIOS, type: integer, nullable: false, label: Scenarios or windows }
+      - { name: VAR, type: number, nullable: false, label: VaR, measure: true }
+      - { name: ES, type: number, nullable: false, label: Expected shortfall, measure: true }
+  stress-window:
+    title: The stress window selection
+    about: For a node (or every node of pnl-history), the windows of consecutive days of its long P&L history with the largest VaR that do not overlap, the largest first, against the newest window; EXCESS is how much worse each is.
+    params: [ node ]
+    needs: [ pnl-history ]
+    key: [ NODE_ID, RANK ]
+    columns:
+      - { name: NODE_ID, type: string, nullable: false, label: Node }
+      - { name: RANK, type: integer, nullable: false, label: Rank }
+      - { name: FIRST_DAY, type: date, nullable: false, label: First day }
+      - { name: LAST_DAY, type: date, nullable: false, label: Last day }
+      - { name: WORST_DAY, type: date, nullable: false, label: Worst day }
+      - { name: SVAR, type: number, nullable: false, label: Stressed VaR of the window, measure: true }
+      - { name: CURRENT_SVAR, type: number, nullable: true, label: VaR of the newest window, measure: true }
+      - { name: EXCESS, type: number, nullable: true, label: Excess over the newest window }
+      - { name: SYNTHETIC, type: boolean, nullable: false, label: Synthetic history }
+  backtest:
+    title: Backtesting by node
+    about: For each node of the official records and each confidence they carry (the likelihood ratios and p-values within relative 1e-12: they use the platform's log and exp), the business day's actual, hypothetical and risk-theoretical P&L against the official VaR of the day before, over the window to the date; the exceptions, the zone, the capital multiplier and Kupiec's and Christoffersen's tests.
+    params: [ node ]
+    needs: [ var-history, desk-pnl ]
+    key: [ NODE_ID, CONFIDENCE ]
+    columns:
+      - { name: NODE_ID, type: string, nullable: false, label: Node }
+      - { name: HIERARCHY, type: string, nullable: true, label: Hierarchy }
+      - { name: CONFIDENCE, type: number, nullable: false, label: Confidence }
+      - { name: DAYS, type: integer, nullable: false, label: Days tested }
+      - { name: EXCEPTIONS_ACTUAL, type: integer, nullable: false, label: Exceptions (actual) }
+      - { name: EXCEPTIONS_HYPOTHETICAL, type: integer, nullable: false, label: Exceptions (hypothetical) }
+      - { name: EXCEPTIONS_RTPL, type: integer, nullable: false, label: Exceptions (risk-theoretical) }
+      - { name: COUNTED, type: integer, nullable: false, label: Exceptions counted }
+      - { name: ZONE, type: string, nullable: false, label: Zone }
+      - { name: MULTIPLIER, type: number, nullable: false, label: Capital multiplier, measure: true }
+      - { name: KUPIEC_LR, type: number, nullable: false, label: Kupiec LR, exact: "relative:1e-12" }
+      - { name: KUPIEC_P, type: number, nullable: false, label: Kupiec p-value, exact: "relative:1e-12" }
+      - { name: CHRISTOFFERSEN_LR, type: number, nullable: false, label: Christoffersen LR, exact: "relative:1e-12" }
+      - { name: CHRISTOFFERSEN_P, type: number, nullable: false, label: Christoffersen p-value, exact: "relative:1e-12" }
+  backtest-days:
+    title: The tested days of a backtest
+    about: One row per node, confidence and tested day; the official VaR of the day before and the day's three P&Ls; EXCEPTION when the actual P&L is below minus the VaR.
+    shape: series
+    axis: DATE
+    params: [ node ]
+    needs: [ var-history, desk-pnl ]
+    key: [ NODE_ID, CONFIDENCE, DATE ]
+    columns:
+      - { name: NODE_ID, type: string, nullable: false, label: Node }
+      - { name: CONFIDENCE, type: number, nullable: false, label: Confidence }
+      - { name: DATE, type: date, nullable: false, label: Date }
+      - { name: PRIOR, type: date, nullable: false, label: VaR of }
+      - { name: VAR, type: number, nullable: false, label: Official VaR of the day before }
+      - { name: ACTUAL, type: number, nullable: false, label: Actual P&L }
+      - { name: HYPOTHETICAL, type: number, nullable: false, label: Hypothetical P&L }
+      - { name: RTPL, type: number, nullable: true, label: Risk-theoretical P&L }
+      - { name: EXCEPTION, type: boolean, nullable: false, label: Exception }
+  period-stats:
+    title: Period statistics of an official measure
+    about: For each node of the official records, the measure's value at the period end, its average, high and low over the official dates of the period, the average of the last N business days' VaR and of the last weeks' stressed VaR the capital formula takes, and the weekdays without a record.
+    params: [ node, period, measure ]
+    needs: [ var-history ]
+    key: [ NODE_ID ]
+    columns:
+      - { name: NODE_ID, type: string, nullable: false, label: Node }
+      - { name: HIERARCHY, type: string, nullable: true, label: Hierarchy }
+      - { name: PERIOD, type: string, nullable: false, label: Period }
+      - { name: FIRST_DAY, type: date, nullable: false, label: From }
+      - { name: LAST_DAY, type: date, nullable: false, label: To }
+      - { name: RECORDS, type: integer, nullable: false, label: Records }
+      - { name: PERIOD_END, type: number, nullable: true, label: Period end, measure: true }
+      - { name: AVERAGE, type: number, nullable: true, label: Average, measure: true }
+      - { name: HIGH, type: number, nullable: true, label: High, measure: true }
+      - { name: HIGH_DATE, type: date, nullable: true, label: High on }
+      - { name: LOW, type: number, nullable: true, label: Low, measure: true }
+      - { name: LOW_DATE, type: date, nullable: true, label: Low on }
+      - { name: AVERAGE_N, type: number, nullable: true, label: VaR average (capital), measure: true }
+      - { name: STRESSED_AVERAGE, type: number, nullable: true, label: Stressed VaR average (capital), measure: true }
+      - { name: MISSING_DAYS, type: integer, nullable: false, label: Weekdays without a record }
+  regulatory-report:
+    title: Regulatory and management VaR tables
+    about: Each report's rows (official nodes, the computed diversification and the total) with the period's end, average, high and low of the measure, the prior year's period end and the movement.
+    params: [ report, period, measure ]
+    needs: [ var-history, report-row ]
+    key: [ REPORT_ID, ROW_ORDER ]
+    columns:
+      - { name: REPORT_ID, type: string, nullable: false, label: Report }
+      - { name: ROW_ORDER, type: integer, nullable: false, label: Row }
+      - { name: LABEL, type: string, nullable: true, label: Label }
+      - { name: CODE, type: string, nullable: true, label: Code }
+      - { name: NODE_ID, type: string, nullable: true, label: Node }
+      - { name: PERIOD_END, type: number, nullable: true, label: Period end, measure: true }
+      - { name: AVERAGE, type: number, nullable: true, label: Average, measure: true }
+      - { name: HIGH, type: number, nullable: true, label: High, measure: true }
+      - { name: LOW, type: number, nullable: true, label: Low, measure: true }
+      - { name: PRIOR_PERIOD_END, type: number, nullable: true, label: Prior year period end, measure: true }
+      - { name: MOVEMENT, type: number, nullable: true, label: Movement, measure: true }
+  sensitivity-sum:
+    title: Sensitivities summed by factor parts
+    about: The sensitivity elements of a scope in the reporting currency, summed net and gross by one or two factor parts (the MR cube's sums and heat map).
+    params: [ scope, by, currency ]
+    needs: [ sensitivity-element, risk-factor ]
+    key: [ ROW_KEY, COLUMN_KEY ]
+    columns:
+      - { name: ROW_KEY, type: string, nullable: false, label: Row }
+      - { name: COLUMN_KEY, type: string, nullable: false, label: Column }
+      - { name: NET, type: number, nullable: false, label: Net, measure: true }
+      - { name: GROSS, type: number, nullable: false, label: Gross, measure: true }
+      - { name: POSITIONS, type: integer, nullable: false, label: Positions }
+  sensitivity-ladder:
+    title: The sensitivity ladder
+    about: One risk class's delta by qualifier (the curve currency for rates) and the ladder's tenor buckets, net and gross, each against its two-sided limit (within, near or breach).
+    params: [ scope, risk-class, sensitivity-measure, currency ]
+    needs: [ sensitivity-element, risk-factor ]
+    key: [ QUALIFIER, BUCKET ]
+    columns:
+      - { name: QUALIFIER, type: string, nullable: false, label: Qualifier }
+      - { name: BUCKET, type: string, nullable: false, label: Bucket }
+      - { name: NET, type: number, nullable: false, label: Net, measure: true }
+      - { name: GROSS, type: number, nullable: false, label: Gross, measure: true }
+      - { name: POSITIONS, type: integer, nullable: false, label: Positions }
+      - { name: LIMIT, type: number, nullable: true, label: Limit }
+      - { name: LIMIT_USE, type: number, nullable: true, label: Limit use }
+      - { name: STATUS, type: string, nullable: true, label: Status }
+  frtb-sa:
+    title: FRTB standardised approach
+    about: The sensitivities-based method by risk class, measure and bucket in the three correlation scenarios, the default risk charge by bucket and the residual risk add-on; TOTAL = SBM + DRC + RRAO, a DRC or RRAO whose input is absent named missing, never 0.
+    params: [ scope, currency, scenario, girr-correlation, curvature-source ]
+    needs: [ sensitivity-element, risk-factor ]
+    key: [ COMPONENT, RISK_CLASS, MEASURE, BUCKET ]
+    columns:
+      - { name: COMPONENT, type: string, nullable: false, label: Component }
+      - { name: RISK_CLASS, type: string, nullable: false, label: Risk class }
+      - { name: MEASURE, type: string, nullable: false, label: Measure }
+      - { name: BUCKET, type: string, nullable: false, label: Bucket }
+      - { name: CHARGE, type: number, nullable: true, label: Charge, measure: true }
+      - { name: CHARGE_LOW, type: number, nullable: true, label: Low correlation }
+      - { name: CHARGE_MEDIUM, type: number, nullable: true, label: Medium correlation }
+      - { name: CHARGE_HIGH, type: number, nullable: true, label: High correlation }
+      - { name: NOTE, type: string, nullable: true, label: Note }
+  frtb-contributions:
+    title: FRTB-SA contributions by attribute
+    about: Each value of a record attribute's contribution to the FRTB-SA total (the SBM by Euler in the reported scenario, the DRC by obligor share, the RRAO as is); the parts add up to the total.
+    params: [ scope, currency, scenario, girr-correlation, curvature-source, attribute ]
+    needs: [ sensitivity-element, risk-factor ]
+    key: [ VALUE ]
+    columns:
+      - { name: VALUE, type: string, nullable: false, label: Value }
+      - { name: CONTRIBUTION, type: number, nullable: false, label: Contribution, measure: true }
+  what-if:
+    title: What-if on supplied vectors
+    about: A node's VaR and ES before and after hypothetical trades whose scenario P&L the caller supplies (the engine prices nothing), each trade's standalone, incremental and component VaR, and the stressed VaR of the worst window before and after.
+    params: [ scenario-set, window, currency, node, trades ]
+    needs: [ scenario-set, fx-scenario ]
+    key: [ ROW ]
+    columns:
+      - { name: ROW, type: string, nullable: false, label: Row }
+      - { name: FACTOR, type: number, nullable: true, label: Factor }
+      - { name: VAR, type: number, nullable: true, label: VaR, measure: true }
+      - { name: ES, type: number, nullable: true, label: ES, measure: true }
+      - { name: INCREMENTAL_VAR, type: number, nullable: true, label: Incremental VaR, measure: true }
+      - { name: INCREMENTAL_ALONE, type: number, nullable: true, label: Incremental VaR alone }
+      - { name: COMPONENT_VAR, type: number, nullable: true, label: Component VaR }
+      - { name: COMPONENT_ES, type: number, nullable: true, label: Component ES }
+      - { name: STRESSED_VAR, type: number, nullable: true, label: Stressed VaR (worst window) }
 capabilities: [ explain, workbook ]
 limits:
   memory: { fixed-bytes: 16777216, per-row-bytes: { scenario-pv: 4400, pnl-vector: 4400, fx-scenario: 4200 } }

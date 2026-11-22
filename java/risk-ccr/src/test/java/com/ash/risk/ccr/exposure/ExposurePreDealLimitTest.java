@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test;
  */
 class ExposurePreDealLimitTest {
 
-    private static final ExposurePreDeal.Measure PFE = ExposurePreDeal.Measure.of("PFE 95 peak", 0.95);
+    private static final com.ash.risk.ccr.calc.LimitMeasure PFE = com.ash.risk.ccr.calc.LimitMeasure.of("PFE 95 peak", 0.95);
 
     /** A what-if answer: the peak PFE before and after, and a profile of three dates (0.25, 0.5 and 2 years). */
     private static Map<String, Object> whatIf(double before, double after, double[] pfeBase, double[] pfe) {
@@ -72,7 +72,7 @@ class ExposurePreDealLimitTest {
     @Test
     void aBucketNearItsLimitMakesTheCheckNear() {
         ExposureDate.Limit lim = new ExposureDate.Limit("LIM-1", 1000.0, "PFE 95 peak",
-                List.of(ExposureDate.Bucket.of("0-1Y", 100), ExposureDate.Bucket.of("1Y+", 1000)));
+                List.of(com.ash.risk.ccr.calc.TenorBucket.of("0-1Y", 100), com.ash.risk.ccr.calc.TenorBucket.of("1Y+", 1000)));
         Map<String, Object> l = ExposurePreDeal.limitUse(lim, PFE, whatIf(60, 90, new double[] {40, 60, 30}, new double[] {70, 90, 35}), 0.8);
         assertThat(l.get("status")).isEqualTo("near");                           // 9% of the limit, but the 0-1Y bucket at 90%
         assertThat((String) l.get("nearText")).contains("0-1Y").contains("90.0%");

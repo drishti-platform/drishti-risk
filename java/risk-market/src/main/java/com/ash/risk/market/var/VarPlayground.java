@@ -15,8 +15,8 @@
  */
 package com.ash.risk.market.var;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.market.calc.Columns;
 import com.ash.risk.market.calc.ScenarioFx;
 import com.ash.risk.market.calc.VarBook;
@@ -26,7 +26,7 @@ import com.ash.risk.market.calc.VarMath;
 import com.ash.risk.kernel.vector.OrdinalSet;
 import com.ash.risk.kernel.workbook.ExportSizing;
 import com.ash.risk.kernel.workbook.PlaygroundTemplate;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import java.io.OutputStream;
 import java.nio.file.Path;
 import java.time.LocalDate;
@@ -110,7 +110,7 @@ final class VarPlayground {
 
     private void enabled() {
         if (!settings.enabled()) {
-            throw new DrishtiException(ErrorCode.FORBIDDEN, "the VaR Playground is switched off on this server (drishti.var.playground.enabled)");
+            throw new RiskFailure(RiskCode.FORBIDDEN, "the VaR Playground is switched off on this server (drishti.var.playground.enabled)");
         }
     }
 
@@ -119,7 +119,7 @@ final class VarPlayground {
         if (a.ids() != null && !a.ids().isBlank()) {
             List<String> ids = java.util.Arrays.stream(a.ids().split("[,\\s]+")).map(String::trim).filter(s -> !s.isEmpty()).distinct().toList();
             if (ids.size() > settings.maxIds()) {
-                throw new DrishtiException(ErrorCode.BAD_REQUEST, ids.size() + " ids: PLAY VAR takes at most " + settings.maxIds()
+                throw new RiskFailure(RiskCode.BAD_REQUEST, ids.size() + " ids: PLAY VAR takes at most " + settings.maxIds()
                         + " (drishti.var.playground.max-ids); give a scope for more");
             }
             List<String> pos = new ArrayList<>();
@@ -137,7 +137,7 @@ final class VarPlayground {
             return String.join(" + ", terms);
         }
         if (a.scope() == null || a.scope().isBlank()) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "give a scope (scope=DESK:RATES, BANK, POS:<id>) or ids (ids=POS-1,T-1001)");
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "give a scope (scope=DESK:RATES, BANK, POS:<id>) or ids (ids=POS-1,T-1001)");
         }
         return a.scope().trim();
     }
@@ -154,7 +154,7 @@ final class VarPlayground {
             VarLens l = svc.props().lens(a.horizon(), a.method(), a.confidence(), a.esConfidence(), a.set());
             return l.tenDay() ? l : new VarLens(1, VarLens.Method.NONE, l.confidence(), l.esConfidence(), l.stressed());
         } catch (IllegalArgumentException e) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, e.getMessage());
+            throw new RiskFailure(RiskCode.BAD_REQUEST, e.getMessage());
         }
     }
 
@@ -162,7 +162,7 @@ final class VarPlayground {
      * Builds the playground of {@code a} with at most {@code count} positions as their own columns ({@code 0}: every position); the rest in
      * Rest of scope.
      */
-    Built build(Principal p, Ask a, int count) {
+    Built build(Caller p, Ask a, int count) {
         enabled();
         VarLens lens = lens(a);
         boolean stressed = lens.stressed();
@@ -177,7 +177,7 @@ final class VarPlayground {
         VarBook bu = su.date().book();
         boolean byTrade = scope.toUpperCase(Locale.ROOT).startsWith("TRD:") && !scope.trim().contains(" ");
         if (!byTrade && !s.view().seesPositions(s.set())) {
-            throw new DrishtiException(ErrorCode.FORBIDDEN, "your role sees this scope in aggregate only: the playground works position by position");
+            throw new RiskFailure(RiskCode.FORBIDDEN, "your role sees this scope in aggregate only: the playground works position by position");
         }
         VarCalc calc = new VarCalc(lens.confidence(), lens.esConfidence(), svc.props().rule(), svc.props().componentWindow(),
                 svc.props().componentScaleToVar());
@@ -196,12 +196,12 @@ final class VarPlayground {
         if (shown > settings.maxPositions()) {                       // an export: refused before its positions are read when no application opens it
             ExportSizing.Estimate est = estimate(count, all.size(), ev.length, 2);
             if (est.refused() != null) {
-                throw new DrishtiException(ErrorCode.BAD_REQUEST, "the workbook of " + (count <= 0 ? "all " + all.size() : count) + " positions cannot be made: "
+                throw new RiskFailure(RiskCode.BAD_REQUEST, "the workbook of " + (count <= 0 ? "all " + all.size() : count) + " positions cannot be made: "
                         + est.refused());
             }
         }
         ScenarioFx fx = stressed ? new ScenarioFx(ev.length, List.of()) : svc.fx(su.date());
-        ScenarioFx.Rates rep = fx.rates(ccy).orElseThrow(() -> new DrishtiException(ErrorCode.VAR_NO_FX, "no " + ccy + " scenario FX on " + s.date().date()));
+        ScenarioFx.Rates rep = fx.rates(ccy).orElseThrow(() -> new RiskFailure(RiskCode.VAR_NO_FX, "no " + ccy + " scenario FX on " + s.date().date()));
         List<VarPlaygroundModel.Pos> positions = new ArrayList<>();
         List<double[]> engineParts = new ArrayList<>();
         TreeSet<String> ccys = new TreeSet<>();
@@ -378,7 +378,7 @@ final class VarPlayground {
                 standalone - m.var());
     }
 
-    private Map<String, Object> provenance(Principal p, VarService.Scoped s, String scope, VarLens lens, int total, int shown, int[] forms, ScenarioFx fx) {
+    private Map<String, Object> provenance(Caller p, VarService.Scoped s, String scope, VarLens lens, int total, int shown, int[] forms, ScenarioFx fx) {
         VarDate d = s.date();
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("Business date", d.date().toString());
@@ -416,7 +416,7 @@ final class VarPlayground {
     VarPlaygroundParametric.Engine parametric(Built b) {
         VarParametric par = views.parametric();
         if (par == null || !par.enabled()) {
-            throw new com.ash.risk.hostcompat.api.error.DrishtiException(com.ash.risk.hostcompat.api.error.ErrorCode.FORBIDDEN,
+            throw new com.ash.risk.kernel.RiskFailure(com.ash.risk.kernel.RiskCode.FORBIDDEN,
                     "parametric VaR is switched off on this server (drishti.var.parametric.enabled): the playground's Parametric tab is not offered");
         }
         return VarPlaygroundParametric.engine(b.scope(), b.parts(), b.model().set.confidence(), b.model().set.esConfidence(), par.props().settings());
@@ -427,7 +427,7 @@ final class VarPlayground {
     }
 
     /** Writes the workbook of {@code a} with {@code count} positions ({@code 0}: all), refusing a size no application opens. */
-    void export(Principal p, Ask a, int count, OutputStream out) {
+    void export(Caller p, Ask a, int count, OutputStream out) {
         Built b = build(p, a, count);
         new VarPlaygroundBook(b.model(), b.engine(), b.about(), template, true).write(out);
     }

@@ -15,10 +15,10 @@
  */
 package com.ash.risk.market.var;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.market.calc.VarWhatIfMath;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -55,19 +55,19 @@ final class VarWhatIf {
     }
 
     @SuppressWarnings("unchecked")
-    Map<String, Object> whatIf(Principal p, Map<String, Object> body, LocalDate date) {
+    Map<String, Object> whatIf(Caller p, Map<String, Object> body, LocalDate date) {
         String scope = String.valueOf(body.getOrDefault("scope", "")).trim();
         if (scope.isEmpty()) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "a what-if names its scope: {\"scope\": \"DESK:RATES\", \"items\": [{\"copyOf\": \"MX-30000121\", \"factor\": -1}]}");
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "a what-if names its scope: {\"scope\": \"DESK:RATES\", \"items\": [{\"copyOf\": \"MX-30000121\", \"factor\": -1}]}");
         }
         List<Map<String, Object>> asked = body.get("items") instanceof List<?> l ? (List<Map<String, Object>>) l : List.of();
         if (asked.isEmpty() || asked.size() > MAX_ITEMS) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "a what-if has 1 to " + MAX_ITEMS + " items: [{\"copyOf\": <a booked trade>, \"factor\": 1}]");
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "a what-if has 1 to " + MAX_ITEMS + " items: [{\"copyOf\": <a booked trade>, \"factor\": 1}]");
         }
         String ccy = VarCurrencies.normalise(body.get("ccy") == null ? null : String.valueOf(body.get("ccy")));
         VarService.Scoped base = svc.scoped(p, scope, date, ccy);
         if (base.set().isEmpty()) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "the scope " + scope + " has no trades on " + base.date().date() + ": a what-if starts from a scope that has");
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "the scope " + scope + " has no trades on " + base.date().date() + ": a what-if starts from a scope that has");
         }
         List<VarWhatIfMath.Item> items = new ArrayList<>();
         for (Map<String, Object> it : asked) {
@@ -77,7 +77,7 @@ final class VarWhatIf {
         try {
             r = VarWhatIfMath.of(base.vector(), items, svc.calc(), VarWhatIfMath.STRESS_WINDOW);
         } catch (IllegalArgumentException e) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, e.getMessage());
+            throw new RiskFailure(RiskCode.BAD_REQUEST, e.getMessage());
         }
         Map<String, Object> out = answer(r, base, scope);
         svc.audit(p, "var-whatif", base, "items=" + items.size());
@@ -89,16 +89,16 @@ final class VarWhatIf {
      * scope such as {@code BOOK:BOOK-RATES-3} for a hedge shaped like a book; read as the person), or a vector priced elsewhere
      * ({@code pnl}: one P&amp;L per scenario day, in the answer's reporting currency).
      */
-    private VarWhatIfMath.Item item(Principal p, Map<String, Object> it, VarService.Scoped base) {
+    private VarWhatIfMath.Item item(Caller p, Map<String, Object> it, VarService.Scoped base) {
         String from = it.get("copyOf") == null ? "" : String.valueOf(it.get("copyOf")).trim();
         boolean priced = it.get("pnl") instanceof List<?>;
         if (from.isEmpty() && !priced) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "a what-if item is a copy of a booked trade, {\"copyOf\": \"MX-30000121\", \"factor\": 1}, "
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "a what-if item is a copy of a booked trade, {\"copyOf\": \"MX-30000121\", \"factor\": 1}, "
                     + "or a P&L priced elsewhere, {\"label\": \"new swap\", \"pnl\": [one per scenario day], \"factor\": 1}");
         }
         double f = it.get("factor") instanceof Number n ? n.doubleValue() : it.get("factor") == null ? 1.0 : parse(it.get("factor"));
         if (!Double.isFinite(f)) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "a what-if factor is a finite number (-1: the unwind), not " + it.get("factor"));
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "a what-if factor is a finite number (-1: the unwind), not " + it.get("factor"));
         }
         double[] v;
         if (priced) {
@@ -107,7 +107,7 @@ final class VarWhatIf {
             for (int i = 0; i < v.length; i++) {
                 v[i] = l.get(i) instanceof Number n ? n.doubleValue() : Double.NaN;
                 if (!Double.isFinite(v[i])) {
-                    throw new DrishtiException(ErrorCode.BAD_REQUEST, "what-if item " + (it.get("label") == null ? "" : it.get("label") + " ")
+                    throw new RiskFailure(RiskCode.BAD_REQUEST, "what-if item " + (it.get("label") == null ? "" : it.get("label") + " ")
                             + "has a P&L that is not a number on scenario day " + (i + 1));
                 }
             }
@@ -117,7 +117,7 @@ final class VarWhatIf {
             VarService.Scoped t = svc.scoped(p, text, base.date().date(), base.date().currency());
             if (t.set().isEmpty()) {
                 List<String> n = new VarSelection(svc).notices(t);
-                throw new DrishtiException(ErrorCode.BAD_REQUEST, n.isEmpty() ? text + " has no P&L vector on " + base.date().date() : n.get(0));
+                throw new RiskFailure(RiskCode.BAD_REQUEST, n.isEmpty() ? text + " has no P&L vector on " + base.date().date() : n.get(0));
             }
             v = t.vector().clone();
         }
@@ -132,7 +132,7 @@ final class VarWhatIf {
         try {
             return Double.parseDouble(String.valueOf(o));
         } catch (NumberFormatException e) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "a what-if factor is a number (-1: the unwind), not " + o);
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "a what-if factor is a number (-1: the unwind), not " + o);
         }
     }
 

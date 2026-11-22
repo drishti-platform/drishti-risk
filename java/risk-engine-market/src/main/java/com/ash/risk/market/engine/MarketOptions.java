@@ -16,10 +16,14 @@
 package com.ash.risk.market.engine;
 
 import com.ash.engine.Options;
+import com.ash.risk.kernel.limits.RiskLimits;
 import com.ash.risk.kernel.scope.HierarchySpec;
 import com.ash.risk.kernel.scope.PositionRules;
 import com.ash.risk.market.calc.VarCalc;
+import com.ash.risk.market.calc.ParametricVar;
 import com.ash.risk.market.calc.VarMath;
+import com.ash.risk.market.frtb.calc.FrtbParams;
+import java.time.MonthDay;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -31,7 +35,32 @@ import java.util.Map;
  * Drishti's properties classes held become these options; the old keys are the host's aliases.
  */
 record MarketOptions(List<HierarchySpec> hierarchies, PositionRules positions, VarCalc calc, int threads, String linearAlgebra,
-        Map<String, String> words) {
+        Map<String, String> words, ParametricVar.Settings parametric, String stressedPrefix, Regulatory regulatory, Sensitivities sensitivities,
+        RiskLimits limits, FrtbParams frtb, boolean rraoFromPositions) {
+
+    /** The backtest, the stress window selection and the period statistics: Drishti's regulatory settings as options. */
+    record Regulatory(int backtestWindow, String count, List<Double> multipliers, int stressLength, int stressTop, MonthDay yearEnd,
+            int averageDays, int stressWeeks) {
+
+        /** The capital multiplier of a count (the table's last value for that many or more). */
+        double multiplier(int exceptions) {
+            return multipliers.get(Math.max(0, Math.min(exceptions, multipliers.size() - 1)));
+        }
+
+        /** The count the zone and the multiplier read: actual (the US rule), hypothetical, or the higher of the two. */
+        int counted(int actual, int hypothetical) {
+            return switch (count) {
+                case "hypothetical" -> hypothetical;
+                case "higher" -> Math.max(actual, hypothetical);
+                default -> actual;
+            };
+        }
+    }
+
+    /** The sensitivity ladder: its buckets ([from, to) in years, in order) and its two-sided limits by "QUALIFIER BUCKET". */
+    record Sensitivities(Map<String, double[]> grid, Map<String, Double> limits) {}
+
+
 
     /** The summation chunk Drishti's book and goldens use; part of "the same bits". */
     static final int PARALLEL_ROWS = 4096;
@@ -70,6 +99,41 @@ record MarketOptions(List<HierarchySpec> hierarchies, PositionRules positions, V
         VarMath.RankRule rule = "interpolated".equals(o.text("rank-rule")) ? VarMath.RankRule.INTERPOLATED : VarMath.RankRule.KTH_WORST;
         VarCalc calc = new VarCalc(o.number("confidence"), o.number("es-confidence"), rule, (int) o.integer("component-window"),
                 o.flag("scale-to-var"));
-        return new MarketOptions(List.copyOf(specs), rules, calc, (int) o.integer("threads"), o.text("linear-algebra"), Map.copyOf(words));
+        ParametricVar.Settings pv = new ParametricVar.Settings(ParametricVar.Weighting.of(o.text("pvar-weighting")), o.number("pvar-lambda"));
+        List<Double> mult = new ArrayList<>();
+        for (Object x : (List<Object>) o.value("backtest-multipliers")) {
+            mult.add(((Number) x).doubleValue());
+        }
+        if (mult.isEmpty()) {
+            throw new IllegalArgumentException("backtest-multipliers needs at least one value");
+        }
+        Regulatory reg = new Regulatory((int) o.integer("backtest-window"), o.text("backtest-count"), List.copyOf(mult),
+                (int) o.integer("stress-window-length"), (int) o.integer("stress-window-top"), MonthDay.parse("--" + o.text("fiscal-year-end").strip()),
+                (int) o.integer("average-days"), (int) o.integer("stress-weeks"));
+        Map<String, double[]> grid = new LinkedHashMap<>();
+        double at = 0;
+        for (Object r : (List<Object>) o.value("ladder-grid")) {
+            Map<String, Object> m = (Map<String, Object>) r;
+            double from = ((Number) m.get("from")).doubleValue();
+            double to = m.get("to") == null ? Double.POSITIVE_INFINITY : ((Number) m.get("to")).doubleValue();
+            if (Math.abs(from - at) > 1e-9 || to <= from) {
+                throw new IllegalArgumentException("ladder-grid has a gap or an overlap at " + m.get("bucket") + ": each bucket starts where the last ended");
+            }
+            grid.put(String.valueOf(m.get("bucket")), new double[] {from, to});
+            at = to;
+        }
+        Map<String, Double> ladderLimits = new LinkedHashMap<>();
+        for (Object r : (List<Object>) o.value("ladder-limits")) {
+            Map<String, Object> m = (Map<String, Object>) r;
+            ladderLimits.put(String.valueOf(m.get("cell")).strip().toUpperCase(java.util.Locale.ROOT), ((Number) m.get("limit")).doubleValue());
+        }
+        return new MarketOptions(List.copyOf(specs), rules, calc, (int) o.integer("threads"), o.text("linear-algebra"), Map.copyOf(words), pv,
+                o.text("stressed-prefix"), reg, new Sensitivities(java.util.Collections.unmodifiableMap(grid), Map.copyOf(ladderLimits)),
+                new RiskLimits(o.number("limit-near")), frtb(), o.flag("rrao-from-positions"));
+    }
+
+    /** The JAR's FRTB-SA parameters, checked at init (a missing or broken file refuses the engine's start in words). */
+    private static FrtbParams frtb() {
+        return FrtbParams.builtIn();
     }
 }

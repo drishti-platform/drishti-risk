@@ -15,8 +15,8 @@
  */
 package com.ash.risk.ccr.exposure;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -276,7 +276,7 @@ record ExposurePreDealCommand(String counterparty, String like, Double notional,
         return v == Math.rint(v) ? String.valueOf((long) v) : java.math.BigDecimal.valueOf(v).stripTrailingZeros().toPlainString();
     }
 
-    private static DrishtiException bad(String why) {
-        return new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, why);
+    private static RiskFailure bad(String why) {
+        return new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, why);
     }
 }

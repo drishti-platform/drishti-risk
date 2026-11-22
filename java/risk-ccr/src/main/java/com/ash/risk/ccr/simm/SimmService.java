@@ -18,8 +18,8 @@ package com.ash.risk.ccr.simm;
 import com.ash.tools.codec.Hashes;
 import com.ash.risk.hostcompat.api.AsOf;
 import com.ash.risk.hostcompat.api.DataNode;
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.ccr.simm.calc.Simm;
 import com.ash.risk.ccr.simm.calc.SimmChoices;
 import com.ash.risk.ccr.simm.calc.SimmExamples;
@@ -27,7 +27,7 @@ import com.ash.risk.ccr.simm.calc.SimmInput;
 import com.ash.risk.ccr.simm.calc.SimmParams;
 import com.ash.risk.market.frtb.FrtbData;
 import com.ash.risk.market.frtb.FrtbService;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import com.ash.risk.market.var.VarService;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -203,7 +203,7 @@ public final class SimmService {
     void enabled() {
         java.util.function.BooleanSupplier r = running;
         if (!(r == null ? props.enabled() : r.getAsBoolean())) {
-            throw new com.ash.risk.hostcompat.server.engines.EngineOffException("simm", "SIMM");
+            throw new com.ash.risk.kernel.RiskFailure(com.ash.risk.kernel.RiskCode.ENGINE_OFF, "SIMM is off (the host's engine switch for simm)");
         }
     }
 
@@ -212,16 +212,16 @@ public final class SimmService {
         String v = asked == null || asked.isBlank() ? defaultVersion : asked.strip();
         String who = nettingSet == null ? "" : "; " + nettingSet + " is not computed";
         if (v.isBlank()) {
-            throw new DrishtiException(ErrorCode.SIMM_NOT_INSTALLED, "DRS-5333 no SIMM version is installed: SIMM needs the ISDA parameter files "
+            throw new RiskFailure(RiskCode.SIMM_NOT_INSTALLED, "DRS-5333 no SIMM version is installed: SIMM needs the ISDA parameter files "
                     + "(licensed; see Help, SIMM guide, \"The licensed parameter file\"). They go in " + Path.of(props.parametersDir()).toAbsolutePath()
                     + ", one a version" + who);
         }
         Version x = versions.get(v);
         if (x == null) {
-            throw new DrishtiException(ErrorCode.SIMM_NOT_INSTALLED, "DRS-5333 SIMM " + v + " is not installed" + who);
+            throw new RiskFailure(RiskCode.SIMM_NOT_INSTALLED, "DRS-5333 SIMM " + v + " is not installed" + who);
         }
         if (!x.ok()) {
-            throw new DrishtiException(ErrorCode.SIMM_NOT_INSTALLED, x.problem() + who);
+            throw new RiskFailure(RiskCode.SIMM_NOT_INSTALLED, x.problem() + who);
         }
         return x;
     }
@@ -235,7 +235,7 @@ public final class SimmService {
             SimmParams p = SimmParams.parse(bytes, Map.of());
             return new Version(p.version, "the recipe's parameter file", bytes, p, null);
         } catch (IllegalArgumentException e) {
-            throw new DrishtiException(ErrorCode.SOURCE_FAILED, e.getMessage());
+            throw new RiskFailure(RiskCode.SOURCE_FAILED, e.getMessage());
         }
     }
 
@@ -249,12 +249,12 @@ public final class SimmService {
         try {
             return overridden.computeIfAbsent(key, k -> SimmParams.parse(b, c.overrides()));
         } catch (IllegalArgumentException e) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, e.getMessage());
+            throw new RiskFailure(RiskCode.BAD_REQUEST, e.getMessage());
         }
     }
 
     /** The trades and positions the person may see on the date, or null when no VaR engine resolves scopes here. */
-    private Set<String> visible(Principal p, LocalDate date) {
+    private Set<String> visible(Caller p, LocalDate date) {
         if (scopes == null) {
             return null;
         }
@@ -272,16 +272,16 @@ public final class SimmService {
      * SIMM of a netting set, an analytic scope or {@code EXAMPLE}: both directions with the choices; {@code bytes} a recipe's parameter file
      * (null: the installed version's).
      */
-    public Run run(Principal p, String scope, LocalDate date, Instant knownAt, String asked, SimmChoices ch, byte[] bytes) {
+    public Run run(Caller p, String scope, LocalDate date, Instant knownAt, String asked, SimmChoices ch, byte[] bytes) {
         enabled();
         if (scope == null || scope.isBlank()) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "give a netting set (nettingSet=NS-...), a scope (scope=DESK:DESK-RATES, an analytic) or EXAMPLE");
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "give a netting set (nettingSet=NS-...), a scope (scope=DESK:DESK-RATES, an analytic) or EXAMPLE");
         }
         String s = scope.strip();
         if (s.toUpperCase(Locale.ROOT).startsWith("NS:")) {
             s = s.substring(3).strip();
         }
-        String key = date + "|" + knownAt + "|" + s + "|" + asked + "|" + ch.key() + "|" + (p == null ? "" : p.user() + p.roles()) + "|"
+        String key = date + "|" + knownAt + "|" + s + "|" + asked + "|" + ch.key() + "|" + (p == null ? "" : p.user() + "|" + p.visibility()) + "|"
                 + (bytes == null ? "" : java.util.Arrays.hashCode(bytes));
         Run hit = cache.get(key);
         if (hit != null) {
@@ -297,7 +297,7 @@ public final class SimmService {
         } else {
             SimmData.Day day = data.day(new AsOf(date, knownAt));
             if (!day.sens().sensitivitiesRead()) {
-                throw new DrishtiException(ErrorCode.NO_SOURCE_FOR_KIND, "no connector serves position-sensitivity: load the position sensitivities first");
+                throw new RiskFailure(RiskCode.NO_SOURCE_FOR_KIND, "no connector serves position-sensitivity: load the position sensitivities first");
             }
             Set<String> keep = visible(p, day.date());
             SimmData.NettingSet ns = day.nettingSets().get(s);
@@ -309,11 +309,11 @@ public final class SimmService {
 
     private Run nettingSet(SimmData.Day day, SimmData.NettingSet ns, Set<String> keep, String asked, SimmChoices ch, byte[] bytes, Instant knownAt) {
         if (keep != null && ns.trades().stream().noneMatch(keep::contains) && day.recordsBySet().getOrDefault(ns.id(), List.of()).stream().noneMatch(r -> seen(keep, r))) {
-            throw new DrishtiException(ErrorCode.FORBIDDEN, "your role does not see the trades of " + ns.id());
+            throw new RiskFailure(RiskCode.FORBIDDEN, "your role does not see the trades of " + ns.id());
         }
         SimmData.Csa csa = ns.csa() == null ? null : day.csas().get(ns.csa());
         if (csa != null && csa.model().equals("SCHEDULE")) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, ns.id() + " is margined by schedule IM under " + csa.id() + ": not a SIMM netting set");
+            throw new RiskFailure(RiskCode.BAD_REQUEST, ns.id() + " is margined by schedule IM under " + csa.id() + ": not a SIMM netting set");
         }
         String v = asked != null && !asked.isBlank() ? asked : csa == null ? null : csa.version();
         Version ver = resolve(v, ns.id(), bytes);
@@ -355,7 +355,7 @@ public final class SimmService {
         return run;
     }
 
-    private Run analytic(Principal p, SimmData.Day day, String scope, String asked, SimmChoices ch, byte[] bytes, Instant knownAt) {
+    private Run analytic(Caller p, SimmData.Day day, String scope, String asked, SimmChoices ch, byte[] bytes, Instant knownAt) {
         Version ver = resolve(asked, null, bytes);
         SimmParams prm = params(ver, ch, bytes);
         Set<String> keep;
@@ -376,7 +376,7 @@ public final class SimmService {
             }
         }
         if (recs.isEmpty() && !scope.contains(":") && !scope.equalsIgnoreCase("BANK")) {
-            throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no netting set " + scope + " on " + day.date() + " (and no record in it as a scope)");
+            throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no netting set " + scope + " on " + day.date() + " (and no record in it as a scope)");
         }
         Map<String, Integer> refused = new TreeMap<>();
         SimmInput in = input(day, recs, "USD", prm, SimmInput.AddOns.NONE, refused);
@@ -393,7 +393,7 @@ public final class SimmService {
         Map<String, Double> fx = day.sens().usdPer();
         Double rep = fx.get(calc);
         if (rep == null) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "no FX for the calculation currency " + calc + " on " + day.date());
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "no FX for the calculation currency " + calc + " on " + day.date());
         }
         Double file = fx.get(prm.calculationCurrency);
         List<SimmInput.Trade> trades = new ArrayList<>();
@@ -442,7 +442,7 @@ public final class SimmService {
             c = Simm.run(in, prm, ch, false);
             po = Simm.run(in, prm, ch, true);
         } catch (IllegalArgumentException e) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, e.getMessage());
+            throw new RiskFailure(RiskCode.BAD_REQUEST, e.getMessage());
         }
         List<String> unknown = new ArrayList<>();
         for (String r : Stream.concat(collect.stream(), post.stream()).distinct().toList()) {
@@ -519,11 +519,11 @@ public final class SimmService {
      * Every netting set of the date the person may see (mock-up A): computed where it has sensitivities, the stored figure (labelled) where
      * it has none, the reason where it cannot be computed; {@code counterparty} narrows the list.
      */
-    public Map<String, Object> nettingSets(Principal p, LocalDate date, String counterparty, String asked, SimmChoices ch) {
+    public Map<String, Object> nettingSets(Caller p, LocalDate date, String counterparty, String asked, SimmChoices ch) {
         enabled();
         SimmData.Day day = data.day(new AsOf(date, null));
         if (!day.nettingSetsRead()) {
-            throw new DrishtiException(ErrorCode.NO_SOURCE_FOR_KIND, "no connector serves " + props.nettingSetKind() + ": load the netting sets first");
+            throw new RiskFailure(RiskCode.NO_SOURCE_FOR_KIND, "no connector serves " + props.nettingSetKind() + ": load the netting sets first");
         }
         Set<String> keep = visible(p, day.date());
         List<Map<String, Object>> rows = new ArrayList<>();
@@ -556,7 +556,7 @@ public final class SimmService {
                     sum[0] += r.imCollect();
                     sum[1] += r.imPost();
                     computed++;
-                } catch (DrishtiException e) {
+                } catch (RiskFailure e) {
                     row.put("status", "not computed: " + e.getMessage());
                 }
             } else {

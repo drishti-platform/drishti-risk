@@ -7,7 +7,9 @@ title: Counterparty credit exposure
 about: >-
   Exposure profiles and figures (current exposure, EE, ENE, effective EE, EPE, effective EPE, PFE at each confidence and its peak) for
   any scope of netting sets, counterparties, legal entities, desks, books or trades, from mark-to-market paths a simulator supplies,
-  netted by set and collateralised under each set's CSA terms. The engine never simulates nor prices: missing paths are an answer.
+  netted by set and collateralised under each set's CSA terms; each netting set's collateral view; the pre-deal check of a new trade
+  against the counterparty's credit limit and its tenor buckets; and ISDA SIMM initial margin from supplied sensitivities under the
+  bank's licensed parameter file. The engine never simulates nor prices: missing paths are an answer.
 publisher: { id: com.ash.risk, name: Drishti Risk }
 product: drishti-risk-ccr
 api: "0.1"
@@ -53,6 +55,45 @@ inputs:
     required: false
     key: [ TRADE_ID ]
     columns: [ TRADE_ID, MTM ]
+  credit-limit:
+    contract: risk/credit-limit@1
+    about: Each counterparty's credit limit (USD) and the measure it is set on (PFE 95 peak, EEPE, EPE, EE peak).
+    required: false
+    key: [ LIMIT_ID ]
+    columns: [ LIMIT_ID, COUNTERPARTY, MEASURE, LIMIT ]
+  credit-limit-bucket:
+    contract: risk/credit-limit-bucket@1
+    about: A credit limit's tenor buckets (0-1Y, 1-3Y, 10Y+), each with its own limit (the BUCKETS child rows of risk/credit-limit).
+    required: false
+    key: [ LIMIT_ID, BUCKET ]
+    columns: [ LIMIT_ID, BUCKET, LIMIT ]
+  sensitivity-element:
+    contract: risk/sensitivity-element@1
+    about: The position sensitivities one element a row, each with its trade's netting set and product group; SIMM reads the netting set's.
+    required: false
+    key: [ SENSITIVITY_ID, ELEMENT ]
+    columns: [ SENSITIVITY_ID, ELEMENT, TRADE_ID, POSITION_ID, NETTING_SET, COUNTERPARTY, LEGAL_ENTITY, DESK, TT_BOOK, PRODUCT_GROUP, RISK_FACTOR,
+               MEASURE, VALUE, CURRENCY, IMPLIED_VOL ]
+    scope-columns: [ COUNTERPARTY, LEGAL_ENTITY, DESK, TT_BOOK, NETTING_SET ]
+  risk-factor:
+    contract: risk/risk-factor@1
+    about: The factor dictionary's SIMM mapping (the CRIF terms) of every factor the elements name.
+    required: false
+    key: [ RISK_FACTOR ]
+    columns: [ RISK_FACTOR, SIMM_RISK_CLASS, FACTOR_TYPE, SIMM_BUCKET, QUALIFIER, SIMM_LABEL1, SIMM_LABEL2, SENIORITY ]
+  simm-parameters:
+    contract: risk/simm-parameters@1
+    about: The bank's licensed ISDA SIMM parameter files, one row per version (TEXT, the file as delivered); absent, SIMM is not found, never estimated.
+    required: false
+    per: []
+    key: [ VERSION ]
+    columns: [ VERSION, TEXT ]
+  fx-spot:
+    contract: market/fx-spot@1
+    about: The date's FX mids (PAIR as EURUSD) that take sensitivities into the calculation currency; without it only that currency's elements are used.
+    required: false
+    key: [ PAIR ]
+    columns: [ PAIR, MID ]
 options:
   model: { type: enum, options: [ lagged, current, none ], default: lagged, label: Collateral model }
   rule: { type: enum, options: [ kth, interpolated ], default: kth, label: Quantile rule }
@@ -60,9 +101,33 @@ options:
   pfe-confidence: { type: number, default: 0.95, min: 0.5, max: 0.9999, label: Headline PFE confidence }
   pfe-window: { type: int, default: 21, min: 1, label: Effective window (grid points) }
   im-model: { type: enum, options: [ held, none ], default: held, label: Initial margin }
+  alpha: { type: number, default: 1.4, min: 1, max: 10, label: IMM alpha, help: "EAD = alpha x EEPE in the pre-deal answer." }
+  limit-near: { type: number, default: 0.8, min: 0.01, max: 1, label: Near share of a limit }
+  simm-product-classes:
+    type: records
+    label: SIMM product classes
+    help: The product class of a record's PRODUCT_GROUP (SIMM paragraph 6); a group not listed takes the default.
+    fields:
+      group: { type: text, required: true }
+      class: { type: enum, options: [ RatesFX, Credit, Equity, Commodity ], required: true }
+    default: [ { group: Rates, class: RatesFX }, { group: Inflation, class: RatesFX }, { group: Money market, class: RatesFX }, { group: FX, class: RatesFX },
+               { group: Fixed income, class: RatesFX }, { group: Securities financing, class: RatesFX }, { group: Structured, class: RatesFX },
+               { group: Credit, class: Credit }, { group: Equity, class: Equity }, { group: Commodity, class: Commodity } ]
+  simm-default-product-class: { type: enum, options: [ RatesFX, Credit, Equity, Commodity ], default: RatesFX, label: SIMM default product class }
 params:
   scope: { type: text, default: BANK, label: Scope, help: "BANK, NSET:<id>, CPTY:<id>, LE:<id>, DESK:<id>, BOOK:<id>, TRD:<id>,..." }
   standalone: { type: bool, default: false, label: Standalone, help: "True: the scope's trades as if they were netted only among themselves." }
+  counterparty: { type: text, default: "", label: Counterparty, help: The counterparty the new trade is with. }
+  template: { type: text, default: "", label: Template trade, help: "A booked trade whose paths on the date's run are copied, scaled to the notional." }
+  notional: { type: number, default: 0, min: 0, label: Notional, help: "0: the template's own notional." }
+  reverse: { type: bool, default: false, label: Reverse, help: "True: the opposite side of the template." }
+  netting-set: { type: text, default: "", label: Netting set, help: "The netting set the trade goes into; empty: the template's, or the counterparty's only one." }
+  simm-scope: { type: text, default: "", label: SIMM netting set, help: "NSET:<id> or CPTY:<id>; empty: every netting set of the sensitivities." }
+  direction: { type: enum, options: [ collect, post ], default: collect, label: Direction }
+  calculation-currency: { type: text, default: USD, label: Calculation currency }
+  simm-version: { type: text, default: "", label: SIMM version, help: "A VERSION of simm-parameters; empty: the newest." }
+  concentration: { type: enum, options: [ "on", "off" ], default: "on", label: Concentration }
+  hvr: { type: enum, options: [ "on", "off" ], default: "on", label: Historical volatility ratios }
 outputs:
   exposure-summary:
     title: Exposure figures of a scope
@@ -107,6 +172,101 @@ outputs:
       - { name: EPE, type: number, nullable: false, label: EPE, measure: true }
       - { name: EEPE, type: number, nullable: false, label: Effective EPE, measure: true }
       - { name: PEAK_PFE, type: number, nullable: false, label: Peak PFE, measure: true }
+  netting-set-collateral:
+    title: Netting and collateral by netting set
+    about: Each netting set's CSA terms, collateral and initial margin held, its MtM today, current exposure uncollateralised and collateralised, and EPE and peak PFE without and with collateral (the collateral's benefit).
+    key: [ NETTING_SET ]
+    columns:
+      - { name: NETTING_SET, type: string, nullable: false, label: Netting set }
+      - { name: COUNTERPARTY, type: string, nullable: true, label: Counterparty }
+      - { name: CSA, type: string, nullable: true, label: CSA }
+      - { name: MARGINED, type: boolean, nullable: false, label: Variation margin }
+      - { name: THRESHOLD_THEM, type: number, nullable: false, label: Their threshold }
+      - { name: THRESHOLD_US, type: number, nullable: false, label: Our threshold }
+      - { name: MTA_THEM, type: number, nullable: false, label: Their MTA }
+      - { name: INDEPENDENT_AMOUNT, type: number, nullable: false, label: Independent amount }
+      - { name: MPOR_DAYS, type: integer, nullable: false, label: Margin period of risk }
+      - { name: COLLATERAL_HELD, type: number, nullable: false, label: Collateral held }
+      - { name: IM_HELD, type: number, nullable: false, label: Initial margin held }
+      - { name: TRADES, type: integer, nullable: false, label: Trades }
+      - { name: MTM, type: number, nullable: false, label: MtM today }
+      - { name: CE_UNCOLLATERALISED, type: number, nullable: false, label: Current exposure uncollateralised, measure: true }
+      - { name: CE, type: number, nullable: false, label: Current exposure, measure: true }
+      - { name: EPE_UNCOLLATERALISED, type: number, nullable: false, label: EPE uncollateralised, measure: true }
+      - { name: EPE, type: number, nullable: false, label: EPE, measure: true }
+      - { name: PEAK_PFE_UNCOLLATERALISED, type: number, nullable: false, label: Peak PFE uncollateralised, measure: true }
+      - { name: PEAK_PFE, type: number, nullable: false, label: Peak PFE, measure: true }
+      - { name: COLLATERAL_BENEFIT, type: number, nullable: false, label: Collateral benefit (EPE), measure: true }
+  pre-deal:
+    title: Pre-deal check
+    about: Does a new trade, a copy of a booked template scaled to the notional, fit the counterparty's credit limit? approve (the exact method, the limit and every bucket within it, the whole counterparty seen), decline (the limit or a bucket over), or refer (no limit on record for the counterparty, a measure the engine does not compute, the trade alone in a netting set of its own); each reason said. Without the limits' inputs the check is not found. The IMM EAD (alpha x EEPE) before and after.
+    shape: row
+    params: [ counterparty, template, notional, reverse, netting-set ]
+    needs: [ simulation-run, exposure-path, credit-limit, credit-limit-bucket ]
+    key: [ COUNTERPARTY ]
+    columns:
+      - { name: COUNTERPARTY, type: string, nullable: false, label: Counterparty }
+      - { name: DECISION, type: string, nullable: false, label: Decision }
+      - { name: REASONS, type: string, nullable: false, label: Reasons }
+      - { name: TEMPLATE, type: string, nullable: false, label: Template }
+      - { name: FACTOR, type: number, nullable: false, label: Scale factor }
+      - { name: NETTING_SET, type: string, nullable: true, label: Netting set }
+      - { name: LIMIT_ID, type: string, nullable: true, label: Limit }
+      - { name: MEASURE, type: string, nullable: true, label: Limit measure }
+      - { name: LIMIT, type: number, nullable: true, label: Limit amount }
+      - { name: BEFORE, type: number, nullable: false, label: Before, measure: true }
+      - { name: AFTER, type: number, nullable: false, label: After, measure: true }
+      - { name: INCREMENT, type: number, nullable: false, label: Increment, measure: true }
+      - { name: USE_BEFORE, type: number, nullable: true, label: Use before }
+      - { name: USE_AFTER, type: number, nullable: true, label: Use after, measure: true }
+      - { name: STATUS, type: string, nullable: true, label: Limit status }
+      - { name: EAD_BEFORE, type: number, nullable: false, label: EAD before, measure: true }
+      - { name: EAD_AFTER, type: number, nullable: false, label: EAD after, measure: true }
+  pre-deal-buckets:
+    title: Pre-deal check by tenor bucket
+    about: Each tenor bucket of the counterparty's limit, the profile's peak of the limit's measure within it before and after the trade, against the bucket's own limit.
+    params: [ counterparty, template, notional, reverse, netting-set ]
+    needs: [ simulation-run, exposure-path, credit-limit, credit-limit-bucket ]
+    key: [ BUCKET ]
+    columns:
+      - { name: BUCKET, type: string, nullable: false, label: Bucket }
+      - { name: LIMIT, type: number, nullable: false, label: Limit }
+      - { name: POINTS, type: integer, nullable: false, label: Grid points }
+      - { name: BEFORE, type: number, nullable: true, label: Before, measure: true }
+      - { name: AFTER, type: number, nullable: true, label: After, measure: true }
+      - { name: USE_AFTER, type: number, nullable: true, label: Use after, measure: true }
+      - { name: STATUS, type: string, nullable: false, label: Status }
+  simm:
+    title: ISDA SIMM by product and risk class
+    about: Initial margin of a netting set's (or every set's) sensitivities under the bank's SIMM version, by product class and risk class (delta, vega, curvature, base correlation), for the bank's side (collect) or the counterparty's (post).
+    params: [ simm-scope, direction, calculation-currency, simm-version, concentration, hvr ]
+    needs: [ sensitivity-element, risk-factor, simm-parameters ]
+    key: [ SCOPE, PRODUCT_CLASS, RISK_CLASS ]
+    columns:
+      - { name: SCOPE, type: string, nullable: false, label: Scope }
+      - { name: PRODUCT_CLASS, type: string, nullable: false, label: Product class }
+      - { name: RISK_CLASS, type: string, nullable: false, label: Risk class }
+      - { name: DELTA, type: number, nullable: false, label: Delta margin }
+      - { name: VEGA, type: number, nullable: false, label: Vega margin }
+      - { name: CURVATURE, type: number, nullable: false, label: Curvature margin }
+      - { name: BASE_CORR, type: number, nullable: false, label: Base correlation margin }
+      - { name: IM, type: number, nullable: false, label: Risk class margin, measure: true }
+  simm-total:
+    title: ISDA SIMM of a scope
+    about: The scope's SIMM (the product classes added), its add-on and the total initial margin, with the version used.
+    params: [ simm-scope, direction, calculation-currency, simm-version, concentration, hvr ]
+    needs: [ sensitivity-element, risk-factor, simm-parameters ]
+    key: [ SCOPE ]
+    columns:
+      - { name: SCOPE, type: string, nullable: false, label: Scope }
+      - { name: VERSION, type: string, nullable: false, label: SIMM version }
+      - { name: DIRECTION, type: string, nullable: false, label: Direction }
+      - { name: TRADES, type: integer, nullable: false, label: Trades }
+      - { name: SIMM, type: number, nullable: false, label: SIMM, measure: true }
+      - { name: ADD_ON, type: number, nullable: false, label: Add-on, measure: true }
+      - { name: TOTAL, type: number, nullable: false, label: Total initial margin, measure: true }
+      - { name: REGULATORY, type: boolean, nullable: false, label: Regulatory figures }
+      - { name: REFUSED, type: integer, nullable: false, label: Elements refused }
 capabilities: [ explain, workbook ]
 limits:
   memory: { fixed-bytes: 16777216, per-row-bytes: { exposure-path: 2048 } }

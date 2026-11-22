@@ -15,8 +15,8 @@
  */
 package com.ash.risk.ccr.exposure;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.hostcompat.compute.arrow.ArrowIpc;
 import com.ash.risk.hostcompat.compute.arrow.ArrowTable;
 import com.ash.risk.ccr.calc.ExposureBook;
@@ -24,7 +24,7 @@ import com.ash.risk.ccr.calc.ExposureCalc;
 import com.ash.risk.ccr.calc.ExposureGrid;
 import com.ash.risk.ccr.calc.ExposureMath;
 import com.ash.risk.ccr.calc.ExposureWhatIfMath;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -56,7 +56,7 @@ final class ExposureWhatIfPaths {
         this.svc = svc;
     }
 
-    Map<String, Object> whatIf(Principal p, String scope, ExposureService.Scoped base, ExposureService.Ask ask, List<Map<String, Object>> cands,
+    Map<String, Object> whatIf(Caller p, String scope, ExposureService.Scoped base, ExposureService.Ask ask, List<Map<String, Object>> cands,
             LocalDate date, boolean audited) {
         ExposureDate d = base.date();
         ExposureBook b = d.book();
@@ -68,7 +68,7 @@ final class ExposureWhatIfPaths {
             items.add(it);
             if (!it.set().isEmpty() && !sets.containsKey(it.set())) {
                 if (sets.size() >= MAX_SETS) {
-                    throw new DrishtiException(ErrorCode.EXPOSURE_BATCH_JOB, "a what-if's candidates join at most " + MAX_SETS + " netting sets");
+                    throw new RiskFailure(RiskCode.EXPOSURE_BATCH_JOB, "a what-if's candidates join at most " + MAX_SETS + " netting sets");
                 }
                 sets.put(it.set(), set(p, base, it.set(), date, ask));
             }
@@ -80,7 +80,7 @@ final class ExposureWhatIfPaths {
             w = ExposureWhatIfMath.of(new ExposureWhatIfMath.Scope(r.e, r.n, r.stats.ce, life(b, r)), sets, items, g, b.paths(), ExposureCalc.times(g),
                     ask.q(), model, svc.props().rule(), base.res().canonical());
         } catch (IllegalArgumentException e) {
-            throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, e.getMessage());
+            throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, e.getMessage());
         }
         Map<String, Object> out = answer(w, base, scope, b, model);
         if (audited) {
@@ -90,16 +90,16 @@ final class ExposureWhatIfPaths {
     }
 
     /** A netting set a candidate joins: one the scope covers whole, read as the asker sees it. */
-    private ExposureWhatIfMath.NettingSet set(Principal p, ExposureService.Scoped base, String id, LocalDate date, ExposureService.Ask ask) {
+    private ExposureWhatIfMath.NettingSet set(Caller p, ExposureService.Scoped base, String id, LocalDate date, ExposureService.Ask ask) {
         ExposureBook b = base.date().book();
         boolean whole = base.result().pieces.stream().anyMatch(pc -> pc.whole && b.set(pc.set).id().equals(id));
         if (!whole) {
-            throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, "the netting set " + id + " is not one the scope " + base.res().canonical()
+            throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, "the netting set " + id + " is not one the scope " + base.res().canonical()
                     + " covers whole: a candidate joins a netting set of the scope (or none: a netting set of its own)");
         }
         ExposureService.Scoped s = svc.scoped(p, "NSET:" + id, date, ask);
         if (s.result().pieces.size() != 1 || !s.result().pieces.get(0).whole) {
-            throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, "the netting set " + id + " is not seen whole: a candidate joins a netting "
+            throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, "the netting set " + id + " is not seen whole: a candidate joins a netting "
                     + "set you see whole (or none: a netting set of its own)");
         }
         ExposureCalc.Piece pc = s.result().pieces.get(0);
@@ -124,7 +124,7 @@ final class ExposureWhatIfPaths {
         int len = b.grid().size() * b.paths();
         String id = cand.get("tradeId") == null ? "CANDIDATE-" + n : String.valueOf(cand.get("tradeId"));
         if (!(cand.get("paths") instanceof Map<?, ?> pm)) {
-            throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, "method paths needs each candidate's paths on the run " + b.runId()
+            throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, "method paths needs each candidate's paths on the run " + b.runId()
                     + ": paths: {copyOf: <trade>, factor} or {runId, mtm: [" + b.grid().size() + " lists of " + b.paths() + "]}; " + id + " has none");
         }
         double[] m;
@@ -134,16 +134,16 @@ final class ExposureWhatIfPaths {
             String from = String.valueOf(pm.get("copyOf")).trim();
             int t = b.tradeOrdinal(from);
             if (t < 0) {
-                throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no exposure paths for the trade " + from + " on " + d.date() + " (run " + b.runId() + ")");
+                throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no exposure paths for the trade " + from + " on " + d.date() + " (run " + b.runId() + ")");
             }
             if (!view.seesTrades(com.ash.risk.kernel.vector.OrdinalSet.of(t))) {       // a copy shows the trade's paths: only for who sees it
-                throw new DrishtiException(ErrorCode.FORBIDDEN, "the trade " + from + " is not one you see trade by trade: a copy is made of a trade "
+                throw new RiskFailure(RiskCode.FORBIDDEN, "the trade " + from + " is not one you see trade by trade: a copy is made of a trade "
                         + "you see");
             }
             double f = pm.get("factor") instanceof Number x ? x.doubleValue() : 1.0;
             double[] src = svc.paths(d).read(List.of(b.trade(t).id())).get(b.trade(t).id());
             if (src == null) {
-                throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no exposure paths for the trade " + from + " on " + d.date());
+                throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no exposure paths for the trade " + from + " on " + d.date());
             }
             m = new double[src.length];
             for (int i = 0; i < m.length; i++) {
@@ -155,14 +155,14 @@ final class ExposureWhatIfPaths {
             }
         } else {
             if (pm.get("runId") != null && !b.runId().equals(String.valueOf(pm.get("runId")))) {
-                throw new DrishtiException(ErrorCode.EXPOSURE_WHATIF_RUN, "the candidate's paths are not of the run " + b.runId() + " of " + d.date()
+                throw new RiskFailure(RiskCode.EXPOSURE_WHATIF_RUN, "the candidate's paths are not of the run " + b.runId() + " of " + d.date()
                         + ": they are of " + pm.get("runId"));
             }
             m = pm.get("arrow") != null ? arrow(String.valueOf(pm.get("arrow")), b) : numbers(pm.get("mtm"));
             life = years(d.date(), cand.get("maturityDate"));
         }
         if (m.length != len) {
-            throw new DrishtiException(ErrorCode.EXPOSURE_WHATIF_RUN, "the candidate " + id + "'s paths are not of the run " + b.runId() + ": "
+            throw new RiskFailure(RiskCode.EXPOSURE_WHATIF_RUN, "the candidate " + id + "'s paths are not of the run " + b.runId() + ": "
                     + m.length + " values, the run has " + b.grid().size() + " grid dates x " + b.paths() + " paths = " + len);
         }
         String set = cand.get("nettingSet") == null ? "" : String.valueOf(cand.get("nettingSet")).trim().toUpperCase(Locale.ROOT);
@@ -176,7 +176,7 @@ final class ExposureWhatIfPaths {
 
     private static double[] numbers(Object o) {
         if (!(o instanceof List<?> l)) {
-            throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, "a candidate's paths.mtm is a list of numbers (grid date by grid date)");
+            throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, "a candidate's paths.mtm is a list of numbers (grid date by grid date)");
         }
         List<Double> out = new ArrayList<>();
         for (Object x : l) {
@@ -193,7 +193,7 @@ final class ExposureWhatIfPaths {
         if (y instanceof Number n && Double.isFinite(n.doubleValue())) {
             return n.doubleValue();
         }
-        throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, "a candidate's path value is a finite number, not " + y);
+        throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, "a candidate's path value is a finite number, not " + y);
     }
 
     /** Base64 Arrow IPC with {@code GRID_INDEX} and {@code MTM} (a fixed-size list of P) into {@code G x P}, an absent date zero. */
@@ -205,16 +205,16 @@ final class ExposureWhatIfPaths {
             for (int r = 0; r < t.rows(); r++) {
                 double[] row = t.vector("MTM", r);
                 if (k[r] < 0 || k[r] >= b.grid().size() || row.length != b.paths()) {
-                    throw new DrishtiException(ErrorCode.EXPOSURE_WHATIF_RUN, "the candidate's Arrow paths are not of the run " + b.runId() + ": grid index "
+                    throw new RiskFailure(RiskCode.EXPOSURE_WHATIF_RUN, "the candidate's Arrow paths are not of the run " + b.runId() + ": grid index "
                             + k[r] + " with " + row.length + " paths (the run: " + b.grid().size() + " dates, " + b.paths() + " paths)");
                 }
                 System.arraycopy(row, 0, out, (int) k[r] * b.paths(), b.paths());
             }
             return out;
-        } catch (DrishtiException e) {
+        } catch (RiskFailure e) {
             throw e;
         } catch (Exception e) {
-            throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, "a candidate's paths.arrow is base64 Arrow IPC with GRID_INDEX and MTM (a "
+            throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, "a candidate's paths.arrow is base64 Arrow IPC with GRID_INDEX and MTM (a "
                     + "fixed-size list of float64): " + e.getMessage());
         }
     }
@@ -226,7 +226,7 @@ final class ExposureWhatIfPaths {
         try {
             return Math.max(1 / 365.0, ChronoUnit.DAYS.between(bd, LocalDate.parse(String.valueOf(d).substring(0, 10))) / 365.0);
         } catch (RuntimeException e) {
-            throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, "a candidate's maturityDate is a date (YYYY-MM-DD), not " + d);
+            throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, "a candidate's maturityDate is a date (YYYY-MM-DD), not " + d);
         }
     }
 

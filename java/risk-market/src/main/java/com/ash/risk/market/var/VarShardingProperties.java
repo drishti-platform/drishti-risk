@@ -17,7 +17,6 @@ package com.ash.risk.market.var;
 
 import java.util.List;
 import java.util.Map;
-import com.ash.risk.hostcompat.spring.ConfigurationProperties;
 
 /**
  * The server's settings of VaR sharding across Drishti*net (DATA_ARCHITECTURE.md section 14). What is sharded comes from the market-risk pack's
@@ -42,7 +41,7 @@ import com.ash.risk.hostcompat.spring.ConfigurationProperties;
  * @param releaseAfterSeconds how long a shard book is kept after no member has had its date open and nothing read it (900), unless the
  *     date is among the lake's newest {@code hot-dates}; 2.9.7 (CLUSTER_GUIDE.md section 5.3)
  */
-@ConfigurationProperties("drishti.var.sharding")
+// the host binds its settings under drishti.var.sharding to these values (the engine reads options, never a configuration file)
 public record VarShardingProperties(Boolean enabled, List<String> key, List<String> kinds, Double targetShardMb, Integer replicas,
         Integer stableSeconds, Integer graceSeconds, Boolean coordinatorOnly, String zoneTag, Map<String, String> pins, Boolean drain,
         Integer callTimeoutSeconds, Integer skeletonTimeoutSeconds, Integer rebalanceSeconds, Integer releaseAfterSeconds) {

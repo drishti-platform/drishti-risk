@@ -15,8 +15,8 @@
  */
 package com.ash.risk.market.var;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -109,7 +109,7 @@ final class VarShardIntake {
                     }
                     if (!String.valueOf(have.get("form")).equals(String.valueOf(d.get("form")))
                             || !String.valueOf(have.get("grain")).equals(String.valueOf(d.get("grain")))) {
-                        throw new DrishtiException(ErrorCode.VAR_INPUT_MIXED, "the inputs of " + date + " are not loaded: " + sys + " sent "
+                        throw new RiskFailure(RiskCode.VAR_INPUT_MIXED, "the inputs of " + date + " are not loaded: " + sys + " sent "
                                 + have.get("form") + ", " + have.get("grain") + " and " + d.get("form") + ", " + d.get("grain")
                                 + "; one source system sends one form and one grain on one date (VAR_GUIDE.md section 15.13)");
                     }
@@ -119,12 +119,12 @@ final class VarShardIntake {
             }
         }
         if (batches.size() > 1) {
-            throw new DrishtiException(ErrorCode.VAR_INCONSISTENT_DATE, "the VaR inputs of " + date + " are not loaded: the vectors come from "
+            throw new RiskFailure(RiskCode.VAR_INCONSISTENT_DATE, "the VaR inputs of " + date + " are not loaded: the vectors come from "
                     + batches.size() + " runs (BATCH_ID " + String.join(", ", batches) + "): one run per date");
         }
         List<String> other = sets.stream().filter(x -> !x.equals(setId)).toList();
         if (!other.isEmpty()) {
-            throw new DrishtiException(ErrorCode.VAR_INCONSISTENT_DATE, "the VaR inputs of " + date + " are not loaded: vectors of the scenario set "
+            throw new RiskFailure(RiskCode.VAR_INCONSISTENT_DATE, "the VaR inputs of " + date + " are not loaded: vectors of the scenario set "
                     + String.join(", ", other) + " beside the date's set " + setId);
         }
         return new VarIntake.Summary(rejected, List.copyOf(rejections), excluded, List.copyOf(batches), List.copyOf(sets), rules, rulesDigest,

@@ -15,12 +15,12 @@
  */
 package com.ash.risk.market.var;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.market.calc.ScenarioFx;
 import com.ash.risk.market.calc.VarBook;
 import com.ash.risk.market.calc.VarCalc;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -89,18 +89,18 @@ final class VarMatrix {
 
     // ------------------------------------------------------------------------------------------------------------------ the answer
 
-    Map<String, Object> matrix(Principal p, Asked a) {
+    Map<String, Object> matrix(Caller p, Asked a) {
         int asked = a.days() == null || a.days() <= 0 ? DEFAULT_DAYS : a.days();
         int n = Math.min(asked, maxDays);
         if (a.horizon() != null && a.horizon() != 1) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "horizon " + a.horizon() + ": the scenario matrix computes the 1-day horizon today");
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "horizon " + a.horizon() + ": the scenario matrix computes the 1-day horizon today");
         }
         VarCalc calc = calc(a);
         String ccy = VarCurrencies.normalise(a.ccy());
         Target t = resolve(p, a.id(), a.asOf(), ccy);
         boolean byTrade = "trade".equalsIgnoreCase(a.by() == null ? "" : a.by().trim());
         if (byTrade && (!"position".equals(t.kind()) || t.supplied())) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "by trade is for a position whose trades are known: " + t.scope()
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "by trade is for a position whose trades are known: " + t.scope()
                     + ("position".equals(t.kind()) ? " is sent whole by its source system (its trades have no vectors of their own)" : " is a " + t.kind()));
         }
         List<LocalDate> dates = new ArrayList<>(svc.loader().datesUpTo(t.anchor().date().date(), n));
@@ -158,7 +158,7 @@ final class VarMatrix {
         try {
             return Integer.parseInt(VarProperties.checkWindow(w, "window"));
         } catch (IllegalArgumentException e) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, e.getMessage());
+            throw new RiskFailure(RiskCode.BAD_REQUEST, e.getMessage());
         }
     }
 
@@ -169,7 +169,7 @@ final class VarMatrix {
             double ec = a.esConfidence() == null ? pr.esConfidence() : VarProperties.checkConfidence(a.esConfidence(), "es-confidence");
             return new VarCalc(c, ec, svc.calc().rule(), svc.calc().window(), svc.calc().scaleToVar());
         } catch (IllegalArgumentException e) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, e.getMessage());
+            throw new RiskFailure(RiskCode.BAD_REQUEST, e.getMessage());
         }
     }
 
@@ -194,10 +194,10 @@ final class VarMatrix {
      * P&amp;L vector's or a scenario PV's id ({@code PNL-<id>-<set>}, {@code SPV-...}) its trade or position; else a position id, then a
      * trade id. The engine checks it as the person (FORBIDDEN when they do not see it position by position).
      */
-    Target resolve(Principal p, String id, LocalDate asOf, String ccy) {
+    Target resolve(Caller p, String id, LocalDate asOf, String ccy) {
         String text = id == null ? "" : id.trim();
         if (text.isEmpty()) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "give a trade, a position or a VaR scope: SMAT T-1001, SMAT POS-..., SMAT DESK:RATES");
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "give a trade, a position or a VaR scope: SMAT T-1001, SMAT POS-..., SMAT DESK:RATES");
         }
         List<String> tries = new ArrayList<>();
         if (text.contains(":") || text.equalsIgnoreCase("BANK")) {
@@ -209,13 +209,13 @@ final class VarMatrix {
                 tries.add("TRD:" + x);
             }
         }
-        DrishtiException last = null;
+        RiskFailure last = null;
         for (String scope : tries) {
             VarService.Scoped s;
             try {
                 s = svc.scoped(p, scope, asOf, ccy);
-            } catch (DrishtiException e) {
-                if (e.errorCode() == ErrorCode.FORBIDDEN) {
+            } catch (RiskFailure e) {
+                if (e.errorCode() == RiskCode.FORBIDDEN) {
                     throw e;
                 }
                 last = e;
@@ -239,7 +239,7 @@ final class VarMatrix {
         if (last != null && tries.size() == 1) {
             throw last;
         }
-        throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no trade, position or VaR scope " + text + " on the newest date: SMAT takes a "
+        throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no trade, position or VaR scope " + text + " on the newest date: SMAT takes a "
                 + "trade id, a position id, a P&L vector's or scenario PV's id, or a VaR scope (DESK:RATES, BOOK:BOOK-RATES-1, BANK)");
     }
 
@@ -257,7 +257,7 @@ final class VarMatrix {
 
     // ---------------------------------------------------------------------------------------------------------------- the columns
 
-    private List<Col> columns(Principal p, Target t, List<LocalDate> dates, String ccy) {
+    private List<Col> columns(Caller p, Target t, List<LocalDate> dates, String ccy) {
         java.util.Set<LocalDate> open = svc.openDates();
         boolean entity = "trade".equals(t.kind()) || "position".equals(t.kind()) && t.supplied();
         boolean node = t.node() != null && t.anchor().view().full();
@@ -285,7 +285,7 @@ final class VarMatrix {
                     c = Col.gap(dates.get(readAt.get(r)), entity ? "lake" : "official", reason(e.getCause()));
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    throw new DrishtiException(ErrorCode.SOURCE_FAILED, "the scenario matrix was interrupted");
+                    throw new RiskFailure(RiskCode.SOURCE_FAILED, "the scenario matrix was interrupted");
                 }
                 if (c == null) {                                              // not held there: the engine opens the date
                     engine.add(readAt.get(r));
@@ -303,18 +303,18 @@ final class VarMatrix {
     }
 
     private static String reason(Throwable e) {
-        if (e instanceof DrishtiException de) {
+        if (e instanceof RiskFailure de) {
             return de.errorCode().code() + " " + de.getMessage();
         }
         return "DRS-1003 " + e;
     }
 
     /** A trade's or supplied position's record from the lake; null when only the engine can convert it. */
-    private Col fromLake(Principal p, Target t, LocalDate d, String ccy) {
+    private Col fromLake(Caller p, Target t, LocalDate d, String ccy) {
         VarLoader.ScenarioSet set;
         try {
             set = svc.loader().scenarioSet(d);
-        } catch (DrishtiException e) {
+        } catch (RiskFailure e) {
             return Col.gap(d, "lake", reason(e));
         }
         VarMatrixLake.Column c = lake.read(p, t.entity(), d, set, ccy);
@@ -343,7 +343,7 @@ final class VarMatrix {
         VarLoader.ScenarioSet set;
         try {
             set = svc.loader().scenarioSet(d);
-        } catch (DrishtiException e) {
+        } catch (RiskFailure e) {
             return null;
         }
         if (!set.id().equals(String.valueOf(cap.get("scenarioSet"))) || vec.size() != set.window().size()) {
@@ -363,11 +363,11 @@ final class VarMatrix {
     }
 
     /** The scope on a date as the engine computes it (the date opened when it is not). */
-    private Col fromEngine(Principal p, Target t, LocalDate d, String ccy, String source) {
+    private Col fromEngine(Caller p, Target t, LocalDate d, String ccy, String source) {
         VarService.Scoped s;
         try {
             s = d.equals(t.anchor().date().date()) && ccy.equals(t.anchor().date().currency()) ? t.anchor() : svc.scoped(p, t.scope(), d, ccy);
-        } catch (DrishtiException e) {
+        } catch (RiskFailure e) {
             return Col.gap(d, source, reason(e));
         }
         if (!s.date().date().equals(d)) {                                    // a refused date is answered by an earlier one: a gap here
@@ -513,7 +513,7 @@ final class VarMatrix {
      * A position's trades under one scenario day (the VaR scenario of the newest date when none is asked) across the dates: rows are the
      * trades, a cell a trade's P&amp;L under that day on that date; each date computed by the engine (a trade's own vector is the engine's).
      */
-    private Map<String, Object> byTrade(Principal p, Target t, List<LocalDate> dates, String ccy, String scenario, VarCalc calc,
+    private Map<String, Object> byTrade(Caller p, Target t, List<LocalDate> dates, String ccy, String scenario, VarCalc calc,
             Map<String, Object> out) {
         LocalDate day;
         try {
@@ -521,7 +521,7 @@ final class VarMatrix {
                     ? t.anchor().date().book().scenarioDates().get(calc.measures(t.anchor().vector()).varScenario())
                     : LocalDate.parse(scenario.trim());
         } catch (java.time.format.DateTimeParseException e) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "scenario " + scenario + " is not a day (YYYY-MM-DD)");
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "scenario " + scenario + " is not a day (YYYY-MM-DD)");
         }
         out.put("scenario", day.toString());
         java.util.Set<LocalDate> open = svc.openDates();
@@ -537,7 +537,7 @@ final class VarMatrix {
             VarService.Scoped s;
             try {
                 s = svc.scoped(p, t.scope(), d, ccy);
-            } catch (DrishtiException e) {
+            } catch (RiskFailure e) {
                 m.put("gap", reason(e));
                 continue;
             }

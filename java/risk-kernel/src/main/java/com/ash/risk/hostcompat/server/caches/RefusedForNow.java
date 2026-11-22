@@ -15,19 +15,19 @@
  */
 package com.ash.risk.hostcompat.server.caches;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 
 /**
  * A date refused for room (capacity or disk) and remembered ({@link Refusals}): answered at once with the refusal's code and a
  * {@code Retry-After} of the seconds left, without reading the lake again.
  */
-public final class RefusedForNow extends DrishtiException {
+public final class RefusedForNow extends RiskFailure {
 
     private static final long serialVersionUID = 1L;
     private final long retryAfterSeconds;
 
-    public RefusedForNow(ErrorCode code, String message, long retryAfterSeconds) {
+    public RefusedForNow(RiskCode code, String message, long retryAfterSeconds) {
         super(code, message);
         this.retryAfterSeconds = Math.max(1, retryAfterSeconds);
     }

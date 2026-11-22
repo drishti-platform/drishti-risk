@@ -18,7 +18,6 @@ package com.ash.risk.kernel.linalg;
 import com.ash.risk.hostcompat.api.compute.ComputeEngine;
 import com.ash.risk.kernel.linalg.Blas;
 import java.time.Instant;
-import com.ash.risk.hostcompat.spring.stereotype.Component;
 
 /**
  * "Linear algebra: OpenBLAS" as a switch of Admin -> Engines (docs/guides/OPERATIONS_GUIDE.md section 2.1): the engine-switch mechanism keeps the
@@ -27,7 +26,6 @@ import com.ash.risk.hostcompat.spring.stereotype.Component;
  * fallback warning). On: the self-test against Java first, then OpenBLAS; a failed self-test refuses the switch in words (the engine shows
  * the reason, the Java path stays). The members' paths meet in the cluster agreement ({@link NativeLibraries#agree}).
  */
-@Component
 public class OpenBlasEngine implements ComputeEngine {
 
     /** The engine's catalogue id. */

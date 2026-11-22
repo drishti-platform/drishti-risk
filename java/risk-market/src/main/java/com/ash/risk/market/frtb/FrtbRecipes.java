@@ -15,12 +15,12 @@
  */
 package com.ash.risk.market.frtb;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.market.frtb.calc.FrtbChoices;
 import com.ash.risk.market.frtb.calc.FrtbSa;
 import com.ash.risk.market.frtb.calc.Sbm;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import java.io.IOException;
@@ -80,7 +80,7 @@ public final class FrtbRecipes {
     }
 
     /** Saves a run as a recipe; its id is returned. */
-    public Recipe save(FrtbService.Run run, byte[] sbm, byte[] drc, Principal p) {
+    public Recipe save(FrtbService.Run run, byte[] sbm, byte[] drc, Caller p) {
         FrtbSa.Result r = run.result();
         String id = "FR-" + run.inputsDigest().substring(0, 8).toUpperCase(java.util.Locale.ROOT) + "-"
                 + Long.toString(System.currentTimeMillis(), 36).toUpperCase(java.util.Locale.ROOT);
@@ -102,11 +102,11 @@ public final class FrtbRecipes {
     /** A recipe by id (404 in words when there is none). */
     public Recipe get(String id) {
         if (id == null || !id.matches("FR-[A-Z0-9-]{4,40}")) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "a recipe id is FR-... (as PLAY FRTB shows it), not " + id);
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "a recipe id is FR-... (as PLAY FRTB shows it), not " + id);
         }
         Path f = dir.resolve(id + ".json");
         if (!Files.isRegularFile(f)) {
-            throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no recipe " + id + " on this server");
+            throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no recipe " + id + " on this server");
         }
         try {
             return JSON.readValue(f.toFile(), Recipe.class);
@@ -116,7 +116,7 @@ public final class FrtbRecipes {
     }
 
     /** Runs a recipe again and compares it with what it recorded. */
-    public Replay replay(String id, Principal p) {
+    public Replay replay(String id, Caller p) {
         Recipe rec = get(id);
         byte[] sbm = Base64.getDecoder().decode(rec.sbmFile());
         byte[] drc = Base64.getDecoder().decode(rec.drcFile());

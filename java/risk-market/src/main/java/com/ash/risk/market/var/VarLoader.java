@@ -18,8 +18,8 @@ package com.ash.risk.market.var;
 import com.ash.risk.hostcompat.api.AsOf;
 import com.ash.risk.hostcompat.api.DataNode;
 import com.ash.risk.hostcompat.api.EntityDocument;
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.kernel.scope.PositionRules;
 import com.ash.risk.market.calc.VarBook;
 import com.ash.risk.kernel.vector.ParallelSums;
@@ -335,7 +335,7 @@ final class VarLoader {
         // checked before the build and while the rows stream in) and the page cache (advisory), never by a share of the heap
         long budget = tier.mapped() ? Long.MAX_VALUE : props.memoryBudgetMb() * 1024 * 1024;
         if (shard != null && !tier.mapped()) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "a sharded date needs the tiered memory (drishti.var.tier.mode: mapped)");
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "a sharded date needs the tiered memory (drishti.var.tier.mode: mapped)");
         }
         VarBook.Builder b = tier.mapped() ? new VarBook.Builder(date, setId, scenarioDates, budget,
                 shard == null ? tier.target(date, folder, digest) : tier.target(date, VarDate.USD, shard.index(), digest))
@@ -366,7 +366,7 @@ final class VarLoader {
             try {
                 book = b.meta(meta(sum, versions, intake.fx())).build(sums);
             } catch (IllegalStateException e) {
-                throw new DrishtiException(ErrorCode.VAR_HIERARCHY_INVALID, "the VaR inputs of " + date + " are not loaded: " + e.getMessage());
+                throw new RiskFailure(RiskCode.VAR_HIERARCHY_INVALID, "the VaR inputs of " + date + " are not loaded: " + e.getMessage());
             }
             tier.opened(book);
             long ms = (System.nanoTime() - t0) / 1_000_000;
@@ -513,18 +513,18 @@ final class VarLoader {
             readPv = router.vectors(k.scenarioPv(), SCENARIO_PV, pvColumns, asOf, range, com.ash.risk.hostcompat.api.VectorReads.parallel(
                     ofSet(pvColumns, keep, shardRows(shard, pvColumns, intake::row)), reads));
         } catch (com.ash.risk.kernel.vector.VectorStore.BudgetExceeded e) {
-            throw new DrishtiException(ErrorCode.VAR_CAPACITY, e.getMessage() + ": the engine has no room for this date now; raise "
+            throw new RiskFailure(RiskCode.VAR_CAPACITY, e.getMessage() + ": the engine has no room for this date now; raise "
                     + "drishti.var.memory-budget-mb (the heap tier) or the server's heap, or keep fewer dates open (drishti.module.banking.var.hot-dates)");
         } catch (VarBook.DuplicateTrade e) {
-            throw new DrishtiException(ErrorCode.VAR_DUPLICATE_TRADE, "the P&L vectors of " + date + " are not loaded: " + e.getMessage()
+            throw new RiskFailure(RiskCode.VAR_DUPLICATE_TRADE, "the P&L vectors of " + date + " are not loaded: " + e.getMessage()
                     + (unmarked == null ? "" : "; " + unmarked));
-        } catch (DrishtiException e) {
+        } catch (RiskFailure e) {
             throw e;
         } catch (Exception e) {
-            throw new DrishtiException(ErrorCode.SOURCE_FAILED, "the P&L vectors of " + date + " could not be read: " + e.getMessage());
+            throw new RiskFailure(RiskCode.SOURCE_FAILED, "the P&L vectors of " + date + " could not be read: " + e.getMessage());
         }
         if (!read && !readPv) {
-            throw new DrishtiException(ErrorCode.SOURCE_FAILED, "no connector keeps " + k.vector() + ".PNL (or " + k.scenarioPv() + "." + SCENARIO_PV
+            throw new RiskFailure(RiskCode.SOURCE_FAILED, "no connector keeps " + k.vector() + ".PNL (or " + k.scenarioPv() + "." + SCENARIO_PV
                     + ") as a vector column with the columns " + columns + " (the pack's layout." + k.vector() + ".columns and .vectors)");
         }
         VarIntake.Summary sum = intake.summary();
@@ -572,7 +572,7 @@ final class VarLoader {
         /** The date's normal set; none or two refuse the date as before ({@code DRS-1001}, {@code DRS-5203}). */
         DataNode normal(LocalDate date) {
             if (normal.isEmpty()) {
-                throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no scenario set for " + date + " (kind " + kind + ")"
+                throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no scenario set for " + date + " (kind " + kind + ")"
                         + (stress.isEmpty() ? "" : ": only the stress set " + String.join(", ", stress.keySet())));
             }
             if (normal.size() > 1) {
@@ -584,7 +584,7 @@ final class VarLoader {
         /** The date's stress set; none is said in words ({@code DRS-1001}: stressed VaR is not available on the date, never zero). */
         DataNode stress(LocalDate date) {
             if (stress.isEmpty()) {
-                throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no stress scenario set on " + date + ": stressed VaR is not "
+                throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no stress scenario set on " + date + ": stressed VaR is not "
                         + "available for this date (a stress set is a scenario set with SET_TYPE STRESS, VAR_GUIDE.md section 18.8)");
             }
             if (stress.size() > 1) {
@@ -661,7 +661,7 @@ final class VarLoader {
             missing.add("layout." + k.scenarioPv() + ".columns");
         }
         if (!missing.isEmpty()) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "the stress set " + setId + " cannot be read: the connector does not promote "
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "the stress set " + setId + " cannot be read: the connector does not promote "
                     + "SCENARIO_SET_ID (" + String.join(", ", missing) + "), so its rows cannot be told from the normal set's");
         }
     }
@@ -932,7 +932,7 @@ final class VarLoader {
         }
         if (!limits.unbuildable().isEmpty()) {
             List<String> ids = new ArrayList<>(limits.unbuildable().keySet());
-            out.add(ErrorCode.VAR_LIMIT_UNKNOWN_NODE.code() + " " + ids.size() + " VaR limit" + (ids.size() == 1 ? " names" : "s name")
+            out.add(RiskCode.VAR_LIMIT_UNKNOWN_NODE.code() + " " + ids.size() + " VaR limit" + (ids.size() == 1 ? " names" : "s name")
                     + " no node its hierarchy can build, unused: " + String.join("; ", ids.subList(0, Math.min(5, ids.size())).stream()
                     .map(i -> i + " (" + limits.unbuildable().get(i) + ")").toList()) + (ids.size() > 5 ? "; ..." : ""));
         }
@@ -1186,10 +1186,10 @@ final class VarLoader {
             intake.scenarioPvs(pvColumns.subList(1, pvColumns.size()), () -> fx(date, days), days);
             router.vectors(k.scenarioPv(), SCENARIO_PV, pvColumns, asOf, com.ash.risk.hostcompat.api.VectorReads.parallel(ofSet(pvColumns, normal,
                     intake::row), reads));
-        } catch (DrishtiException e) {
+        } catch (RiskFailure e) {
             throw e;
         } catch (Exception e) {
-            throw new DrishtiException(ErrorCode.SOURCE_FAILED, "the intraday updates of " + date + " could not be read: " + e.getMessage());
+            throw new RiskFailure(RiskCode.SOURCE_FAILED, "the intraday updates of " + date + " could not be read: " + e.getMessage());
         }
         return intake;
     }
@@ -1362,8 +1362,8 @@ final class VarLoader {
         return props;
     }
 
-    private static DrishtiException inconsistent(LocalDate date, String why) {
-        return new DrishtiException(ErrorCode.VAR_INCONSISTENT_DATE, "the VaR inputs of " + date + " are not loaded: " + why);
+    private static RiskFailure inconsistent(LocalDate date, String why) {
+        return new RiskFailure(RiskCode.VAR_INCONSISTENT_DATE, "the VaR inputs of " + date + " are not loaded: " + why);
     }
 
     private Map<String, DataNode> documents(String kind, AsOf asOf) {

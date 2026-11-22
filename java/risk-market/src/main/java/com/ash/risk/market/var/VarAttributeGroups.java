@@ -17,13 +17,13 @@ package com.ash.risk.market.var;
 
 import com.ash.risk.hostcompat.api.AsOf;
 import com.ash.risk.hostcompat.api.ColumnSet;
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.market.calc.Columns;
 import com.ash.risk.market.calc.VarBook;
 import com.ash.risk.kernel.vector.OrdinalSet;
 import com.ash.risk.hostcompat.engine.source.SourceRouter;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -72,13 +72,13 @@ final class VarAttributeGroups {
         }
         String c = by.trim().substring(PREFIX.length()).trim().toUpperCase(Locale.ROOT);
         if (!COLUMN.matcher(c).matches()) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "by=attribute:<COLUMN> names a trade column such as TRADER_ID, not '" + c + "'");
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "by=attribute:<COLUMN> names a trade column such as TRADER_ID, not '" + c + "'");
         }
         return c;
     }
 
     /** True when the column is masked for the caller: no groups (the values would be shown as the groups' names). */
-    boolean masked(Principal p, String column) {
+    boolean masked(Caller p, String column) {
         return svc.access().masked(p, column);
     }
 
@@ -117,7 +117,7 @@ final class VarAttributeGroups {
             counts.computeIfAbsent(k, x -> new int[1])[0]++;
         });
         if (groups.size() > MAX_GROUPS) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, column + " has " + groups.size() + " values in " + s.res().canonical()
+            throw new RiskFailure(RiskCode.BAD_REQUEST, column + " has " + groups.size() + " values in " + s.res().canonical()
                     + ", more than " + MAX_GROUPS + ": VaR by a column of so many values is VaR by trade (by=trade)");
         }
         List<VarViews.Part> out = new ArrayList<>(groups.size());
@@ -145,7 +145,7 @@ final class VarAttributeGroups {
         }
         if (!router.columnar(kind).contains(column)) {
             List<String> own = new ArrayList<>(tc.textColumns());
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, column + " is not a column of the VaR book's trades (" + String.join(", ", own)
+            throw new RiskFailure(RiskCode.BAD_REQUEST, column + " is not a column of the VaR book's trades (" + String.join(", ", own)
                     + ") nor a column the trade valuations (" + kind + ") keep: VaR by attribute groups by one of them");
         }
         Map<String, String> byTrade = join(router, kind, column, s.date().date());
@@ -165,8 +165,8 @@ final class VarAttributeGroups {
         if (hit != null) {
             return hit;
         }
-        ColumnSet cs = router.columns(kind, List.of("TRADE_ID", column), asOf, READ).orElseThrow(() -> new DrishtiException(
-                ErrorCode.BAD_REQUEST, "the trade valuations (" + kind + ") of " + date + " could not be read as columns for " + column));
+        ColumnSet cs = router.columns(kind, List.of("TRADE_ID", column), asOf, READ).orElseThrow(() -> new RiskFailure(
+                RiskCode.BAD_REQUEST, "the trade valuations (" + kind + ") of " + date + " could not be read as columns for " + column));
         Map<String, String> out = new HashMap<>(cs.size() * 2);
         for (int i = 0; i < cs.size(); i++) {
             Object t = cs.value("TRADE_ID", i);

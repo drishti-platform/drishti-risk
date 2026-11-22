@@ -15,8 +15,8 @@
  */
 package com.ash.risk.market.var;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.market.calc.Backtest;
 import com.ash.risk.market.calc.Columns;
 import com.ash.risk.market.calc.CurrencyTotals;
@@ -26,7 +26,7 @@ import com.ash.risk.market.calc.VarCalc;
 import com.ash.risk.market.calc.VarLens;
 import com.ash.risk.market.calc.VarMath;
 import com.ash.risk.kernel.vector.OrdinalSet;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -204,7 +204,7 @@ final class VarViews {
 
     // ------------------------------------------------------------------------------------------------------------------- headline
 
-    Map<String, Object> headline(Principal p, String scope, LocalDate date) {
+    Map<String, Object> headline(Caller p, String scope, LocalDate date) {
         return headline(p, scope, date, VarDate.USD);
     }
 
@@ -212,7 +212,7 @@ final class VarViews {
      * The headline's VaR and ES recomputed on the newest {@code window} scenarios (null: the date's) and at other confidences (null: the
      * settings'), from the same vector (VAR_GUIDE.md section 18.5): {@code override} says what changed; never official, never captured.
      */
-    Map<String, Object> override(Map<String, Object> h, Principal p, String scope, LocalDate date, String ccy, String window, Double conf,
+    Map<String, Object> override(Map<String, Object> h, Caller p, String scope, LocalDate date, String ccy, String window, Double conf,
             Double esConf) {
         VarService.Scoped s = svc.scoped(p, scope, date, ccy);
         double[] v = s.vector();
@@ -254,7 +254,7 @@ final class VarViews {
     }
 
     /** The headline in a reporting currency ({@code ccy}; every amount of the answer is in it, and {@code currency} says which). */
-    Map<String, Object> headline(Principal p, String scope, LocalDate date, String ccy) {
+    Map<String, Object> headline(Caller p, String scope, LocalDate date, String ccy) {
         return headline(p, scope, date, ccy, null);
     }
 
@@ -268,7 +268,7 @@ final class VarViews {
     }
 
     /** The same through a lens (2.9.7: horizon, 10-day method, confidences; null: the default). */
-    Map<String, Object> headline(Principal p, String scope, LocalDate date, String ccy, VarLens lens) {
+    Map<String, Object> headline(Caller p, String scope, LocalDate date, String ccy, VarLens lens) {
         VarService.Scoped s = svc.scoped(p, scope, date, ccy, lens);
         VarBook b = s.date().book();
         String mode = partMode(s, "child", p);
@@ -588,7 +588,7 @@ final class VarViews {
         }
     }
 
-    List<Part> parts(VarService.Scoped s, String by, Principal p) {
+    List<Part> parts(VarService.Scoped s, String by, Caller p) {
         return partsOf(s, by, p).list();
     }
 
@@ -598,7 +598,7 @@ final class VarViews {
      * only for a viewer who sees them. More positions or trades than {@code max-parts}: the largest by gross size (market value, else
      * PV, else quantity) are kept, and the answer says so.
      */
-    Parts partsOf(VarService.Scoped s, String by, Principal p) {
+    Parts partsOf(VarService.Scoped s, String by, Caller p) {
         VarBook b = s.date().book();
         String mode = partMode(s, by, p);
         if (mode.isEmpty()) {
@@ -623,7 +623,7 @@ final class VarViews {
      * The kind of part {@code by} asks for in this scope: {@code node}, {@code part}, {@code position}, {@code trade}, {@code desk} or
      * {@code book}; empty when the scope has none to show (a trade; positions for an aggregate-only viewer asking the default).
      */
-    String partMode(VarService.Scoped s, String by, Principal p) {
+    String partMode(VarService.Scoped s, String by, Caller p) {
         VarBook b = s.date().book();
         String column = VarAttributeGroups.column(by);
         if (column != null) {
@@ -631,7 +631,7 @@ final class VarViews {
         }
         String mode = by == null || by.isBlank() ? "child" : by.trim().toLowerCase(java.util.Locale.ROOT);
         if (mode.equals("node") && (s.res().node() == null || b.node(s.res().node()).children().isEmpty())) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "by=node lists a node's child nodes; " + s.res().canonical()
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "by=node lists a node's child nodes; " + s.res().canonical()
                     + (s.res().node() == null ? " is not a node" : " has none") + ": use by=position, trade, desk or book");
         }
         if (mode.equals("child")) {
@@ -650,10 +650,10 @@ final class VarViews {
             if (by == null || by.isBlank() || by.equals("child")) {
                 return "";                                               // an aggregate-only viewer: no position level below this node
             }
-            throw new DrishtiException(ErrorCode.FORBIDDEN, "your role sees this scope in aggregate only: no positions or trades");
+            throw new RiskFailure(RiskCode.FORBIDDEN, "your role sees this scope in aggregate only: no positions or trades");
         }
         if (!List.of("node", "part", "position", "trade", "desk", "book").contains(mode)) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "by is child, node, part, position, trade, desk, book or attribute:<COLUMN>");
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "by is child, node, part, position, trade, desk, book or attribute:<COLUMN>");
         }
         return mode;
     }
@@ -715,7 +715,7 @@ final class VarViews {
                     return ts;
                 }));
             }
-            default -> throw new DrishtiException(ErrorCode.BAD_REQUEST, "by is child, node, part, position, trade, desk or book");
+            default -> throw new RiskFailure(RiskCode.BAD_REQUEST, "by is child, node, part, position, trade, desk or book");
         }
         VarLens l = lens(s);
         if (l.method() != VarLens.Method.NONE) {                       // 2.9.7: each part's vector through the answer's horizon
@@ -906,20 +906,20 @@ final class VarViews {
 
     // ------------------------------------------------------------------------------------------------------------------- contributions
 
-    Map<String, Object> contributions(Principal p, String scope, LocalDate date, String by, String scenario) {
+    Map<String, Object> contributions(Caller p, String scope, LocalDate date, String by, String scenario) {
         return contributions(p, scope, date, by, scenario, VarDate.USD);
     }
 
-    Map<String, Object> contributions(Principal p, String scope, LocalDate date, String by, String scenario, String ccy) {
+    Map<String, Object> contributions(Caller p, String scope, LocalDate date, String by, String scenario, String ccy) {
         return contributions(p, scope, date, by, scenario, ccy, null);
     }
 
-    Map<String, Object> contributions(Principal p, String scope, LocalDate date, String by, String scenario, String ccy, VarLens lens) {
+    Map<String, Object> contributions(Caller p, String scope, LocalDate date, String by, String scenario, String ccy, VarLens lens) {
         return contributions(p, scope, date, by, scenario, ccy, lens, false);
     }
 
     /** The same, {@code matrix}: with the parts' correlation and covariance matrix (parametric, docs/guides/VAR_GUIDE.md section 3). */
-    Map<String, Object> contributions(Principal p, String scope, LocalDate date, String by, String scenario, String ccy, VarLens lens, boolean matrix) {
+    Map<String, Object> contributions(Caller p, String scope, LocalDate date, String by, String scenario, String ccy, VarLens lens, boolean matrix) {
         VarService.Scoped s = svc.scoped(p, scope, date, ccy, lens);
         VarBook b = s.date().book();
         String column = VarAttributeGroups.column(by);
@@ -932,7 +932,7 @@ final class VarViews {
         List<VarCalc.Contribution> cs = calc(s).contributions(s.vector(), s.measures(), cp);
         int scen = scenario == null || scenario.isBlank() ? -1 : s.dates().indexOf(LocalDate.parse(scenario));
         if (scenario != null && !scenario.isBlank() && scen < 0) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, scenario + " is not a scenario date of " + b.scenarioSet()
+            throw new RiskFailure(RiskCode.BAD_REQUEST, scenario + " is not a scenario date of " + b.scenarioSet()
                     + (lens(s).method() == VarLens.Method.SUM ? " that ends a 10-day window" : ""));
         }
         List<Map<String, Object>> rows = new ArrayList<>();
@@ -1013,7 +1013,7 @@ final class VarViews {
             Map<String, Object> pt = parametric.totals(pf, pComp, pAlone, !ps.truncated());
             if (matrix) {
                 if (parts.size() < 2) {
-                    throw new DrishtiException(ErrorCode.BAD_REQUEST, "matrix=true needs a scope with parts (" + s.label() + " has "
+                    throw new RiskFailure(RiskCode.BAD_REQUEST, "matrix=true needs a scope with parts (" + s.label() + " has "
                             + parts.size() + ")");
                 }
                 pt.put("matrix", parametric.matrix(parts.stream().map(Part::key).toList(), parts.stream().map(Part::label).toList(),
@@ -1041,15 +1041,15 @@ final class VarViews {
      * VaR and ES computed from the scope's per-trade-currency totals with that currency's scenario FX (never the page's VaR at a rate),
      * that VaR in the page's currency {@code ccy} at today's rate, and the difference from the page's VaR. As the viewer.
      */
-    Map<String, Object> inCurrencies(Principal p, String scope, LocalDate date, String ccy) {
+    Map<String, Object> inCurrencies(Caller p, String scope, LocalDate date, String ccy) {
         return inCurrencies(p, scope, date, ccy, null);
     }
 
-    Map<String, Object> inCurrencies(Principal p, String scope, LocalDate date, String ccy, VarLens lens) {
+    Map<String, Object> inCurrencies(Caller p, String scope, LocalDate date, String ccy, VarLens lens) {
         long t0 = System.nanoTime();
         String page = VarCurrencies.normalise(ccy);
         if (lens != null && lens.stressed()) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "stressed VaR is answered in USD only: the stress set's scenario FX converts "
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "stressed VaR is answered in USD only: the stress set's scenario FX converts "
                     + "its trades, not the reporting currencies");
         }
         VarService.Scoped s = svc.scoped(p, scope, date, VarDate.USD, lens);
@@ -1057,7 +1057,7 @@ final class VarViews {
         VarDate usd = s.date();
         ScenarioFx fx = svc.fx(usd);
         if (fx.rates(page).isEmpty()) {
-            throw new DrishtiException(ErrorCode.VAR_NO_FX, "no " + page + " FX for the scenarios of " + usd.date() + "; the currencies with FX on "
+            throw new RiskFailure(RiskCode.VAR_NO_FX, "no " + page + " FX for the scenarios of " + usd.date() + "; the currencies with FX on "
                     + "the date: " + String.join(", ", fx.currencies()));
         }
         CurrencyTotals.Sums totals = svc.totals(usd, s.set(), s.res().node());
@@ -1114,24 +1114,24 @@ final class VarViews {
     // ------------------------------------------------------------------------------------------------------------------- path
 
     /** One page of the positions holding matured trades in the scope, as far as the reader may see them named. */
-    Map<String, Object> matured(Principal p, String scope, LocalDate date, int page, int size) {
+    Map<String, Object> matured(Caller p, String scope, LocalDate date, int page, int size) {
         return VarMaturedView.page(svc.scoped(p, scope, date, VarDate.USD, null), svc.tradeIdsMasked(p), page, size);
     }
 
-    Map<String, Object> path(Principal p, String scope, LocalDate date, int page, int size) {
+    Map<String, Object> path(Caller p, String scope, LocalDate date, int page, int size) {
         return path(p, scope, date, page, size, VarDate.USD);
     }
 
-    Map<String, Object> path(Principal p, String scope, LocalDate date, int page, int size, String ccy) {
+    Map<String, Object> path(Caller p, String scope, LocalDate date, int page, int size, String ccy) {
         return path(p, scope, date, page, size, ccy, null);
     }
 
-    Map<String, Object> path(Principal p, String scope, LocalDate date, int page, int size, String ccy, VarLens lens) {
+    Map<String, Object> path(Caller p, String scope, LocalDate date, int page, int size, String ccy, VarLens lens) {
         return path(p, scope, date, page, size, ccy, lens, false);
     }
 
     /** The same with the matured-items switch: the path of the scope with its matured items added, labelled (VAR_GUIDE.md, "Matured items"). */
-    Map<String, Object> path(Principal p, String scope, LocalDate date, int page, int size, String ccy, VarLens lens, boolean matured) {
+    Map<String, Object> path(Caller p, String scope, LocalDate date, int page, int size, String ccy, VarLens lens, boolean matured) {
         VarService.Scoped official = svc.scoped(p, scope, date, ccy, lens);
         VarService.WithMatured w = matured ? svc.withMatured(p, official) : null;
         VarService.Scoped s = w == null ? official : w.scoped();
@@ -1221,15 +1221,15 @@ final class VarViews {
 
     // ------------------------------------------------------------------------------------------------------------------- history
 
-    Map<String, Object> history(Principal p, String scope, LocalDate date) {
+    Map<String, Object> history(Caller p, String scope, LocalDate date) {
         return history(svc.scoped(p, scope, date));
     }
 
-    Map<String, Object> history(Principal p, String scope, LocalDate date, String ccy) {
+    Map<String, Object> history(Caller p, String scope, LocalDate date, String ccy) {
         return history(svc.scoped(p, scope, date, ccy));
     }
 
-    Map<String, Object> history(Principal p, String scope, LocalDate date, String ccy, VarLens lens) {
+    Map<String, Object> history(Caller p, String scope, LocalDate date, String ccy, VarLens lens) {
         return history(svc.scoped(p, scope, date, ccy, lens));
     }
 
@@ -1379,20 +1379,20 @@ final class VarViews {
     // ------------------------------------------------------------------------------------------------------------------- tree
 
     /** Every node of a hierarchy the viewer sees, with its VaR, ES, limit and counts (the explorer's left pane). */
-    Map<String, Object> tree(Principal p, String hierarchy, LocalDate date) {
+    Map<String, Object> tree(Caller p, String hierarchy, LocalDate date) {
         return tree(p, hierarchy, date, VarDate.USD);
     }
 
-    Map<String, Object> tree(Principal p, String hierarchy, LocalDate date, String ccy) {
+    Map<String, Object> tree(Caller p, String hierarchy, LocalDate date, String ccy) {
         return tree(p, hierarchy, date, ccy, null);
     }
 
-    Map<String, Object> tree(Principal p, String hierarchy, LocalDate date, String ccy, VarLens lens) {
+    Map<String, Object> tree(Caller p, String hierarchy, LocalDate date, String ccy, VarLens lens) {
         return tree(p, hierarchy, date, ccy, lens, false);
     }
 
     /** The same with the matured-items switch ({@code matured}: each node's figure with its matured items beside, VAR_GUIDE.md, "Matured items"). */
-    Map<String, Object> tree(Principal p, String hierarchy, LocalDate date, String ccy, VarLens lens, boolean matured) {
+    Map<String, Object> tree(Caller p, String hierarchy, LocalDate date, String ccy, VarLens lens, boolean matured) {
         return tree(p, null, hierarchy, date, ccy, lens, matured);
     }
 
@@ -1402,11 +1402,11 @@ final class VarViews {
      * hold any of its positions, each node's figures those of the basket's part in it ({@code (within) & NODE:id}, computed here). A
      * node none of the basket is in is left out with everything under it. Limits are the nodes', not the basket's parts': none shown.
      */
-    Map<String, Object> treeWithin(Principal p, String within, String hierarchy, LocalDate date, String ccy, VarLens lens, boolean matured) {
+    Map<String, Object> treeWithin(Caller p, String within, String hierarchy, LocalDate date, String ccy, VarLens lens, boolean matured) {
         return tree(p, within, hierarchy, date, ccy, lens, matured);
     }
 
-    private Map<String, Object> tree(Principal p, String within, String hierarchy, LocalDate date, String ccy, VarLens lens, boolean matured) {
+    private Map<String, Object> tree(Caller p, String within, String hierarchy, LocalDate date, String ccy, VarLens lens, boolean matured) {
         VarDate d = svc.date(date, ccy);
         VarBook b = d.book();
         List<String> present = b.hierarchies();
@@ -1414,7 +1414,7 @@ final class VarViews {
                 : hierarchy.toUpperCase(java.util.Locale.ROOT);
         VarBook.Node root = b.root(h);
         if (root == null) {
-            throw new DrishtiException(ErrorCode.VAR_HIERARCHY_UNKNOWN, "no hierarchy " + h + " on " + d.date() + " (it has "
+            throw new RiskFailure(RiskCode.VAR_HIERARCHY_UNKNOWN, "no hierarchy " + h + " on " + d.date() + " (it has "
                     + (present.isEmpty() ? "none: configure hierarchies: in the pack or drishti.var.hierarchies" : String.join(", ", present)) + ")");
         }
         List<Map<String, Object>> rows = new ArrayList<>();
@@ -1475,13 +1475,13 @@ final class VarViews {
     }
 
     /** One node's row and its children's ({@code within}: the basket's part in each node, a node without any left out with its subtree). */
-    private void walk(Principal p, VarBook b, VarBook.Node n, int depth, List<Map<String, Object>> rows, LocalDate date, String ccy, VarLens lens,
+    private void walk(Caller p, VarBook b, VarBook.Node n, int depth, List<Map<String, Object>> rows, LocalDate date, String ccy, VarLens lens,
             boolean matured, VarService.Scoped within) {
         VarService.Scoped s;
         String scope = within == null ? "NODE:" + n.id() : depth == 0 ? within.res().canonical() : "(" + within.res().canonical() + ") & NODE:" + n.id();
         try {
             s = depth == 0 && within != null ? within : svc.scoped(p, scope, date, ccy, lens);
-        } catch (DrishtiException e) {
+        } catch (RiskFailure e) {
             return;
         }
         if (s.set().isEmpty() && (within != null || !s.view().full())) {
@@ -1533,7 +1533,7 @@ final class VarViews {
      * A headline answer with the matured-items switch on (VAR_GUIDE.md, "Matured items"): the official answer as it is, and its
      * {@code matured} block (the figure with the scope's matured items added, the label, the official figure beside).
      */
-    Map<String, Object> withMatured(Map<String, Object> headline, Principal p, String scope, LocalDate date, String ccy, VarLens lens) {
+    Map<String, Object> withMatured(Map<String, Object> headline, Caller p, String scope, LocalDate date, String ccy, VarLens lens) {
         VarService.Scoped s = svc.scoped(p, scope, date, ccy, lens);
         Map<String, Object> out = new LinkedHashMap<>(headline);
         out.put("matured", VarMaturedSwitch.block(s, svc.withMatured(p, s), VarMaturedSwitch.grainWord(s.date().intake())));

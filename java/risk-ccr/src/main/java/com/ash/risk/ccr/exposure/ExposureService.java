@@ -16,15 +16,15 @@
 package com.ash.risk.ccr.exposure;
 
 import com.ash.tools.codec.Hashes;
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.ccr.calc.ExposureBook;
 import com.ash.risk.ccr.calc.ExposureCalc;
 import com.ash.risk.ccr.calc.ExposureMath;
 import com.ash.risk.ccr.calc.ExposureScopes;
 import com.ash.risk.kernel.vector.OrdinalSet;
 import com.ash.risk.hostcompat.identity.AuditLog;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -55,17 +55,17 @@ final class ExposureService implements AutoCloseable {
                 try {
                     qq = Double.parseDouble(q.trim());
                 } catch (NumberFormatException e) {
-                    throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, "q is a confidence between 0.5 and 0.9999, not " + q);
+                    throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, "q is a confidence between 0.5 and 0.9999, not " + q);
                 }
             }
             if (!(qq > 0.5 && qq <= 0.9999)) {
-                throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, "q is a confidence between 0.5 and 0.9999, not " + qq);
+                throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, "q is a confidence between 0.5 and 0.9999, not " + qq);
             }
             String c = collateral == null || collateral.isBlank() ? props.collateralModel() : collateral.trim().toLowerCase(Locale.ROOT);
             try {
                 ExposureMath.Model.of(c);
             } catch (IllegalArgumentException e) {
-                throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, e.getMessage());
+                throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, e.getMessage());
             }
             return new Ask(qq, c, run == null ? "" : run.trim(), Boolean.TRUE.equals(strict));
         }
@@ -124,7 +124,7 @@ final class ExposureService implements AutoCloseable {
         this.audit = audit;
         this.loads = com.ash.risk.hostcompat.server.compute.LoadPools.named("drishti-exposure-load", props.loadThreads());
         this.watch = new com.ash.risk.hostcompat.server.compute.VersionWatch("exposure", props.versionCheck(), loader::version);
-        this.room = new com.ash.risk.hostcompat.server.caches.Refusals(java.util.Set.of(ErrorCode.EXPOSURE_CAPACITY, ErrorCode.DISK_GUARD),
+        this.room = new com.ash.risk.hostcompat.server.caches.Refusals(java.util.Set.of(RiskCode.EXPOSURE_CAPACITY, RiskCode.DISK_GUARD),
                 props::refusalTtlSeconds, System::currentTimeMillis);
         this.pins = new com.ash.risk.hostcompat.server.caches.PinKeeper("exposure", props.pinned(), props.fiscalYearEnd(), () -> calendar,
                 new com.ash.risk.hostcompat.server.caches.PinKeeper.Engine() {
@@ -334,11 +334,11 @@ final class ExposureService implements AutoCloseable {
     /** The date a request reads: the one asked when it has paths, else the newest on or before it. */
     ExposureDate date(LocalDate asked, boolean strict) {
         if (!running()) {
-            throw new com.ash.risk.hostcompat.server.engines.EngineOffException("exposure", "Exposure");
+            throw new com.ash.risk.kernel.RiskFailure(com.ash.risk.kernel.RiskCode.ENGINE_OFF, "Exposure is off (the host's engine switch for exposure)");
         }
         LocalDate latest = loader.latest();
         if (latest == null) {
-            throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no exposure paths in any connector (kind " + props.kinds().paths()
+            throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no exposure paths in any connector (kind " + props.kinds().paths()
                     + "): build the demo lake (drishti.py lake demo) or point the counterparty-risk pack's exposure-store at your lake");
         }
         return load(asked == null || asked.isAfter(latest) ? latest : asked, 0, strict);
@@ -360,7 +360,6 @@ final class ExposureService implements AutoCloseable {
     private com.ash.risk.hostcompat.server.admission.AdmissionGate gate;
     private com.ash.risk.hostcompat.server.admission.AdmissionGate.Loads gateLoads;
 
-    @com.ash.risk.hostcompat.spring.Autowired(required = false)
     void admission(com.ash.risk.hostcompat.server.admission.AdmissionGate g) {
         this.gate = g;
         this.gateLoads = g.loads("exposure", props::loadThreads);
@@ -376,7 +375,7 @@ final class ExposureService implements AutoCloseable {
         String[] r = refused.get(d);
         if (r != null && r[0].equals(loader.version(d))) {
             if (strict) {
-                throw new DrishtiException(ErrorCode.EXPOSURE_INCONSISTENT_RUN, r[1]);
+                throw new RiskFailure(RiskCode.EXPOSURE_INCONSISTENT_RUN, r[1]);
             }
             return previous(d, r[1], depth);
         }
@@ -409,12 +408,12 @@ final class ExposureService implements AutoCloseable {
             String w = watch.check(d, xd.version(), false, () -> swap(d, f));           // O9: the lake moved on without a signal
             return w == null ? xd : xd.warned(w);
         } catch (java.util.concurrent.CompletionException e) {
-            if (e.getCause() instanceof DrishtiException de && room.remembers(de)) {
+            if (e.getCause() instanceof RiskFailure de && room.remembers(de)) {
                 room.remember(d, roomStamp(d), de);
             }
             dates.remove(d, f);
-            if (e.getCause() instanceof DrishtiException de) {
-                if (de.errorCode() == ErrorCode.EXPOSURE_INCONSISTENT_RUN) {
+            if (e.getCause() instanceof RiskFailure de) {
+                if (de.errorCode() == RiskCode.EXPOSURE_INCONSISTENT_RUN) {
                     refused.put(d, new String[] {loader.version(d), de.getMessage()});
                     if (strict) {
                         throw de;
@@ -423,14 +422,14 @@ final class ExposureService implements AutoCloseable {
                 }
                 throw de;
             }
-            throw new DrishtiException(ErrorCode.SOURCE_FAILED, "the exposure data of " + d + " could not be loaded: " + e.getCause());
+            throw new RiskFailure(RiskCode.SOURCE_FAILED, "the exposure data of " + d + " could not be loaded: " + e.getCause());
         }
     }
 
     private ExposureDate previous(LocalDate d, String why, int depth) {
         LocalDate p = depth < 5 ? loader.previous(d) : null;
         if (p == null) {
-            throw new DrishtiException(ErrorCode.EXPOSURE_INCONSISTENT_RUN, why);
+            throw new RiskFailure(RiskCode.EXPOSURE_INCONSISTENT_RUN, why);
         }
         return load(p, depth + 1, false).warned(why + "; answered from " + p + " instead");
     }
@@ -545,11 +544,11 @@ final class ExposureService implements AutoCloseable {
     }
 
     /** Resolves and computes a scope as the viewer (cached); a null viewer is the server (no interactive limit). */
-    Scoped scoped(Principal p, String scope, LocalDate asked, Ask ask) {
+    Scoped scoped(Caller p, String scope, LocalDate asked, Ask ask) {
         long t0 = System.nanoTime();
         ExposureDate d = date(asked, ask.strict());
         if (!ask.run().isEmpty() && !ask.run().equals(d.book().runId())) {
-            throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, "the run " + ask.run() + " is not loaded for " + d.date() + ": the date's "
+            throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, "the run " + ask.run() + " is not loaded for " + d.date() + ": the date's "
                     + "newest complete run " + d.book().runId() + " answers (leave run empty)");
         }
         ExposureAccess.View view = access.view(p, d);
@@ -557,14 +556,14 @@ final class ExposureService implements AutoCloseable {
         try {
             res = new ExposureScopes(d.book(), g -> Optional.ofNullable(d.groups().get(g)), loader.hierarchySpecs()).resolve(scope);
         } catch (IllegalArgumentException e) {
-            throw new DrishtiException(ErrorCode.EXPOSURE_BAD_PARAMETER, e.getMessage());
+            throw new RiskFailure(RiskCode.EXPOSURE_BAD_PARAMETER, e.getMessage());
         }
         noPaths(d, res, scope);
         java.util.Set<String> words = loader.words();
         boolean naming = com.ash.risk.kernel.scope.ScopeExpr.parse(scope, words).refs().stream()
                 .anyMatch(r -> NAMING.contains(r.word()) || words.contains(r.word()));        // a column hierarchy's node names trades as DESK: does
         if (naming && !view.seesTrades(res.trades().and(view.visible()))) {
-            throw new DrishtiException(ErrorCode.FORBIDDEN, "a scope of trades, desks, books or a rule may only name the netting sets you see trade "
+            throw new RiskFailure(RiskCode.FORBIDDEN, "a scope of trades, desks, books or a rule may only name the netting sets you see trade "
                     + "by trade; your role sees some of these only in aggregate");
         }
         String key = d.date() + "|" + d.version() + "|" + view.signature() + "|" + access.masked(p, "NAME") + "|" + res.canonical() + "|" + ask.q()
@@ -590,7 +589,7 @@ final class ExposureService implements AutoCloseable {
         try {
             r = ExposureCalc.evaluate(d.book(), set, res.standalone(), params(ask, p == null), paths(d));
         } catch (ExposureCalc.TooLarge e) {
-            throw new DrishtiException(ErrorCode.EXPOSURE_BATCH_JOB, e.getMessage() + ": its official figures are computed by the end-of-day capture "
+            throw new RiskFailure(RiskCode.EXPOSURE_BATCH_JOB, e.getMessage() + ": its official figures are computed by the end-of-day capture "
                     + "(GET /api/v1/risk/exposure/official), or narrow the scope");
         }
         if (!d.warnings().isEmpty() && !r.flags.contains("stale-run")) {
@@ -611,7 +610,7 @@ final class ExposureService implements AutoCloseable {
             String id = u.toUpperCase(Locale.ROOT);
             String known = d.known().containsKey(id) ? id : d.known().containsKey("NS-" + id) ? "NS-" + id : null;
             if (known != null) {
-                throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no exposure paths for the netting set " + known + " on " + d.date()
+                throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no exposure paths for the netting set " + known + " on " + d.date()
                         + " (the run " + d.book().runId() + " does not cover it)");
             }
         }
@@ -619,18 +618,18 @@ final class ExposureService implements AutoCloseable {
             String c = scope.trim().substring(5).trim().toUpperCase(Locale.ROOT);
             boolean has = d.known().values().stream().anyMatch(k -> c.equals(k.counterparty()) || ("CP-" + c).equals(k.counterparty()));
             if (has) {
-                throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no exposure paths for the counterparty " + c + " on " + d.date()
+                throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no exposure paths for the counterparty " + c + " on " + d.date()
                         + " (the run " + d.book().runId() + " covers none of its netting sets)");
             }
         }
         if (!res.unknown().isEmpty()) {
-            throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "the scope " + scope + " names what " + d.date() + " does not hold: "
+            throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "the scope " + scope + " names what " + d.date() + " does not hold: "
                     + String.join(", ", res.unknown()));
         }
     }
 
     /** A counterparty's name for the viewer (its id when the name is masked). */
-    String name(ExposureDate d, String counterparty, Principal p) {
+    String name(ExposureDate d, String counterparty, Caller p) {
         if (counterparty == null) {
             return null;
         }
@@ -638,7 +637,7 @@ final class ExposureService implements AutoCloseable {
         return n == null || access.masked(p, "NAME") ? counterparty : n;
     }
 
-    private String label(ExposureDate d, ExposureScopes.Resolution res, Principal p) {
+    private String label(ExposureDate d, ExposureScopes.Resolution res, Caller p) {
         String id = res.id();
         return switch (res.kind()) {
             case "netting-set" -> {
@@ -656,7 +655,7 @@ final class ExposureService implements AutoCloseable {
         };
     }
 
-    void audit(Principal p, String action, Scoped s, String extra) {
+    void audit(Caller p, String action, Scoped s, String extra) {
         if (audit == null) {
             return;
         }

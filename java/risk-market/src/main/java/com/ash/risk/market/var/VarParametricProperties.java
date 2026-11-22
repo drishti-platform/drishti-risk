@@ -19,7 +19,6 @@ import com.ash.risk.market.calc.ParametricVar;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
-import com.ash.risk.hostcompat.spring.ConfigurationProperties;
 
 /**
  * Parametric VaR, a cross-check beside historical (docs/guides/VAR_GUIDE.md section 5; VAR_GUIDE.md section 18.15).
@@ -32,7 +31,7 @@ import com.ash.risk.hostcompat.spring.ConfigurationProperties;
  * @param matrixMaxParts most parts of a correlation matrix
  * @param showCurve the Normal curve toggle starts on
  */
-@ConfigurationProperties("drishti.var.parametric")
+// the host binds its settings under drishti.var.parametric to these values (the engine reads options, never a configuration file)
 public record VarParametricProperties(Boolean enabled, String weighting, Double lambda, String horizonRule, Integer curvePoints,
         Integer matrixMaxParts, Boolean showCurve) {
 

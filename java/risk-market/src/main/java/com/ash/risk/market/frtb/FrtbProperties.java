@@ -20,8 +20,8 @@ package com.ash.risk.market.frtb;
  * Position sensitivities and FRTB-SA on the server (FRTB_SA_GUIDE.md section 9), {@code drishti.frtb}.
  *
  * @param enabled the engine, its API and the playground
- * @param parametersDir the folder of the parameter files {@code frtb-sa-sbm.yaml} and {@code frtb-sa-drc-rrao.yaml} (the market-risk pack's
- *     {@code capital/})
+ * @param parametersDir an absolute folder of a bank's own parameter files {@code frtb-sa-sbm.yaml} and {@code frtb-sa-drc-rrao.yaml}; blank:
+ *     the Basel files the product carries ({@link com.ash.risk.market.frtb.calc.FrtbParams#builtIn()})
  * @param sensitivityKind the kind of the position sensitivities ({@code position-sensitivity})
  * @param factorKind the kind of the factor dictionary ({@code risk-factor})
  * @param defaultRiskKind the kind of the DRC inputs ({@code default-risk}); none served: the DRC is missing, never 0
@@ -39,10 +39,7 @@ public record FrtbProperties(Boolean enabled, String parametersDir, String sensi
 
     public FrtbProperties {
         enabled = enabled == null || enabled;
-        // config/engines/frtb-sa.yaml names it under ${drishti.module.dir.banking}; without that file, under banking's folder as the module
-        // boot gave it (KERNEL_AND_MODULES.md section 4.2.1)
-        parametersDir = blank(parametersDir) || parametersDir.strip().startsWith("/packs/") ? bankingDir().resolve("packs").resolve("market-risk")
-                .resolve("capital").toString() : parametersDir.strip();
+        parametersDir = blank(parametersDir) ? "" : parametersDir.strip();
         sensitivityKind = blank(sensitivityKind) ? "position-sensitivity" : sensitivityKind.strip();
         factorKind = blank(factorKind) ? "risk-factor" : factorKind.strip();
         defaultRiskKind = blank(defaultRiskKind) ? "default-risk" : defaultRiskKind.strip();
@@ -52,14 +49,6 @@ public record FrtbProperties(Boolean enabled, String parametersDir, String sensi
         recipesDir = blank(recipesDir) ? com.ash.risk.hostcompat.api.Roots.data("frtb/recipes") : recipesDir.strip();
         cacheMinutes = cacheMinutes == null || cacheMinutes < 1 ? 10 : cacheMinutes;
         playgroundTemplate = playgroundTemplate == null ? "" : playgroundTemplate.strip();
-    }
-
-    /** Banking's folder as the module boot gave this process ({@code ModuleHomes}: published, else read from the process's settings). */
-    private static java.nio.file.Path bankingDir() {
-        return com.ash.risk.hostcompat.api.resolution.ModuleHomes.current().flatMap(h -> h.dir("banking"))
-                .or(() -> com.ash.risk.hostcompat.api.resolution.ModuleHomes.resolve(System::getProperty).dir("banking"))
-                .orElseThrow(() -> new IllegalStateException("the FRTB parameters' folder: banking is not among the modules the boot gave this"
-                        + " process; set drishti.module.banking.frtb.parameters-dir (DRISHTI_FRTB_PARAMETERS)"));
     }
 
     /** The defaults (tests, and a server without the block). */

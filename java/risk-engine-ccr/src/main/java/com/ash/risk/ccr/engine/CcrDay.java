@@ -69,9 +69,12 @@ final class CcrDay {
     final Map<String, Map<String, Object>> balances;
     final Map<String, Double> mtm0;
     final Map<String, Missing> missing;
+    /** The limits, sensitivities and SIMM parameter files. */
+    final CcrExtras extras;
 
     private CcrDay(Snapshot snapshot, Map<String, Object> run, List<PathRow> paths, Map<String, Map<String, Object>> sets,
-            Map<String, Map<String, Object>> csas, Map<String, Map<String, Object>> balances, Map<String, Double> mtm0, Map<String, Missing> missing) {
+            Map<String, Map<String, Object>> csas, Map<String, Map<String, Object>> balances, Map<String, Double> mtm0, Map<String, Missing> missing,
+            CcrExtras extras) {
         this.snapshot = snapshot;
         this.date = LocalDate.parse(snapshot.dimensions().get("date"));
         this.run = run;
@@ -81,6 +84,7 @@ final class CcrDay {
         this.balances = balances;
         this.mtm0 = mtm0;
         this.missing = missing;
+        this.extras = extras;
     }
 
     static CcrDay read(Snapshot snapshot, Inputs inputs, Control control) throws EngineException {
@@ -128,8 +132,9 @@ final class CcrDay {
         Map<String, Object> run = rows.get(RUN).stream().min(Comparator.comparing(r -> String.valueOf(r.get("RUN_ID")))).orElse(null);
         Map<String, Double> mtm0 = new TreeMap<>();
         rows.get(VALUATION).forEach(r -> mtm0.put(String.valueOf(r.get("TRADE_ID")), num(r, "MTM")));
+        CcrExtras extras = CcrExtras.read(snapshot, inputs, missing, control);
         return new CcrDay(snapshot, run, List.copyOf(paths), byKey(rows.get(SET), "NETTING_SET_ID"), byKey(rows.get(CSA), "CSA_ID"),
-                byKey(rows.get(BALANCE), "BALANCE_ID"), mtm0, missing);
+                byKey(rows.get(BALANCE), "BALANCE_ID"), mtm0, missing, extras);
     }
 
     private static Map<String, Map<String, Object>> byKey(List<Map<String, Object>> rows, String key) {
@@ -244,6 +249,6 @@ final class CcrDay {
         for (PathRow r : paths) {
             b += 128 + (r.mtm() == null ? 0 : 8L * r.mtm().length);
         }
-        return b;
+        return b + extras.bytes();
     }
 }

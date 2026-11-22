@@ -15,13 +15,13 @@
  */
 package com.ash.risk.market.var;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.market.calc.VarBook;
 import com.ash.risk.market.calc.VarCalc;
 import com.ash.risk.market.calc.VarMath;
 import com.ash.risk.kernel.vector.OrdinalSet;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import com.ash.risk.market.var.VarExplainMath.Op;
 import com.ash.risk.market.var.VarExplainMath.State;
 import com.ash.risk.market.var.VarExplainMath.Step;
@@ -105,7 +105,7 @@ final class VarExplain {
 
     private void enabled() {
         if (!props.enabled()) {
-            throw new DrishtiException(ErrorCode.FORBIDDEN, "the VaR change explanation is switched off on this server (drishti.var.explain.enabled)");
+            throw new RiskFailure(RiskCode.FORBIDDEN, "the VaR change explanation is switched off on this server (drishti.var.explain.enabled)");
         }
     }
 
@@ -117,23 +117,23 @@ final class VarExplain {
         }
         double c = confidence > 1 ? confidence / 100.0 : confidence;
         if (svc.props().confidences().stream().noneMatch(x -> Math.abs(x - c) < 1e-9)) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "confidence " + confidence + " is not offered; choose one of " + svc.props().confidences());
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "confidence " + confidence + " is not offered; choose one of " + svc.props().confidences());
         }
         return new VarCalc(c, base.esConfidence(), base.rule(), base.window(), base.scaleToVar());
     }
 
     /** The explanation of a scope between two dates (null: the business date before the newest, and the newest), with its drivers. */
-    Result explain(Principal p, String scope, LocalDate from, LocalDate to, Double confidence) {
+    Result explain(Caller p, String scope, LocalDate from, LocalDate to, Double confidence) {
         return explain(p, scope, from, to, confidence, true);
     }
 
-    Result explain(Principal p, String scope, LocalDate from, LocalDate to, Double confidence, boolean drivers) {
+    Result explain(Caller p, String scope, LocalDate from, LocalDate to, Double confidence, boolean drivers) {
         enabled();
         long t0 = System.nanoTime();
         VarCalc calc = calc(confidence);
         LocalDate toAsked = to == null ? svc.loader().latest() : to;
         if (toAsked == null) {
-            throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no business date with P&L vectors is loaded: nothing to explain");
+            throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no business date with P&L vectors is loaded: nothing to explain");
         }
         VarService.Scoped sTo = svc.scoped(p, scope, toAsked);
         LocalDate toDay = sTo.date().date();
@@ -143,15 +143,15 @@ final class VarExplain {
             fromAsked = usable == null ? fromAsked : usable;
         }
         if (fromAsked == null) {
-            throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no business date with P&L vectors before " + toDay + ": nothing to compare with");
+            throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no business date with P&L vectors before " + toDay + ": nothing to compare with");
         }
         if (!fromAsked.isBefore(toDay)) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "from (" + fromAsked + ") must be before to (" + toDay + ")");
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "from (" + fromAsked + ") must be before to (" + toDay + ")");
         }
         VarService.Scoped sFrom = svc.scoped(p, scope, fromAsked);
         LocalDate fromDay = sFrom.date().date();
         if (!fromDay.isBefore(toDay)) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "the business date before " + toDay + " that has vectors is not before it: " + fromDay);
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "the business date before " + toDay + " that has vectors is not before it: " + fromDay);
         }
         String key = String.join("|", sFrom.date().date().toString(), sFrom.date().version(), "i" + sFrom.date().intradayStamp(), sTo.date().date().toString(),
                 sTo.date().version(), "i" + sTo.date().intradayStamp(), sTo.view().signature(), sFrom.view().signature(), sTo.res().canonical(),
@@ -167,7 +167,7 @@ final class VarExplain {
     }
 
     /** The Matrix view: the scope and each child node (at most {@code matrix-max}), the steps across. */
-    Map<String, Object> matrix(Principal p, String scope, LocalDate from, LocalDate to, Double confidence) {
+    Map<String, Object> matrix(Caller p, String scope, LocalDate from, LocalDate to, Double confidence) {
         Result top = explain(p, scope, from, to, confidence, false);
         List<Map<String, Object>> rows = new ArrayList<>();
         rows.add(row(top, 0));
@@ -185,8 +185,8 @@ final class VarExplain {
                 }
                 try {
                     rows.add(row(explain(p, "NODE:" + c, top.from(), top.to(), confidence, false), 1));
-                } catch (DrishtiException e) {
-                    if (e.errorCode() != ErrorCode.FORBIDDEN) {
+                } catch (RiskFailure e) {
+                    if (e.errorCode() != RiskCode.FORBIDDEN) {
                         throw e;
                     }
                 }
@@ -227,7 +227,7 @@ final class VarExplain {
 
     /** One explanation being worked out. */
     private final class Run {
-        final Principal p;
+        final Caller p;
         final VarService.Scoped sFrom;
         final VarService.Scoped sTo;
         final VarBook fb;
@@ -252,7 +252,7 @@ final class VarExplain {
         int amended;
         boolean marks;
 
-        Run(Principal p, VarService.Scoped sFrom, VarService.Scoped sTo, VarCalc calc, boolean drivers) {
+        Run(Caller p, VarService.Scoped sFrom, VarService.Scoped sTo, VarCalc calc, boolean drivers) {
             this.p = p;
             this.sFrom = sFrom;
             this.sTo = sTo;
@@ -267,7 +267,7 @@ final class VarExplain {
             List<LocalDate> fromDays = fb.scenarioDates();
             List<LocalDate> toDays = tb.scenarioDates();
             if (sFrom.vector().length != fromDays.size() || sTo.vector().length != toDays.size()) {
-                throw new DrishtiException(ErrorCode.BAD_REQUEST, "the vectors and the scenario days of a date differ in length: explained on whole sets only");
+                throw new RiskFailure(RiskCode.BAD_REQUEST, "the vectors and the scenario days of a date differ in length: explained on whole sets only");
             }
             Map<String, Object> official = new LinkedHashMap<>();
             double[] captured = captured(official, fromDays.size());

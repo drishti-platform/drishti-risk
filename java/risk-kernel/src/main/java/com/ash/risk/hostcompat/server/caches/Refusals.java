@@ -15,8 +15,8 @@
  */
 package com.ash.risk.hostcompat.server.caches;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -38,31 +38,31 @@ import java.util.function.LongSupplier;
 public final class Refusals {
 
     /** The refusal codes that mean "no room now" (others are the data's, not the room's, and are not remembered here). */
-    private final Set<ErrorCode> codes;
+    private final Set<RiskCode> codes;
     private final IntSupplier ttlSeconds;
     private final LongSupplier clock;
     private final Map<LocalDate, Entry> entries = new ConcurrentHashMap<>();
 
-    private record Entry(String stamp, ErrorCode code, String reason, long atMillis, long untilMillis) {}
+    private record Entry(String stamp, RiskCode code, String reason, long atMillis, long untilMillis) {}
 
     /**
      * @param codes the refusals remembered
      * @param ttlSeconds how long one is remembered (0: not at all)
      * @param clock the time in milliseconds
      */
-    public Refusals(Set<ErrorCode> codes, IntSupplier ttlSeconds, LongSupplier clock) {
+    public Refusals(Set<RiskCode> codes, IntSupplier ttlSeconds, LongSupplier clock) {
         this.codes = Set.copyOf(codes);
         this.ttlSeconds = ttlSeconds;
         this.clock = clock;
     }
 
     /** True when {@code e} is a refusal for room this keeps. */
-    public boolean remembers(DrishtiException e) {
+    public boolean remembers(RiskFailure e) {
         return codes.contains(e.errorCode()) && !(e instanceof RefusedForNow);
     }
 
     /** Remembers a refusal of {@code date} at {@code stamp} (the date's inputs and the settings of room). */
-    public void remember(LocalDate date, String stamp, DrishtiException e) {
+    public void remember(LocalDate date, String stamp, RiskFailure e) {
         int ttl = ttlSeconds.getAsInt();
         if (ttl <= 0 || !remembers(e)) {
             return;

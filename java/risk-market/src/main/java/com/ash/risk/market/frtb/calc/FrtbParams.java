@@ -254,6 +254,28 @@ public final class FrtbParams {
     }
 
     /** Reads the two files; {@code overrides} ({@code path → value}, may be empty) are set on the trees before they are checked. */
+    /** The SBM parameter file the product carries (Basel MAR21, the market-risk pack's capital/frtb-sa-sbm.yaml). */
+    public static final String SBM_RESOURCE = "/com/ash/risk/market/frtb/params/frtb-sa-sbm.yaml";
+    /** The DRC and RRAO parameter file the product carries (Basel MAR22 and MAR23). */
+    public static final String DRC_RESOURCE = "/com/ash/risk/market/frtb/params/frtb-sa-drc-rrao.yaml";
+
+    /** A parameter file the product carries, as bytes. */
+    public static byte[] builtIn(String resource) {
+        try (java.io.InputStream in = FrtbParams.class.getResourceAsStream(resource)) {
+            if (in == null) {
+                throw new IllegalArgumentException("the product lacks its parameter file " + resource);
+            }
+            return in.readAllBytes();
+        } catch (java.io.IOException e) {
+            throw new IllegalArgumentException(resource + " could not be read: " + e.getMessage(), e);
+        }
+    }
+
+    /** The parameters the product carries, without overrides. */
+    public static FrtbParams builtIn() {
+        return parse(builtIn(SBM_RESOURCE), builtIn(DRC_RESOURCE), Map.of());
+    }
+
     public static FrtbParams read(Path sbm, Path drcRrao, Map<String, String> overrides) {
         try {
             return parse(Files.readAllBytes(sbm), Files.readAllBytes(drcRrao), overrides);

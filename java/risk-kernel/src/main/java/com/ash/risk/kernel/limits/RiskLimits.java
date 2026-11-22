@@ -15,7 +15,6 @@
  */
 package com.ash.risk.kernel.limits;
 
-import com.ash.risk.hostcompat.spring.ConfigurationProperties;
 
 /**
  * How the banking module says where a figure stands against its limit, one rule for every limit it holds a figure to: a VaR limit (a
@@ -25,7 +24,7 @@ import com.ash.risk.hostcompat.spring.ConfigurationProperties;
  *
  * @param limitNear the share of a limit from which a figure is near it ({@code drishti.risk.limit-near}, 0.8; in (0, 1])
  */
-@ConfigurationProperties("drishti.risk")
+// the host binds its settings under drishti.risk to these values (the engine reads options, never a configuration file)
 public record RiskLimits(Double limitNear) {
 
     public static final String WITHIN = "within";

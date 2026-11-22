@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.data.Offset.offset;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
+import com.ash.risk.kernel.RiskFailure;
 import com.ash.risk.ccr.simm.calc.Simm;
 import com.ash.risk.ccr.simm.calc.SimmChoices;
 import java.nio.file.Files;
@@ -57,7 +57,7 @@ class SimmServiceTest {
         assertThat(two.versions().stream().filter(v -> !v.ok()).findFirst().orElseThrow().problem()).startsWith("DRS-5333");
         assertThat(two.defaultVersion()).isEqualTo("TOY-1");
         SimmService none = SimmTestData.service(SimmTestData.props(true, dir.resolve("nothing")));
-        assertThatThrownBy(() -> none.run(null, NS, COB, null, null, SimmChoices.defaults(), null)).isInstanceOf(DrishtiException.class)
+        assertThatThrownBy(() -> none.run(null, NS, COB, null, null, SimmChoices.defaults(), null)).isInstanceOf(RiskFailure.class)
                 .hasMessageContaining("DRS-5333 no SIMM version is installed");
         assertThatThrownBy(() -> svc.run(null, NS, COB, null, "2.8+2512", SimmChoices.defaults(), null)).hasMessageContaining("DRS-5333 SIMM 2.8+2512 is not installed");
         // the template's structure is the shipped file

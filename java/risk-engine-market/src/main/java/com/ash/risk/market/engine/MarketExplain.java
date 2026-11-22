@@ -51,13 +51,21 @@ final class MarketExplain {
         VarBook b = built.book();
         double[] v = vector(b, day, cell);
         VarCalc calc = options.calc();
-        VarCalc.Measures ms = calc.measures(v);
         String col = cell.column();
         if (cell.output().equals("node-components")) {
             return opaque(b, cell, calc);
         }
+        if ("VAR".equals(col) || "ES".equals(col)) {
+            return ofVector(cell, v, built.scenarios(), calc, col);
+        }
+        throw new EngineException("ENG-3005", Kind.REFUSED, cell.output() + "." + col + " is not a measure this engine explains");
+    }
+
+    /** VaR or ES of one vector explained: the scenario at rank k worst first (VaR), the mean of the k worst (ES). */
+    static Explanation ofVector(Cell cell, double[] v, List<java.time.LocalDate> scenarios, VarCalc calc, String column) throws EngineException {
+        VarCalc.Measures ms = calc.measures(v);
         int n = v.length;
-        if ("VAR".equals(col)) {
+        if ("VAR".equals(column)) {
             List<Map<String, Object>> rows = new ArrayList<>();
             double value;
             if (calc.rule() == VarMath.RankRule.INTERPOLATED) {
@@ -65,12 +73,12 @@ final class MarketExplain {
                 int lo = Math.max(1, (int) Math.floor(pos));
                 int hi = Math.min(n, lo + 1);
                 double w = Math.min(1.0, Math.max(0.0, pos - lo));
-                rows.add(row(lo, ms.order()[lo - 1], built, (1 - w) * v[ms.order()[lo - 1]]));
-                rows.add(row(hi, ms.order()[hi - 1], built, w * v[ms.order()[hi - 1]]));
+                rows.add(row(lo, ms.order()[lo - 1], scenarios, (1 - w) * v[ms.order()[lo - 1]]));
+                rows.add(row(hi, ms.order()[hi - 1], scenarios, w * v[ms.order()[hi - 1]]));
                 value = (1 - w) * v[ms.order()[lo - 1]] + w * v[ms.order()[hi - 1]];
             } else {
                 int k = VarMath.rank(n, calc.confidence());
-                rows.add(row(k, ms.order()[k - 1], built, v[ms.order()[k - 1]]));
+                rows.add(row(k, ms.order()[k - 1], scenarios, v[ms.order()[k - 1]]));
                 value = v[ms.order()[k - 1]];
             }
             List<Step> steps = List.of(
@@ -79,12 +87,12 @@ final class MarketExplain {
                     Steps.of("var", "VaR is the loss there", "0 - step.worst", Map.of(), ms.var()));
             return new Explanation(cell, ms.var(), steps);
         }
-        if ("ES".equals(col)) {
+        if ("ES".equals(column)) {
             int k = VarMath.rank(n, calc.esConfidence());
             List<Map<String, Object>> rows = new ArrayList<>();
             double s = 0;
             for (int i = 0; i < k; i++) {
-                rows.add(row(i + 1, ms.order()[i], built, v[ms.order()[i]]));
+                rows.add(row(i + 1, ms.order()[i], scenarios, v[ms.order()[i]]));
                 s += v[ms.order()[i]];
             }
             List<Step> steps = List.of(
@@ -93,14 +101,14 @@ final class MarketExplain {
                     Steps.of("es", "ES is minus their mean", "0 - step.tail / $.k", Map.of("k", (long) k), ms.es()));
             return new Explanation(cell, ms.es(), steps);
         }
-        throw new EngineException("ENG-3005", Kind.REFUSED, cell.output() + "." + col + " is not a measure this engine explains");
+        throw new EngineException("ENG-3005", Kind.REFUSED, column + " is not VAR or ES");
     }
 
-    private Map<String, Object> row(int rank, int scenario, MarketBooks.Built built, double pnl) {
+    private static Map<String, Object> row(int rank, int scenario, List<java.time.LocalDate> scenarios, double pnl) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("RANK", (long) rank);
         m.put("SCENARIO", (long) scenario);
-        m.put("DATE", built.scenarios().get(scenario).toString());
+        m.put("DATE", scenarios.get(scenario).toString());
         m.put("PNL", pnl);
         return m;
     }

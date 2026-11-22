@@ -15,7 +15,7 @@
  */
 package com.ash.risk.market.var;
 
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.kernel.scope.PositionRules;
 import com.ash.risk.market.calc.ScenarioFx;
 import com.ash.risk.market.calc.VarBook;
@@ -304,7 +304,7 @@ final class VarIntake {
                 return;                                                 // applied already (a redelivery, or a date opened again)
             }
             if (setId != null && set != null && !set.equals(setId)) {
-                reject(new String[] {ErrorCode.VAR_INCONSISTENT_DATE.code(), "an intraday update of the scenario set " + set + " (batch " + batch
+                reject(new String[] {RiskCode.VAR_INCONSISTENT_DATE.code(), "an intraday update of the scenario set " + set + " (batch " + batch
                         + "); the date's set is " + setId + ": not applied"}, trade);
                 return;
             }
@@ -369,11 +369,11 @@ final class VarIntake {
                 // a P&L vector's values are in its CURRENCY
                 String ccy = currency(row);
                 String w = check(values, length, text(row, "STATUS"), null);
-                why = w == null ? null : new String[] {ErrorCode.VAR_ROW_REJECTED.code(), w};
+                why = w == null ? null : new String[] {RiskCode.VAR_ROW_REJECTED.code(), w};
                 if (why == null && length >= 0 && !ccy.equals(ScenarioFx.USD)) {
                     java.util.Optional<ScenarioFx.Rates> r = pnlFx == null ? java.util.Optional.empty() : pnlFx.get().rates(ccy);
                     if (r.isEmpty()) {
-                        why = new String[] {ErrorCode.VAR_NO_FX.code(), "its P&L vector is in " + ccy + " and the date has no " + ccy + " scenario FX"};
+                        why = new String[] {RiskCode.VAR_NO_FX.code(), "its P&L vector is in " + ccy + " and the date has no " + ccy + " scenario FX"};
                     } else {
                         // each scenario's P&L at that scenario's FX into USD: approximate, the currency move inside the trade is
                         // already folded into the vector (tradesWithoutPv; VAR_GUIDE.md section 15.13)
@@ -556,7 +556,7 @@ final class VarIntake {
                 VarIntradayRows.Row r = (VarIntradayRows.Row) p[2];
                 if (morning != null && !morning.equals(p[1])) {
                     currentIntra = true;
-                    reject(new String[] {ErrorCode.VAR_INPUT_MIXED.code(), p[0] + "'s morning run sent " + morning + "; this update is " + p[1]
+                    reject(new String[] {RiskCode.VAR_INPUT_MIXED.code(), p[0] + "'s morning run sent " + morning + "; this update is " + p[1]
                             + " (batch " + r.batchId() + "): not applied"}, r.tradeId());
                     continue;
                 }
@@ -580,13 +580,13 @@ final class VarIntake {
     void verify() {
         List<String> mixed = inputs.mixed();
         if (!mixed.isEmpty()) {
-            throw new com.ash.risk.hostcompat.api.error.DrishtiException(ErrorCode.VAR_INPUT_MIXED, "the inputs of " + date + " are not loaded: "
+            throw new com.ash.risk.kernel.RiskFailure(RiskCode.VAR_INPUT_MIXED, "the inputs of " + date + " are not loaded: "
                     + String.join("; ", mixed) + "; one source system sends one form and one grain on one date (VAR_GUIDE.md section 15.13)");
         }
         for (Map.Entry<String, List<String>> e : positionTrades.entrySet()) {
             for (String t : e.getValue()) {
                 if (tradeGrain.contains(t)) {
-                    throw new com.ash.risk.hostcompat.api.error.DrishtiException(ErrorCode.VAR_INPUT_MIXED, "the inputs of " + date + " are not loaded: "
+                    throw new com.ash.risk.kernel.RiskFailure(RiskCode.VAR_INPUT_MIXED, "the inputs of " + date + " are not loaded: "
                             + "the supplied position " + e.getKey() + " covers the trade " + t + ", which is also sent on its own: it would count twice");
                 }
             }
@@ -661,7 +661,7 @@ final class VarIntake {
 
     /** Why a scenario-PV row is rejected ({code, reason}), or null: its PVs, their valuation dates, its currency's FX. */
     private String[] checkPv(double[] values, int length, String[] row) {
-        String bad = ErrorCode.VAR_ROW_REJECTED.code();
+        String bad = RiskCode.VAR_ROW_REJECTED.code();
         if (length < 0) {
             return null;                                                // no scenario PVs: a failed row, counted by the builder
         }
@@ -697,13 +697,13 @@ final class VarIntake {
                 int j = failed.get(i);
                 b.append(i == 0 ? "" : ", ").append(j).append(scenarioDates == null || j >= scenarioDates.size() ? "" : " (" + scenarioDates.get(j) + ")");
             }
-            return new String[] {ErrorCode.VAR_SCENARIO_FAILED.code(), failed.size() + " scenario" + (failed.size() == 1 ? "" : "s")
+            return new String[] {RiskCode.VAR_SCENARIO_FAILED.code(), failed.size() + " scenario" + (failed.size() == 1 ? "" : "s")
                     + " failed to price: " + b + (failed.size() > 5 ? ", ..." : "") + "; the trade is not loaded (never filled with zero)"};
         }
         String ccy = currency(row);
         if (fx.get().rates(ccy).isEmpty()) {
             String note = fx.get().notes().stream().filter(n -> n.startsWith(ccy + ":")).findFirst().orElse(ccy + ": no rates");
-            return new String[] {ErrorCode.VAR_NO_FX.code(), "its PVs are in " + ccy + " and the date has no " + ccy + " scenario FX (" + note + ")"};
+            return new String[] {RiskCode.VAR_NO_FX.code(), "its PVs are in " + ccy + " and the date has no " + ccy + " scenario FX (" + note + ")"};
         }
         return null;
     }

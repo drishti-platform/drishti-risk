@@ -19,10 +19,10 @@ import com.ash.risk.hostcompat.api.AsOf;
 import com.ash.risk.hostcompat.api.DataNode;
 import com.ash.risk.hostcompat.api.EntityDocument;
 import com.ash.risk.hostcompat.api.compute.Viewer;
-import com.ash.risk.hostcompat.api.error.DrishtiException;
+import com.ash.risk.kernel.RiskFailure;
 import com.ash.risk.hostcompat.kernel.api.view.ViewAugmenter;
 import com.ash.risk.hostcompat.server.net.NetCaller;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -68,7 +68,7 @@ final class VarFigures implements ViewAugmenter {
             return doc;
         }
         Map<String, Object> figures;
-        Optional<Principal> who = caller();
+        Optional<Caller> who = caller();
         if (who.isEmpty()) {
             figures = Map.of("STATUS", "unavailable", "NOTE", "the VaR figures are computed for a signed-in viewer");
         } else {
@@ -82,7 +82,7 @@ final class VarFigures implements ViewAugmenter {
                         : kind.equals(svc.props().kinds().systemBasket()) ? portfolio(who.get(), doc.ref().id(), date)
                         : kind.equals(LEGAL_ENTITY) ? legalEntity(who.get(), doc.ref().id(), o, date)
                         : desk(who.get(), doc.ref().id(), date);
-            } catch (DrishtiException | IllegalArgumentException e) {
+            } catch (RiskFailure | IllegalArgumentException e) {
                 figures = Map.of("STATUS", "unavailable", "NOTE", String.valueOf(e.getMessage()));
             }
         }
@@ -92,12 +92,12 @@ final class VarFigures implements ViewAugmenter {
     }
 
     /** The request's caller (the token's user), or the viewer a live view acts for; empty outside both. */
-    private static Optional<Principal> caller() {
-        Optional<Principal> p = NetCaller.current().map(NetCaller.Caller::principal).filter(java.util.Objects::nonNull);
-        return p.isPresent() ? p : Viewer.current().map(v -> new Principal(v.user(), v.roles()));
+    private static Optional<Caller> caller() {
+        Optional<Caller> p = NetCaller.current().map(NetCaller.Caller::principal).filter(java.util.Objects::nonNull);
+        return p.isPresent() ? p : Viewer.current().map(v -> new Caller(v.user(), String.join(",", v.roles())));
     }
 
-    private Map<String, Object> head(Principal p, String scope, LocalDate date) {
+    private Map<String, Object> head(Caller p, String scope, LocalDate date) {
         Map<String, Object> h = views.headline(p, scope, date);
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("STATUS", "ok");
@@ -113,7 +113,7 @@ final class VarFigures implements ViewAugmenter {
         return m;
     }
 
-    private List<Long> pnl(Principal p, String scope, LocalDate date) {
+    private List<Long> pnl(Caller p, String scope, LocalDate date) {
         Object s = views.path(p, scope, date, 0, 1).get("series");
         List<Long> out = new ArrayList<>();
         if (s instanceof long[] a) {
@@ -125,15 +125,15 @@ final class VarFigures implements ViewAugmenter {
     }
 
     @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> rows(Principal p, String scope, LocalDate date, String by) {
+    private List<Map<String, Object>> rows(Caller p, String scope, LocalDate date, String by) {
         try {
             return (List<Map<String, Object>>) views.contributions(p, scope, date, by, null).getOrDefault("rows", List.of());
-        } catch (DrishtiException e) {
+        } catch (RiskFailure e) {
             return List.of();                                            // an aggregate-only viewer: no positions or trades
         }
     }
 
-    private Map<String, Object> position(Principal p, String id, LocalDate date) {
+    private Map<String, Object> position(Caller p, String id, LocalDate date) {
         String scope = "POS:" + id;
         Map<String, Object> m = head(p, scope, date);
         List<Map<String, Object>> trades = new ArrayList<>();
@@ -159,7 +159,7 @@ final class VarFigures implements ViewAugmenter {
         return m;
     }
 
-    private Map<String, Object> portfolio(Principal p, String id, LocalDate date) {
+    private Map<String, Object> portfolio(Caller p, String id, LocalDate date) {
         String scope = "PORT:" + id;
         Map<String, Object> m = head(p, scope, date);
         List<Map<String, Object>> positions = new ArrayList<>();
@@ -191,7 +191,7 @@ final class VarFigures implements ViewAugmenter {
         return m;
     }
 
-    private Map<String, Object> desk(Principal p, String id, LocalDate date) {
+    private Map<String, Object> desk(Caller p, String id, LocalDate date) {
         return head(p, "DESK:" + id, date);
     }
 
@@ -199,7 +199,7 @@ final class VarFigures implements ViewAugmenter {
      * A legal entity's VaR (LE:&lt;id&gt;) and each of its books' (BOOK:&lt;id&gt;) beside the record's own book rows (BOOK, DESK,
      * PNL, MTM, TRADES): the record stores no VaR since 2.9.2. A book the engine cannot answer for keeps its row with no VAR.
      */
-    private Map<String, Object> legalEntity(Principal p, String id, DataNode.Obj doc, LocalDate date) {
+    private Map<String, Object> legalEntity(Caller p, String id, DataNode.Obj doc, LocalDate date) {
         Map<String, Object> m = head(p, "LE:" + id, date);
         List<Map<String, Object>> books = new ArrayList<>();
         DataNode rows = doc.get("BOOKS");
@@ -211,7 +211,7 @@ final class VarFigures implements ViewAugmenter {
             r.forEach((k, v) -> b.put(String.valueOf(k), v));
             try {
                 b.put("VAR", views.headline(p, "BOOK:" + r.get("BOOK"), date).get("var"));
-            } catch (DrishtiException | IllegalArgumentException e) {
+            } catch (RiskFailure | IllegalArgumentException e) {
                 b.put("VAR", null);
             }
             books.add(b);

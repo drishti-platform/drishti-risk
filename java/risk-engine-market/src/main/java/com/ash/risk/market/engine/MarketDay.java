@@ -88,9 +88,11 @@ final class MarketDay {
     final List<Basket> baskets;
     /** Inputs absent or lacking columns, by input name. */
     final Map<String, Missing> missing;
+    /** The inputs beyond the scenario vectors (histories, sensitivities, reports). */
+    final MarketExtras extras;
 
     private MarketDay(Snapshot snapshot, List<Row> pv, List<Row> pnl, List<ScenarioSet> sets, List<Fx> fx, Map<String, Double> nodeLimits,
-            Map<String, Double> basketLimits, List<Basket> baskets, Map<String, Missing> missing) {
+            Map<String, Double> basketLimits, List<Basket> baskets, Map<String, Missing> missing, MarketExtras extras) {
         this.snapshot = snapshot;
         this.date = LocalDate.parse(snapshot.dimensions().get("date"));
         this.pv = pv;
@@ -101,6 +103,7 @@ final class MarketDay {
         this.basketLimits = basketLimits;
         this.baskets = baskets;
         this.missing = missing;
+        this.extras = extras;
     }
 
     static MarketDay read(Snapshot snapshot, Inputs inputs, Control control) throws EngineException {
@@ -134,8 +137,9 @@ final class MarketDay {
         for (Map<String, Object> r : sorted(plain.get(BASKET), "PORTFOLIO_ID")) {
             baskets.add(new Basket(text(r, "PORTFOLIO_ID"), text(r, "NAME"), text(r, "TYPE"), text(r, "OWNER"), text(r, "SCOPE")));
         }
+        MarketExtras extras = MarketExtras.read(snapshot, inputs, missing, control);
         return new MarketDay(snapshot, pv, pnl, List.copyOf(sets), List.copyOf(fx), Collections.unmodifiableMap(nodeLimits),
-                Collections.unmodifiableMap(basketLimits), List.copyOf(baskets), Collections.unmodifiableMap(missing));
+                Collections.unmodifiableMap(basketLimits), List.copyOf(baskets), Collections.unmodifiableMap(missing), extras);
     }
 
     /** The table when it is there with every needed column; otherwise null, with what is missing recorded. */
@@ -251,6 +255,17 @@ final class MarketDay {
         return normal.isEmpty() ? null : normal.get(0);
     }
 
+    /** The date's stress scenario set: SET_TYPE STRESS, or (no SET_TYPE) an id with the prefix; null when the date has none. */
+    ScenarioSet stressSet(String prefix) {
+        for (ScenarioSet s : sets) {
+            if ("STRESS".equalsIgnoreCase(s.type()) || (s.type() == null || s.type().isBlank()) && prefix != null && !prefix.isBlank()
+                    && s.id().startsWith(prefix)) {
+                return s;
+            }
+        }
+        return null;
+    }
+
     /** Bytes held by the rows (vectors dominate). */
     long bytes() {
         long b = 0;
@@ -262,6 +277,6 @@ final class MarketDay {
         for (Fx f : fx) {
             b += 64 + 8L * f.rates().length;
         }
-        return b;
+        return b + extras.bytes();
     }
 }

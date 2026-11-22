@@ -18,8 +18,8 @@ package com.ash.risk.ccr.exposure;
 import com.ash.risk.hostcompat.api.AsOf;
 import com.ash.risk.hostcompat.api.DataNode;
 import com.ash.risk.hostcompat.api.EntityDocument;
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.ccr.calc.CsaTerms;
 import com.ash.risk.ccr.calc.ExposureBook;
 import com.ash.risk.ccr.calc.ExposureGrid;
@@ -200,23 +200,23 @@ final class ExposureLoader {
         try {
             read = router.vectors(props.kinds().paths(), "MTM", columns, asOf, (id, values, len, row) -> intake.row(id, values, len, row, columns));
         } catch (ExposureBook.BudgetExceeded e) {
-            throw new DrishtiException(ErrorCode.EXPOSURE_CAPACITY, e.getMessage() + ": raise drishti.ccr.exposure.memory-budget-gb or the heap");
+            throw new RiskFailure(RiskCode.EXPOSURE_CAPACITY, e.getMessage() + ": raise drishti.ccr.exposure.memory-budget-gb or the heap");
         } catch (IllegalArgumentException e) {
             throw inconsistent(date, e.getMessage());
-        } catch (DrishtiException e) {
+        } catch (RiskFailure e) {
             throw e;
         } catch (Exception e) {
-            throw new DrishtiException(ErrorCode.SOURCE_FAILED, "the exposure paths of " + date + " could not be read: " + e.getMessage());
+            throw new RiskFailure(RiskCode.SOURCE_FAILED, "the exposure paths of " + date + " could not be read: " + e.getMessage());
         }
         if (!read) {
-            throw new DrishtiException(ErrorCode.SOURCE_FAILED, "no connector keeps " + props.kinds().paths() + ".MTM as a vector column with "
+            throw new RiskFailure(RiskCode.SOURCE_FAILED, "no connector keeps " + props.kinds().paths() + ".MTM as a vector column with "
                     + "the columns " + columns + " (the pack's layout." + props.kinds().paths() + ".columns and .vectors)");
         }
         Map<String, Object> summary = intake.summary(ref);
         try {
             return b.build(ref, props.mapped() ? tier.target(date, digest) : null, digest, summary);
         } catch (java.io.IOException e) {
-            throw new DrishtiException(ErrorCode.SOURCE_FAILED, "the exposure hot file of " + date + " could not be written: " + e.getMessage());
+            throw new RiskFailure(RiskCode.SOURCE_FAILED, "the exposure hot file of " + date + " could not be written: " + e.getMessage());
         }
     }
 
@@ -249,7 +249,7 @@ final class ExposureLoader {
             }
         }
         if (best == null) {
-            throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no complete simulation run of " + date + " (kind " + props.kinds().run() + ")");
+            throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no complete simulation run of " + date + " (kind " + props.kinds().run() + ")");
         }
         String ccy = text(best, "CURRENCY");
         if (ccy != null && !ccy.equalsIgnoreCase("USD")) {
@@ -430,12 +430,12 @@ final class ExposureLoader {
             String cp = text(l, "COUNTERPARTY");
             double amount = l.get("LIMIT").asDouble();
             if (cp != null && !Double.isNaN(amount) && amount > 0) {
-                List<ExposureDate.Bucket> buckets = new ArrayList<>();      // the tenor buckets (the pre-deal check holds each to its own limit)
+                List<com.ash.risk.ccr.calc.TenorBucket> buckets = new ArrayList<>();      // the tenor buckets (the pre-deal check holds each to its own limit)
                 DataNode bs = l.get("BUCKETS");
                 for (int i = 0; bs != null && !bs.isMissing() && !bs.isNull() && i < bs.size(); i++) {
                     DataNode bl = bs.get(i).get("LIMIT");
                     double v = bl == null || bl.isMissing() || bl.isNull() ? Double.NaN : bl.asDouble();
-                    ExposureDate.Bucket b = Double.isNaN(v) || v <= 0 ? null : ExposureDate.Bucket.of(text(bs.get(i), "BUCKET"), v);
+                    com.ash.risk.ccr.calc.TenorBucket b = Double.isNaN(v) || v <= 0 ? null : com.ash.risk.ccr.calc.TenorBucket.of(text(bs.get(i), "BUCKET"), v);
                     if (b != null) {
                         buckets.add(b);
                     }
@@ -521,8 +521,8 @@ final class ExposureLoader {
         return Double.isNaN(d) ? 0 : d;
     }
 
-    static DrishtiException inconsistent(LocalDate date, String why) {
-        return new DrishtiException(ErrorCode.EXPOSURE_INCONSISTENT_RUN, "the exposure run of " + date + " is not loaded: " + why);
+    static RiskFailure inconsistent(LocalDate date, String why) {
+        return new RiskFailure(RiskCode.EXPOSURE_INCONSISTENT_RUN, "the exposure run of " + date + " is not loaded: " + why);
     }
 
     Map<String, DataNode> documents(String kind, AsOf asOf) {
@@ -534,8 +534,8 @@ final class ExposureLoader {
                 var refs = listing.hits().stream().map(h -> h.ref()).toList();
                 router.fetchAll(refs, java.time.Duration.ofSeconds(30), asOf).forEach((ref, d) -> out.put(ref.id(), d.data()));
             }
-        } catch (DrishtiException e) {
-            if (e.errorCode() != ErrorCode.NO_SOURCE_FOR_KIND && e.errorCode() != ErrorCode.CONNECTOR_NOT_CONFIGURED) {
+        } catch (RiskFailure e) {
+            if (e.errorCode() != RiskCode.NO_SOURCE_FOR_KIND && e.errorCode() != RiskCode.CONNECTOR_NOT_CONFIGURED) {
                 throw e;
             }
         }
@@ -567,7 +567,7 @@ final class ExposureLoader {
                 System.arraycopy(values, 0, m, k * p, p);
             });
         } catch (Exception e) {
-            throw new DrishtiException(ErrorCode.SOURCE_FAILED, "the trades' exposure paths of " + d.date() + " could not be read: " + e.getMessage());
+            throw new RiskFailure(RiskCode.SOURCE_FAILED, "the trades' exposure paths of " + d.date() + " could not be read: " + e.getMessage());
         }
         return out;
     }

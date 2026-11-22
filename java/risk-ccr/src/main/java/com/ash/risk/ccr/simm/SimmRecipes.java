@@ -15,11 +15,11 @@
  */
 package com.ash.risk.ccr.simm;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.ccr.simm.calc.Simm;
 import com.ash.risk.ccr.simm.calc.SimmChoices;
-import com.ash.risk.hostcompat.kernel.api.security.Principal;
+import com.ash.risk.kernel.Caller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import java.io.IOException;
@@ -80,7 +80,7 @@ public final class SimmRecipes {
     }
 
     /** Saves a run as a recipe. */
-    public Recipe save(SimmService.Run run, Principal p) {
+    public Recipe save(SimmService.Run run, Caller p) {
         String id = "SM-" + run.inputsDigest().substring(0, 8).toUpperCase(Locale.ROOT) + "-" + Long.toString(System.currentTimeMillis(), 36).toUpperCase(Locale.ROOT);
         Instant knownAt = run.knownAt() != null ? run.knownAt() : Instant.now();
         Recipe rec = new Recipe(id, run.scope(), run.date() == null ? null : run.date().toString(), run.date() == null ? null : knownAt.toString(),
@@ -101,11 +101,11 @@ public final class SimmRecipes {
     /** A recipe by id. */
     public Recipe get(String id) {
         if (id == null || !id.matches("SM-[A-Z0-9-]{4,40}")) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "a SIMM recipe id is SM-... (as PLAY SIMM shows it), not " + id);
+            throw new RiskFailure(RiskCode.BAD_REQUEST, "a SIMM recipe id is SM-... (as PLAY SIMM shows it), not " + id);
         }
         Path f = dir.resolve(id + ".json");
         if (!Files.isRegularFile(f)) {
-            throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no SIMM recipe " + id + " on this server");
+            throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no SIMM recipe " + id + " on this server");
         }
         try {
             return JSON.readValue(f.toFile(), Recipe.class);
@@ -115,7 +115,7 @@ public final class SimmRecipes {
     }
 
     /** Runs a recipe again with its own parameter file and compares it with what it recorded. */
-    public Replay replay(String id, Principal p) {
+    public Replay replay(String id, Caller p) {
         Recipe rec = get(id);
         byte[] file = Base64.getDecoder().decode(rec.parametersFile());
         SimmChoices c = SimmChoices.of(rec.switches(), rec.overrides());

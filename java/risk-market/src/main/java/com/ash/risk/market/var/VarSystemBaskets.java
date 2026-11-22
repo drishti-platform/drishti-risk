@@ -15,8 +15,8 @@
  */
 package com.ash.risk.market.var;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.hostcompat.identity.content.ContentDocs;
 import com.ash.risk.hostcompat.identity.content.ContentStore;
 import java.time.Instant;
@@ -326,8 +326,8 @@ final class VarSystemBaskets {
         }
     }
 
-    static DrishtiException invalid(String why) {
-        return new DrishtiException(ErrorCode.VAR_SYSTEM_BASKET_INVALID, why);
+    static RiskFailure invalid(String why) {
+        return new RiskFailure(RiskCode.VAR_SYSTEM_BASKET_INVALID, why);
     }
 
     // ------------------------------------------------------------------------------------------------------------------------ the store
@@ -435,11 +435,11 @@ final class VarSystemBaskets {
                 throw invalid("a system basket " + b.id() + " exists already (version " + old.get("version") + "): open it to edit it");
             }
             if (!create && old == null) {
-                throw new DrishtiException(ErrorCode.VAR_SYSTEM_BASKET_UNKNOWN, "no system basket " + b.id() + ": create it first");
+                throw new RiskFailure(RiskCode.VAR_SYSTEM_BASKET_UNKNOWN, "no system basket " + b.id() + ": create it first");
             }
             int was = old == null ? 0 : ((Number) old.getOrDefault("version", 0)).intValue();
             if (expected != null && was != expected) {
-                throw new DrishtiException(ErrorCode.STALE_REVISION, "the system basket " + b.id() + " changed since you opened it (now version " + was
+                throw new RiskFailure(RiskCode.STALE_REVISION, "the system basket " + b.id() + " changed since you opened it (now version " + was
                         + "): open it again before saving");
             }
             Basket next = b.withHistory(was + 1, old == null ? now : String.valueOf(old.get("createdAt")), now, actor,
@@ -452,7 +452,7 @@ final class VarSystemBaskets {
 
     /** Retires a system basket: valid until {@code to} (inclusive), kept for the dates before; refused when it is retired already then. */
     Basket retire(String id, LocalDate to, Integer expected, String actor) {
-        Basket b = get(id).orElseThrow(() -> new DrishtiException(ErrorCode.VAR_SYSTEM_BASKET_UNKNOWN, "no system basket " + id));
+        Basket b = get(id).orElseThrow(() -> new RiskFailure(RiskCode.VAR_SYSTEM_BASKET_UNKNOWN, "no system basket " + id));
         if (b.validFrom() != null && to.isBefore(b.validFrom())) {
             throw invalid(id + ": retired on " + to + " is before it starts (valid from " + b.validFrom() + ")");
         }
@@ -516,7 +516,7 @@ final class VarSystemBaskets {
                 if (why != null) {
                     throw invalid(why);
                 }
-            } catch (DrishtiException e) {
+            } catch (RiskFailure e) {
                 row.put("id", o instanceof Map<?, ?> om && om.get("id") != null ? String.valueOf(om.get("id")) : null);
                 row.put("action", "invalid");
                 row.put("reason", e.getMessage());

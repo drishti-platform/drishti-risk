@@ -15,8 +15,9 @@
  */
 package com.ash.risk.market.var;
 
-import com.ash.risk.hostcompat.api.error.DrishtiException;
-import com.ash.risk.hostcompat.api.error.ErrorCode;
+import com.ash.risk.market.calc.Periods;
+import com.ash.risk.kernel.RiskFailure;
+import com.ash.risk.kernel.RiskCode;
 import com.ash.risk.hostcompat.identity.content.ContentDocs;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -59,14 +60,14 @@ final class VarReports {
         try {
             return VarReportDefinition.all(Path.of(props.reportsDir()));
         } catch (IllegalArgumentException e) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, e.getMessage());
+            throw new RiskFailure(RiskCode.BAD_REQUEST, e.getMessage());
         }
     }
 
     VarReportDefinition definition(String id) {
         VarReportDefinition d = definitions().get(id);
         if (d == null) {
-            throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no report definition " + id + " in " + props.reportsDir() + " (the reports: "
+            throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no report definition " + id + " in " + props.reportsDir() + " (the reports: "
                     + definitions().keySet() + ")");
         }
         return d;
@@ -94,15 +95,15 @@ final class VarReports {
     Map<String, Object> run(String report, String period, Long version) {
         List<Long> vs = versions(report, period);
         if (vs.isEmpty()) {
-            throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no run of " + report + " for " + period + " yet: generate it");
+            throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no run of " + report + " for " + period + " yet: generate it");
         }
         long v = version == null ? vs.get(vs.size() - 1) : version;
         return store.docs().value(folder(report, period) + "run-v" + v + ".json", Map.class).map(x -> (Map<String, Object>) x)
-                .orElseThrow(() -> new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no run v" + v + " of " + report + " for " + period));
+                .orElseThrow(() -> new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no run v" + v + " of " + report + " for " + period));
     }
 
     /** The period a report runs over: its own kind (a fiscal year or quarter) or the text given; the current one when none. */
-    VarPeriodStats.Period period(VarReportDefinition d, String text) {
+    Periods.Period period(VarReportDefinition d, String text) {
         String t = text;
         if (t == null || t.isBlank()) {
             LocalDate newest = store.dates().isEmpty() ? LocalDate.now(java.time.ZoneOffset.UTC) : store.dates().last();
@@ -115,14 +116,14 @@ final class VarReports {
         try {
             return VarPeriodStats.period(t, props.yearEnd());
         } catch (IllegalArgumentException e) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, e.getMessage());
+            throw new RiskFailure(RiskCode.BAD_REQUEST, e.getMessage());
         }
     }
 
     /** Generates and freezes the next run of a report for a period. */
     Map<String, Object> generate(String report, String periodText, String who) {
         VarReportDefinition d = definition(report);
-        VarPeriodStats.Period p = period(d, periodText);
+        Periods.Period p = period(d, periodText);
         Map<String, Object> run = d.type().equals("backtesting-chart") ? chart(d, p) : table(d, p);
         List<Map<String, Object>> checks = checks(d, p, run);
         run.put("checks", checks);
@@ -134,7 +135,7 @@ final class VarReports {
         run.put("frozenBy", who);
         run.put("code", "drishti-server " + version());
         if (!store.docs().create(folder(report, p.name()) + "run-v" + version + ".json", run)) {
-            throw new DrishtiException(ErrorCode.CONTENT_CONFLICT, "the run v" + version + " of " + report + " for " + p.name() + " was made at the same time: try again");
+            throw new RiskFailure(RiskCode.CONTENT_CONFLICT, "the run v" + version + " of " + report + " for " + p.name() + " was made at the same time: try again");
         }
         return run;
     }
@@ -144,7 +145,7 @@ final class VarReports {
         return v == null ? "dev" : v;
     }
 
-    private Map<String, Object> head(VarReportDefinition d, VarPeriodStats.Period p) {
+    private Map<String, Object> head(VarReportDefinition d, Periods.Period p) {
         Map<String, Object> run = new LinkedHashMap<>();
         run.put("report", d.id());
         run.put("title", d.title());
@@ -166,9 +167,9 @@ final class VarReports {
 
     // ------------------------------------------------------------------------------------------------------------- var-table
 
-    private Map<String, Object> table(VarReportDefinition d, VarPeriodStats.Period p) {
+    private Map<String, Object> table(VarReportDefinition d, Periods.Period p) {
         Map<String, Object> run = head(d, p);
-        VarPeriodStats.Period prior = VarPeriodStats.priorYear(p, props.yearEnd());
+        Periods.Period prior = VarPeriodStats.priorYear(p, props.yearEnd());
         Map<String, Map<String, Object>> st = new LinkedHashMap<>();
         Map<String, Map<String, Object>> pr = new LinkedHashMap<>();
         for (VarReportDefinition.Row r : d.rows()) {
@@ -252,7 +253,7 @@ final class VarReports {
     }
 
     private Map<String, Object> cell(String c, VarReportDefinition.Row r, Map<String, Object> s, Map<String, Object> ps, VarReportDefinition d,
-            VarPeriodStats.Period p, VarPeriodStats.Period prior) {
+            Periods.Period p, Periods.Period prior) {
         Map<String, Object> cell = new LinkedHashMap<>();
         Map<String, Object> lin = new LinkedHashMap<>();
         lin.put("node", r.node());
@@ -321,7 +322,7 @@ final class VarReports {
     }
 
     /** The narrative's facts, pre-filled: the person writes the text. */
-    private Map<String, Object> facts(VarReportDefinition d, VarPeriodStats.Period p, List<Map<String, Object>> rows, Map<String, Object> ts) {
+    private Map<String, Object> facts(VarReportDefinition d, Periods.Period p, List<Map<String, Object>> rows, Map<String, Object> ts) {
         Map<String, Object> f = new LinkedHashMap<>();
         f.put("average", ts.get("average"));
         f.put("periodEnd", ts.get("periodEnd"));
@@ -395,11 +396,11 @@ final class VarReports {
     // ------------------------------------------------------------------------------------------------------------- the chart
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> chart(VarReportDefinition d, VarPeriodStats.Period p) {
+    private Map<String, Object> chart(VarReportDefinition d, Periods.Period p) {
         Map<String, Object> run = head(d, p);
         LocalDate newest = store.dates().isEmpty() ? null : store.dates().floor(p.to());
         if (newest == null || newest.isBefore(p.from())) {
-            throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no official record in " + p.name() + ": nothing to chart");
+            throw new RiskFailure(RiskCode.ENTITY_NOT_FOUND, "no official record in " + p.name() + ": nothing to chart");
         }
         run.put("preview", newest.isBefore(p.to()));
         if (newest.isBefore(p.to())) {
@@ -430,7 +431,7 @@ final class VarReports {
     // ------------------------------------------------------------------------------------------------------------- checks
 
     @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> checks(VarReportDefinition d, VarPeriodStats.Period p, Map<String, Object> run) {
+    private List<Map<String, Object>> checks(VarReportDefinition d, Periods.Period p, Map<String, Object> run) {
         List<Map<String, Object>> out = new ArrayList<>();
         for (Map<String, Object> c : d.checks()) {
             String kind = String.valueOf(c.get("check"));
