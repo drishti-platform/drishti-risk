@@ -1,0 +1,25 @@
+// Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved.
+// Drishti Risk. Proprietary: see LICENSE.
+//
+// Risk in VS Code: File, Open Workspace from File. The tasks carry the SAME names as the JetBrains run configurations in run-configs/
+// (the launcher standard: docs/plans/LAUNCHER_STANDARD.md in the Drishti repository). JDK 21: change the Java path below (Windows:
+// C:\\jdk-21). Build and run in the IDE: README.md#build-and-run-in-the-ide.
+{
+  "folders": [{"name": "risk", "path": "."}],
+  "extensions": {"recommendations": ["vscjava.vscode-java-pack", "redhat.vscode-xml"]},
+  "settings": {
+    "java.configuration.runtimes": [{"name": "JavaSE-21", "path": "/usr/lib/jvm/java-21-openjdk-amd64", "default": true}],
+    "java.jdt.ls.java.home": "/usr/lib/jvm/java-21-openjdk-amd64",
+    "java.import.maven.enabled": true,
+    "java.configuration.updateBuildConfiguration": "automatic"
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {"label": "Risk: build all", "type": "shell", "command": "./mvnw clean verify -DskipTests", "windows": {"command": "mvnw.cmd clean verify -DskipTests"}, "options": {"cwd": "${workspaceFolder:risk}/java"}, "group": "build", "problemMatcher": []},
+      {"label": "Risk: test", "type": "shell", "command": "./mvnw clean verify", "windows": {"command": "mvnw.cmd clean verify"}, "options": {"cwd": "${workspaceFolder:risk}/java"}, "group": "test", "problemMatcher": []},
+      {"label": "Risk: check guards", "type": "shell", "command": "./mvnw clean verify -pl risk-guards -am", "windows": {"command": "mvnw.cmd clean verify -pl risk-guards -am"}, "options": {"cwd": "${workspaceFolder:risk}/java"}, "group": "test", "problemMatcher": []},
+      {"label": "Risk: install release (tag only)", "type": "shell", "command": "./mvnw clean install -DskipTests", "windows": {"command": "mvnw.cmd clean install -DskipTests"}, "options": {"cwd": "${workspaceFolder:risk}/java"}, "problemMatcher": []}
+    ]
+  }
+}

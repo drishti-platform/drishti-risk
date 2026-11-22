@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Drishti Risk · market and counterparty risk as engines.
+
+  Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
+  All rights reserved.
+
+  PROPRIETARY AND CONFIDENTIAL.
+
+  This file is the confidential and proprietary property of Ashutosh Sinha.
+  Unauthorised copying, use, modification, distribution or disclosure of this
+  file, via any medium, is strictly prohibited except with the express prior
+  written permission of the copyright holder.
+
+  See the LICENSE file in the root of this repository for the full terms.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.ash.risk</groupId>
+    <artifactId>risk-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>risk-api</artifactId>
+  <name>Drishti Risk: risk-api</name>
+  <description>The product's public surface: the embedder's facade (RiskRuntime, RiskDay, MeasureQuery), the module SPI (RiskModule, Measure, Explainer, Playground, LimitRule, ReportDefinition), contract names, RiskException. Its types are the engine API's wherever one exists; it depends on engine-api only (a guard checks it).</description>
+  <properties>
+    <automatic.module.name>com.ash.risk</automatic.module.name>
+  </properties>
+  <dependencies>
+    <dependency><groupId>com.ash.engine</groupId><artifactId>engine-api</artifactId></dependency>
+  </dependencies>
+</project>
