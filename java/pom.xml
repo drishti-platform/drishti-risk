@@ -39,6 +39,7 @@
   </modules>
 
   <properties>
+    <risk.reference.dir></risk.reference.dir>
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.build.outputTimestamp>2026-11-22T00:00:00Z</project.build.outputTimestamp>
@@ -117,7 +118,13 @@
         <configuration>
           <tempDir>tmp</tempDir>
           <argLine>@{argLine} -Djava.io.tmpdir=${project.build.directory}/tmp</argLine>
-          <systemPropertyVariables><risk.repo.root>${maven.multiModuleProjectDirectory}/..</risk.repo.root></systemPropertyVariables>
+          <systemPropertyVariables>
+            <risk.repo.root>${maven.multiModuleProjectDirectory}/..</risk.repo.root>
+            <!-- a Drishti checkout holding the reference data the moved equivalence tests read (data/testdata/market-risk and
+                 counterparty-risk, the packs' capital files, docs/architecture/capital-parameters): -Drisk.reference.dir=/abs/drishti;
+                 without it those tests are skipped, saying so -->
+            <risk.reference.dir>${risk.reference.dir}</risk.reference.dir>
+          </systemPropertyVariables>
         </configuration>
       </plugin>
       <plugin>

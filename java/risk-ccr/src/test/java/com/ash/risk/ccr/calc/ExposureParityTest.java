@@ -15,6 +15,7 @@
  */
 package com.ash.risk.ccr.calc;
 
+import com.ash.risk.ccr.ReferenceData;
 import com.ash.lake.tck.TestRoots;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
@@ -55,12 +56,9 @@ class ExposureParityTest {
     static Path dir;
 
     static Path root() {
-        Path p = Path.of(TestRoots.module());
-        while (p != null && !Files.isDirectory(p.resolve("data/testdata/counterparty-risk/exposure-path"))) {
-            p = p.getParent();
-        }
-        if (p == null) {
-            throw new IllegalStateException("the committed test data (data/testdata/counterparty-risk) is not above " + Path.of(TestRoots.module()));
+        Path p = ReferenceData.drishti();
+        if (!Files.isDirectory(p.resolve("data/testdata/counterparty-risk"))) {
+            throw new IllegalStateException("the committed test data (data/testdata/counterparty-risk) is not in " + p);
         }
         return p;
     }

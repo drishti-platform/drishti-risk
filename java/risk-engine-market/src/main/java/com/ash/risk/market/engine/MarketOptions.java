@@ -129,11 +129,11 @@ record MarketOptions(List<HierarchySpec> hierarchies, PositionRules positions, V
         }
         return new MarketOptions(List.copyOf(specs), rules, calc, (int) o.integer("threads"), o.text("linear-algebra"), Map.copyOf(words), pv,
                 o.text("stressed-prefix"), reg, new Sensitivities(java.util.Collections.unmodifiableMap(grid), Map.copyOf(ladderLimits)),
-                new RiskLimits(o.number("limit-near")), frtb(), o.flag("rrao-from-positions"));
+                new RiskLimits(o.number("limit-near")), builtInFrtb(), o.flag("rrao-from-positions"));
     }
 
     /** The JAR's FRTB-SA parameters, checked at init (a missing or broken file refuses the engine's start in words). */
-    private static FrtbParams frtb() {
+    private static FrtbParams builtInFrtb() {
         return FrtbParams.builtIn();
     }
 }

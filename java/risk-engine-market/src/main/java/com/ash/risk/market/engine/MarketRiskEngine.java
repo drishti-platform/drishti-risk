@@ -30,7 +30,6 @@ import com.ash.engine.LifecycleState;
 import com.ash.engine.Session;
 import com.ash.engine.Snapshot;
 import com.ash.risk.kernel.vector.ParallelSums;
-import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -50,7 +49,7 @@ public final class MarketRiskEngine implements Engine {
     private volatile EngineContext context;
     private volatile MarketOptions options;
     private volatile ParallelSums sums;
-    private volatile EngineMeter meter = new EngineMeter(Clock.systemUTC());
+    private volatile EngineMeter meter = EngineMeter.unstarted();
     private volatile LifecycleState lifecycle = LifecycleState.NEW;
     private volatile String failure;
 

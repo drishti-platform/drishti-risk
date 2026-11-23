@@ -20,7 +20,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.data.Offset.offset;
 
-import com.ash.risk.ccr.simm.calc.SimmMath;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -42,8 +41,7 @@ class FrtbHandBuiltCasesTest {
     static FrtbParams params;
 
     static Path capital() {
-        Path p = Path.of(TestRoots.repo(), "modules", "banking", "packs", "market-risk", "capital");
-        return Files.isDirectory(p) ? p : Path.of(TestRoots.module(), "modules", "banking", "packs", "market-risk", "capital");
+        return com.ash.risk.market.ReferenceData.drishti().resolve("modules/banking/packs/market-risk/capital");
     }
 
     @BeforeAll
@@ -204,13 +202,6 @@ class FrtbHandBuiltCasesTest {
     }
 
     @Test
-    void case6SimmAggregationWithToyParameters() {
-        double k = SimmMath.bucketK(new double[] {50 * -1000, 60 * 400}, new double[] {1, 1}, new double[][] {{1, 0.8}, {0.8, 1}}, true);
-        assertThat(k).isCloseTo(34_000, offset(CENT));
-        assertThat(SimmMath.productClass(new double[] {50_000, 30_000}, new double[][] {{1, 0.3}, {0.3, 1}})).isCloseTo(65_574.39, offset(CENT));
-    }
-
-    @Test
     void case7TheAlternativeSpecification() {
         FrtbSa.Result r = run(FrtbExamples.case7(params), FrtbChoices.defaults());
         Sbm.ClassCharge g = r.sbm().classCharge("GIRR", "DELTA");
@@ -269,17 +260,6 @@ class FrtbHandBuiltCasesTest {
         FrtbCompare.Diff d = FrtbCompare.compare(reval, gamma, "curvature-source: revaluation → gamma");
         assertThat(d.difference()).isCloseTo(-7_500, offset(CENT));
         assertThat(d.words()).contains("lowers the total by 7,500.00", "curvature risk");
-    }
-
-    @Test
-    void case11SimmConcentrationPerIssuer() {
-        double crX = SimmMath.concentration(-4_000, 1_000);
-        double crY = SimmMath.concentration(1_000, 1_000);
-        assertThat(crX).isEqualTo(2);
-        assertThat(crY).isEqualTo(1);
-        double k = SimmMath.bucketK(new double[] {100 * -4_000 * crX, 100 * 1_000 * crY}, new double[] {crX, crY}, new double[][] {{1, 0.4}, {0.4, 1}},
-                false);
-        assertThat(k).isCloseTo(786_129.76, offset(CENT));
     }
 
     @Test

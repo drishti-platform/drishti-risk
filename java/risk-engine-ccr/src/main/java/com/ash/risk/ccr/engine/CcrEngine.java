@@ -29,7 +29,6 @@ import com.ash.engine.Inputs;
 import com.ash.engine.LifecycleState;
 import com.ash.engine.Session;
 import com.ash.engine.Snapshot;
-import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -48,7 +47,7 @@ public final class CcrEngine implements Engine {
     private volatile EngineContext context;
     private volatile CcrOptions options;
     private volatile com.ash.risk.ccr.calc.ExposureCalc.Params params;
-    private volatile EngineMeter meter = new EngineMeter(Clock.systemUTC());
+    private volatile EngineMeter meter = EngineMeter.unstarted();
     private volatile LifecycleState lifecycle = LifecycleState.NEW;
     private volatile String failure;
 

@@ -347,9 +347,10 @@ public final class Blas {
     public static Path defaultCacheDir() {
         String c = setting("drishti.native.cache-dir", "DRISHTI_NATIVE_CACHE_DIR");
         if (c != null && !c.isBlank()) {
-            return com.ash.risk.hostcompat.api.Roots.anchored(c.strip());     // a relative value: under the install folder
+            return Path.of(c.strip()).toAbsolutePath().normalize();
         }
-        return Path.of(com.ash.risk.hostcompat.api.Roots.data("native-cache"));
+        // the engine has no host data folder: the JVM's temporary folder (a host sets drishti.native.cache-dir to its own)
+        return Path.of(System.getProperty("java.io.tmpdir"), "drishti-risk-native-cache").toAbsolutePath().normalize();
     }
 
     private static String setting(String property, String env) {

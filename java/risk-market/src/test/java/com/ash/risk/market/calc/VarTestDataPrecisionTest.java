@@ -15,6 +15,7 @@
  */
 package com.ash.risk.market.calc;
 
+import com.ash.risk.market.ReferenceData;
 import com.ash.risk.kernel.scope.PositionRules;
 
 import com.ash.lake.tck.TestRoots;
@@ -59,12 +60,9 @@ class VarTestDataPrecisionTest {
     static Path dir;
 
     static Path root() {
-        Path p = Path.of(TestRoots.module());
-        while (p != null && !Files.isDirectory(p.resolve("data/testdata/market-risk/scenario-pv"))) {
-            p = p.getParent();
-        }
-        if (p == null) {
-            throw new IllegalStateException("the committed test data (data/testdata/market-risk) is not above " + Path.of(TestRoots.module()));
+        Path p = ReferenceData.drishti();
+        if (!Files.isDirectory(p.resolve("data/testdata/market-risk/scenario-pv"))) {
+            throw new IllegalStateException("the committed test data (data/testdata/market-risk/scenario-pv) is not in " + p);
         }
         return p;
     }

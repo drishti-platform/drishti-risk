@@ -39,13 +39,8 @@ class LineOfBusinessIsolationTest {
     /** The lines of business; a new one is added here with its two modules. */
     static final List<String> LINES = List.of("market", "ccr", "liquidity", "climate");
 
-    /** Files that still name another line of business, until K6 (SPLIT_EXEMPTIONS.md section 4). */
-    static final Set<String> CROSSING_UNTIL_K6 = Set.of(
-            "java/risk-ccr/src/main/java/com/ash/risk/ccr/exposure/ExposureLoader.java",
-            "java/risk-ccr/src/main/java/com/ash/risk/ccr/simm/SimmData.java",
-            "java/risk-ccr/src/main/java/com/ash/risk/ccr/simm/SimmService.java",
-            "java/risk-ccr/src/test/java/com/ash/risk/ccr/simm/SimmTestData.java",
-            "java/risk-market/src/test/java/com/ash/risk/market/frtb/calc/FrtbHandBuiltCasesTest.java");
+    /** Files that still name another line of business (SPLIT_EXEMPTIONS.md section 4): none since the host-tied service classes left the build. */
+    static final Set<String> CROSSING_UNTIL_K6 = Set.of();
 
     private static final Map<String, String> MODULE_OF = Map.of("market", "risk-market", "ccr", "risk-ccr", "liquidity", "risk-liquidity",
             "climate", "risk-climate");

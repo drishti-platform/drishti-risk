@@ -27,7 +27,7 @@ import java.util.Locale;
  * ignoring case: {@code toUpperCase(Locale.ROOT)}; two ids equal ignoring case answer -1, as the map's merge did). Skipped indexes (a
  * cancelled trade) are in neither.
  */
-final class IdIndex {
+public final class IdIndex {
 
     private final String[] ids;
     private final int[] order;
@@ -43,7 +43,7 @@ final class IdIndex {
     }
 
     /** The exact index of {@code ids} ({@code skip}: indexes left out, or null). */
-    static IdIndex exact(String[] ids, BitSet skip) {
+    public static IdIndex exact(String[] ids, BitSet skip) {
         int[] order = kept(ids.length, skip);
         sort(order, ids);
         // the same id twice: keep the later index only (a map's put)
@@ -59,7 +59,7 @@ final class IdIndex {
     }
 
     /** The upper-case index of {@code ids}: two ids equal ignoring case answer -1. */
-    static IdIndex upper(String[] ids, BitSet skip) {
+    public static IdIndex upper(String[] ids, BitSet skip) {
         int[] order = kept(ids.length, skip);
         String[] up = new String[ids.length];                           // transient: the keys while sorting
         for (int i : order) {
@@ -91,7 +91,7 @@ final class IdIndex {
     }
 
     /** The index of {@code id}, or -1. */
-    int get(String id) {
+    public int get(String id) {
         String key = upper ? id.toUpperCase(Locale.ROOT) : id;
         int lo = 0;
         int hi = order.length - 1;
@@ -111,14 +111,14 @@ final class IdIndex {
     }
 
     /** The heap this index holds (its order; the ids are the book's). */
-    long bytes() {
+    public long bytes() {
         return 16L + 4L * order.length + (ambiguous == null ? 0 : ambiguous.size() / 8);
     }
 
     // ------------------------------------------------------------------------------------------------------------- an int sort by key
 
     /** Sorts {@code a} (indexes into {@code keys}) by their keys, stably (a merge sort on primitives: no boxing). */
-    static void sort(int[] a, String[] keys) {
+    public static void sort(int[] a, String[] keys) {
         if (a.length < 2) {
             return;
         }

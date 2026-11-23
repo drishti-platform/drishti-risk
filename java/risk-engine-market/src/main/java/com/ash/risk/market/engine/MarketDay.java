@@ -157,8 +157,13 @@ final class MarketDay {
         return t;
     }
 
+    /** The inputs' vector columns (the descriptor's {@code vector:} of scenario-pv, pnl-vector and fx-scenario). */
+    private static final java.util.Set<String> VECTOR_COLUMNS = java.util.Set.of("SCENARIO_PV", "PNL", "RATES");
+
     private static List<Map<String, Object>> scan(InputTable t, Control control) throws EngineException {
-        List<String> cols = List.copyOf(new java.util.TreeSet<>(t.columns()));
+        java.util.TreeSet<String> all = new java.util.TreeSet<>(t.columns());
+        all.removeAll(VECTOR_COLUMNS);                                  // a vector column is read with vectors(), never as a row value
+        List<String> cols = List.copyOf(all);
         List<Map<String, Object>> out = new ArrayList<>();
         t.scan(new Scan(cols, Filter.ALL, 4_096), b -> {
             control.check();

@@ -54,7 +54,7 @@ class SimmHandBuiltCasesTest {
         assertThat(params.complete()).isTrue();
         assertThat(params.version).isEqualTo("TOY-1");
         assertThat(params.hash).hasSize(64);
-        byte[] empty = Files.readAllBytes(Path.of(TestRoots.repo(), "docs", "architecture", "capital-parameters", "simm.yaml"));
+        byte[] empty = Files.readAllBytes(com.ash.risk.ccr.ReferenceData.drishti().resolve("docs/architecture/capital-parameters/simm.yaml"));
         assertThatThrownBy(() -> SimmParams.parse(empty, Map.of())).hasMessageStartingWith("DRS-5333 SIMM (no version) is refused")
                 .hasMessageContaining("risk-class-correlation.InterestRate.CreditQ is missing");
         SimmParams lenient = SimmParams.lenient(empty);
