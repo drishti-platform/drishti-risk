@@ -117,6 +117,8 @@ options:
 params:
   scope: { type: text, default: BANK, label: Scope, help: "BANK, NSET:<id>, CPTY:<id>, LE:<id>, DESK:<id>, BOOK:<id>, TRD:<id>,..." }
   standalone: { type: bool, default: false, label: Standalone, help: "True: the scope's trades as if they were netted only among themselves." }
+  confidence: { type: number, default: 0, min: 0, max: 0.9999, label: PFE confidence, help: "The PFE confidence of the answer (above 0.5); 0: the engine's pfe-confidence." }
+  collateral: { type: text, default: "", label: Collateral model, help: "lagged, current or none (the uncollateralised view); empty: the engine's model." }
   counterparty: { type: text, default: "", label: Counterparty, help: The counterparty the new trade is with. }
   template: { type: text, default: "", label: Template trade, help: "A booked trade whose paths on the date's run are copied, scaled to the notional." }
   notional: { type: number, default: 0, min: 0, label: Notional, help: "0: the template's own notional." }
@@ -133,7 +135,7 @@ outputs:
     title: Exposure figures of a scope
     about: One row for the scope asked.
     shape: row
-    params: [ scope, standalone ]
+    params: [ scope, standalone, confidence, collateral ]
     key: [ SCOPE ]
     columns:
       - { name: SCOPE, type: string, nullable: false, label: Scope }
@@ -149,7 +151,7 @@ outputs:
     about: One row per primary grid point.
     shape: series
     axis: POINT
-    params: [ scope, standalone ]
+    params: [ scope, standalone, confidence, collateral ]
     key: [ POINT ]
     columns:
       - { name: POINT, type: integer, nullable: false, label: Point }

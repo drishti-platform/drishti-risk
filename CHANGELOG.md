@@ -3,6 +3,11 @@
 
 ## 0.1.0 (unreleased)
 
+- `ccr` (R2, Drishti's exposure routes on the engine): `exposure-summary` and `exposure-profile` take the measure parameters
+  `confidence` (the PFE confidence; 0: the engine's `pfe-confidence`) and `collateral` (lagged, current or none, the uncollateralised view;
+  empty: the engine's `model`), as Drishti's `q` and `collateral`; the book is the same, only the measures read it differently. The
+  pre-deal check reads a netting set summed whole from the book's matrices as the set alone (its exposure and negative matrices), as
+  Drishti's what-if does: the kit's three pre-deal cases that failed with a null matrix give their worked answers.
 - The engines' remaining outputs (R1, branch `r1/outputs`), each with its descriptor entries, explanation and workbook part:
   `market-risk` adds `node-pvar` and `node-pvar-components` (parametric VaR, equal or EWMA), `node-var-horizon` (stressed set, 10-day by
   the square root of 10 or overlapping sums), `stress-window` (from `pnl-history`), `backtest` and `backtest-days` (official records of
