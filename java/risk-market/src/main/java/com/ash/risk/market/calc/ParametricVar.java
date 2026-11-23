@@ -52,9 +52,15 @@ public final class ParametricVar {
      * @param weighting equal (1/N, σ with N − 1) or ewma (RiskMetrics, no small-sample correction)
      * @param lambda EWMA's decay, in (0.5, 1); read only with ewma
      */
-    public record Settings(Weighting weighting, double lambda) {
+    public record Settings(Weighting weighting, double lambda, boolean strict) {
         public static final Settings EQUAL = new Settings(Weighting.EQUAL, 0.94);
 
+        /** The platform's exp and log (the default: as fast as the JVM's intrinsics; the last bit may differ between JVMs). */
+        public Settings(Weighting weighting, double lambda) {
+            this(weighting, lambda, false);
+        }
+
+        /** {@code strict}: exp and log of {@link StrictMath} (the same bits on every JVM; the engine's option exact-path). */
         public Settings {
             if (weighting == Weighting.EWMA && !(lambda > 0.5 && lambda < 1)) {
                 throw new IllegalArgumentException("drishti.var.parametric.lambda must be in (0.5, 1), not " + lambda);
@@ -130,7 +136,20 @@ public final class ParametricVar {
 
     /** The standard normal density φ(x). */
     public static double phi(double x) {
-        return Math.exp(-0.5 * x * x) / SQRT_2PI;
+        return phi(x, false);
+    }
+
+    /** φ(x) with StrictMath's exp when {@code strict}. */
+    public static double phi(double x, boolean strict) {
+        return exp(-0.5 * x * x, strict) / SQRT_2PI;
+    }
+
+    private static double exp(double x, boolean strict) {
+        return strict ? StrictMath.exp(x) : Math.exp(x);
+    }
+
+    private static double log(double x, boolean strict) {
+        return strict ? StrictMath.log(x) : Math.log(x);
     }
 
     /**
@@ -138,6 +157,11 @@ public final class ParametricVar {
      * absolute error under 10⁻¹⁵ on |x| &lt; 8 (0 or 1 beyond).
      */
     public static double cdf(double x) {
+        return cdf(x, false);
+    }
+
+    /** Φ(x) with StrictMath's exp when {@code strict}. */
+    public static double cdf(double x, boolean strict) {
         if (x < -8) {
             return 0;
         }
@@ -155,11 +179,16 @@ public final class ParametricVar {
                 break;
             }
         }
-        return 0.5 + s * phi(x);
+        return 0.5 + s * phi(x, strict);
     }
 
     /** Φ⁻¹(p): Acklam's rational approximation refined by one Halley step (a relative error under 10⁻¹⁵ on (10⁻¹⁰, 1 − 10⁻¹⁰)). */
     public static double inverse(double p) {
+        return inverse(p, false);
+    }
+
+    /** Φ⁻¹(p) with StrictMath's exp and log when {@code strict}. */
+    public static double inverse(double p, boolean strict) {
         if (!(p > 0 && p < 1)) {
             throw new IllegalArgumentException("a probability in (0, 1), not " + p);
         }
@@ -172,7 +201,7 @@ public final class ParametricVar {
         double lo = 0.02425;
         double x;
         if (p < lo) {
-            double q = Math.sqrt(-2 * Math.log(p));
+            double q = Math.sqrt(-2 * log(p, strict));
             x = (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
         } else if (p <= 1 - lo) {
             double q = p - 0.5;
@@ -180,12 +209,12 @@ public final class ParametricVar {
             x = (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q
                     / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
         } else {
-            double q = Math.sqrt(-2 * Math.log(1 - p));
+            double q = Math.sqrt(-2 * log(1 - p, strict));
             x = -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
         }
         for (int i = 0; i < 2; i++) {                                     // Halley: a step from Acklam's 1e-9 to the double's precision
-            double e = cdf(x) - p;
-            double u = e * SQRT_2PI * Math.exp(x * x / 2);
+            double e = cdf(x, strict) - p;
+            double u = e * SQRT_2PI * exp(x * x / 2, strict);
             x = x - u / (1 + x * u / 2);
         }
         return x;
@@ -215,9 +244,9 @@ public final class ParametricVar {
 
     public static Figures of(double[] v, double confidence, double esConfidence, Settings s) {
         Fit f = fit(v, s);
-        double z = inverse(confidence);
-        double zEs = inverse(esConfidence);
-        double ef = phi(zEs) / (1 - esConfidence);
+        double z = inverse(confidence, s.strict());
+        double zEs = inverse(esConfidence, s.strict());
+        double ef = phi(zEs, s.strict()) / (1 - esConfidence);
         double zs = z * f.sigma();
         double var = zs - f.mu();
         double es = f.sigma() * ef - f.mu();

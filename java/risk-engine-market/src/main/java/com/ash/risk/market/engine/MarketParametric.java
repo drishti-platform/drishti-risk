@@ -227,7 +227,7 @@ final class MarketParametric {
                 double ce = options.calc().esConfidence();
                 int zRow = at;
                 int fRow = at + 1;
-                main.row(zRow).text(0, "z", "bold").formula(1, "NORMSINV(" + c + ")", ParametricVar.inverse(c), "decimal");
+                main.row(zRow).text(0, "z", "bold").formula(1, "NORMSINV(" + c + ")", ParametricVar.inverse(c, options.parametric().strict()), "decimal");
                 main.row(fRow).text(0, "ES factor", "bold").formula(1, "NORMDIST(NORMSINV(" + ce + "),0,1,FALSE)/(1-" + ce + ")",
                         ParametricVar.esFactor(ce), "decimal");
                 int row = at + 3;

@@ -99,7 +99,8 @@ record MarketOptions(List<HierarchySpec> hierarchies, PositionRules positions, V
         VarMath.RankRule rule = "interpolated".equals(o.text("rank-rule")) ? VarMath.RankRule.INTERPOLATED : VarMath.RankRule.KTH_WORST;
         VarCalc calc = new VarCalc(o.number("confidence"), o.number("es-confidence"), rule, (int) o.integer("component-window"),
                 o.flag("scale-to-var"));
-        ParametricVar.Settings pv = new ParametricVar.Settings(ParametricVar.Weighting.of(o.text("pvar-weighting")), o.number("pvar-lambda"));
+        ParametricVar.Settings pv = new ParametricVar.Settings(ParametricVar.Weighting.of(o.text("pvar-weighting")), o.number("pvar-lambda"),
+                o.flag("exact-path"));                                  // StrictMath for the normal quantile and density: the same bits on every JVM
         List<Double> mult = new ArrayList<>();
         for (Object x : (List<Object>) o.value("backtest-multipliers")) {
             mult.add(((Number) x).doubleValue());

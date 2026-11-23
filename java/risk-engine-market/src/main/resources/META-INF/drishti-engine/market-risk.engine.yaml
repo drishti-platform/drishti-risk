@@ -157,6 +157,12 @@ options:
   scale-to-var: { type: bool, default: true, label: Scale components to VaR }
   threads: { type: int, default: 4, min: 1, max: 256, label: Summation threads, help: The sums are the same bits at any count. }
   linear-algebra: { type: enum, options: [ native, java ], default: java, label: Linear algebra }
+  exact-path:
+    type: bool
+    default: false
+    forces: exact-path
+    label: Exact path
+    help: "True: the normal quantile and density use StrictMath, so the columns exact to relative 1e-12 (Z, PVAR, PES and the parametric parts) are the same bits on every JVM (specification 6.4 rule 9)."
   pvar-weighting: { type: enum, options: [ equal, ewma ], default: equal, label: Parametric weighting, help: "equal: 1/N with the sample variance (N - 1); ewma: RiskMetrics decay." }
   pvar-lambda: { type: number, default: 0.94, min: 0.51, max: 0.9999, label: EWMA decay }
   stressed-prefix: { type: text, default: HS-STRESS-, label: Stress set prefix, help: "A set is the stress set when its SET_TYPE is STRESS, or (no SET_TYPE) its id starts with this." }
