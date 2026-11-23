@@ -17,7 +17,7 @@
 What it reads (moved with history, unchanged): ``java/risk-market/src/test/resources/var/golden-matrix.json.gz`` (VarGoldenMatrixTest:
 3 dates x 2 windows x 2 currencies, every hierarchy node and every system basket), ``hierarchy-golden-2026-09-30.json``
 (HierarchyEquivalenceTest's HierarchyGolden: every node with its aggregate's digest) and ``java/risk-ccr/src/test/resources/ccr/reference.json``
-(ExposureParityTest's outside oracle: every netting set and scope). What it writes: ``tck/recorded/<engine>/*.yaml``.
+(ExposureParityTest's outside oracle: every netting set and scope). What it writes: ``tck/harvested/<engine>/*.yaml (reference documents, not kit cases; the recorder writes the cases)``.
 
 Two kinds of value, kept apart:
 
@@ -58,7 +58,7 @@ def market(root):
     res = os.path.join(root, "java/risk-market/src/test/resources/var")
     with gzip.open(os.path.join(res, "golden-matrix.json.gz"), "rt", encoding="utf-8") as f:
         matrix = json.load(f)
-    out_dir = os.path.join(root, "tck/recorded/market-risk")
+    out_dir = os.path.join(root, "tck/harvested/market-risk")
     os.makedirs(out_dir, exist_ok=True)
     written = []
     by_date = {}
@@ -112,7 +112,7 @@ def market(root):
 
 def ccr(root):
     ref = json.load(open(os.path.join(root, "java/risk-ccr/src/test/resources/ccr/reference.json"), encoding="utf-8"))
-    out_dir = os.path.join(root, "tck/recorded/ccr")
+    out_dir = os.path.join(root, "tck/harvested/ccr")
     os.makedirs(out_dir, exist_ok=True)
     lines = [HEADER, "# Harvested from Drishti's ExposureParityTest reference (an outside oracle on float32 paths), run " + ref["runId"] + ".\n",
              "# Compared within 2 x 2^-24 x max(1, PEAK_PFE_99, max EE_UNCOLL) (+1e-6; +1e-5 for the profile), as the parity test does; never as bits.\n",

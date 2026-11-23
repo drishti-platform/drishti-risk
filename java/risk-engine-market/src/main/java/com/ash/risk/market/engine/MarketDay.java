@@ -15,7 +15,6 @@
  */
 package com.ash.risk.market.engine;
 
-import com.ash.engine.Batch;
 import com.ash.engine.Control;
 import com.ash.engine.EngineException;
 import com.ash.engine.Filter;
@@ -167,22 +166,23 @@ final class MarketDay {
         List<Map<String, Object>> out = new ArrayList<>();
         t.scan(new Scan(cols, Filter.ALL, 4_096), b -> {
             control.check();
+            // each column's array once per batch (a batch builds it on each call), then the rows
+            Object[] arrays = new Object[cols.size()];
+            for (int k = 0; k < cols.size(); k++) {
+                arrays[k] = NUMBERS.contains(cols.get(k)) ? b.numbers(cols.get(k)) : b.texts(cols.get(k));
+            }
             for (int i = 0; i < b.rows(); i++) {
-                out.add(row(b, cols, i));
+                Map<String, Object> m = new HashMap<>();
+                for (int k = 0; k < cols.size(); k++) {
+                    String c = cols.get(k);
+                    if (!b.isNull(c, i)) {
+                        m.put(c, arrays[k] instanceof double[] d ? (Object) d[i] : ((String[]) arrays[k])[i]);
+                    }
+                }
+                out.add(m);
             }
         });
         return out;
-    }
-
-    private static Map<String, Object> row(Batch b, List<String> cols, int i) {
-        Map<String, Object> m = new HashMap<>();
-        for (String c : cols) {
-            if (b.isNull(c, i)) {
-                continue;
-            }
-            m.put(c, NUMBERS.contains(c) ? (Object) b.numbers(c)[i] : b.texts(c)[i]);
-        }
-        return m;
     }
 
     private static List<Row> vectors(String name, String key, String vector, String pvColumn, Inputs inputs, Snapshot snapshot,

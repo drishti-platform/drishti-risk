@@ -261,6 +261,7 @@ public final class RiskRecorder {
         y.append("  - id: ").append(date).append('-').append(w).append('-').append(cur).append('\n');
         y.append("    source: \"recorder: Drishti 3813b8735 (VarBook, VarCalc, CurrencyBook, ScopeResolver), canonical order, 1/4/24 threads equal\"\n");
         y.append("    reference: ").append(w == 250 && cur.equals("USD")).append('\n');
+        y.append("    laws: []                 # the recorded bits only: the laws run on the hand cases (tck/cases), not on 8,000 positions\n");
         y.append("    request: { outputs: [ headline, node-var, node-components, basket-var ], params: { scenario-set: \"\", window: ").append(w)
                 .append(", currency: ").append(cur).append(" }, visibility: { scenario-pv: all, pnl-vector: all }, seed: 0 }\n");
         y.append("    expect:\n      status: complete\n      tables:\n");
@@ -424,6 +425,7 @@ public final class RiskRecorder {
             y.append("  - id: ").append(q(scope)).append('\n');
             y.append("    source: \"recorder: Drishti 3813b8735 (ExposureBook, ExposureScopes, ExposureCalc), paths in (trade, grid index) order\"\n");
             y.append("    reference: ").append(scope.equals("BANK")).append('\n');
+            y.append("    laws: []                 # the recorded bits only: the laws run on the hand cases (tck/cases), not on 8,000 positions\n");
             y.append("    request: { outputs: [ exposure-summary, exposure-profile ], params: { scope: ").append(q(scope))
                     .append(", standalone: false }, visibility: { exposure-path: all }, seed: 0 }\n");
             y.append("    expect:\n      status: complete\n      tables:\n");

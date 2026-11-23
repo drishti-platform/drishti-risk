@@ -27,6 +27,7 @@ cases:
   - id: 2026-09-28-509-USD
     source: "recorder: Drishti 3813b8735 (VarBook, VarCalc, CurrencyBook, ScopeResolver), canonical order, 1/4/24 threads equal"
     reference: false
+    laws: []                 # the recorded bits only: the laws run on the hand cases (tck/cases), not on 8,000 positions
     request: { outputs: [ headline, node-var, node-components, basket-var ], params: { scenario-set: "", window: 509, currency: USD }, visibility: { scenario-pv: all, pnl-vector: all }, seed: 0 }
     expect:
       status: complete
@@ -336,6 +337,7 @@ cases:
   - id: 2026-09-28-509-EUR
     source: "recorder: Drishti 3813b8735 (VarBook, VarCalc, CurrencyBook, ScopeResolver), canonical order, 1/4/24 threads equal"
     reference: false
+    laws: []                 # the recorded bits only: the laws run on the hand cases (tck/cases), not on 8,000 positions
     request: { outputs: [ headline, node-var, node-components, basket-var ], params: { scenario-set: "", window: 509, currency: EUR }, visibility: { scenario-pv: all, pnl-vector: all }, seed: 0 }
     expect:
       status: complete
@@ -645,6 +647,7 @@ cases:
   - id: 2026-09-28-250-USD
     source: "recorder: Drishti 3813b8735 (VarBook, VarCalc, CurrencyBook, ScopeResolver), canonical order, 1/4/24 threads equal"
     reference: true
+    laws: []                 # the recorded bits only: the laws run on the hand cases (tck/cases), not on 8,000 positions
     request: { outputs: [ headline, node-var, node-components, basket-var ], params: { scenario-set: "", window: 250, currency: USD }, visibility: { scenario-pv: all, pnl-vector: all }, seed: 0 }
     expect:
       status: complete
@@ -954,6 +957,7 @@ cases:
   - id: 2026-09-28-250-EUR
     source: "recorder: Drishti 3813b8735 (VarBook, VarCalc, CurrencyBook, ScopeResolver), canonical order, 1/4/24 threads equal"
     reference: false
+    laws: []                 # the recorded bits only: the laws run on the hand cases (tck/cases), not on 8,000 positions
     request: { outputs: [ headline, node-var, node-components, basket-var ], params: { scenario-set: "", window: 250, currency: EUR }, visibility: { scenario-pv: all, pnl-vector: all }, seed: 0 }
     expect:
       status: complete

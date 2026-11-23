@@ -17,6 +17,7 @@ cases:
   - id: "BANK"
     source: "recorder: Drishti 3813b8735 (ExposureBook, ExposureScopes, ExposureCalc), paths in (trade, grid index) order"
     reference: true
+    laws: []                 # the recorded bits only: the laws run on the hand cases (tck/cases), not on 8,000 positions
     request: { outputs: [ exposure-summary, exposure-profile ], params: { scope: "BANK", standalone: false }, visibility: { exposure-path: all }, seed: 0 }
     expect:
       status: complete
@@ -44,6 +45,7 @@ cases:
   - id: "NSET:NS-ALDERSHOT-FRA"
     source: "recorder: Drishti 3813b8735 (ExposureBook, ExposureScopes, ExposureCalc), paths in (trade, grid index) order"
     reference: false
+    laws: []                 # the recorded bits only: the laws run on the hand cases (tck/cases), not on 8,000 positions
     request: { outputs: [ exposure-summary, exposure-profile ], params: { scope: "NSET:NS-ALDERSHOT-FRA", standalone: false }, visibility: { exposure-path: all }, seed: 0 }
     expect:
       status: complete
@@ -71,6 +73,7 @@ cases:
   - id: "NSET:NS-ALDERSHOT-LDN"
     source: "recorder: Drishti 3813b8735 (ExposureBook, ExposureScopes, ExposureCalc), paths in (trade, grid index) order"
     reference: false
+    laws: []                 # the recorded bits only: the laws run on the hand cases (tck/cases), not on 8,000 positions
     request: { outputs: [ exposure-summary, exposure-profile ], params: { scope: "NSET:NS-ALDERSHOT-LDN", standalone: false }, visibility: { exposure-path: all }, seed: 0 }
     expect:
       status: complete
@@ -98,6 +101,7 @@ cases:
   - id: "NSET:NS-ALDERSHOT-NY"
     source: "recorder: Drishti 3813b8735 (ExposureBook, ExposureScopes, ExposureCalc), paths in (trade, grid index) order"
     reference: false
+    laws: []                 # the recorded bits only: the laws run on the hand cases (tck/cases), not on 8,000 positions
     request: { outputs: [ exposure-summary, exposure-profile ], params: { scope: "NSET:NS-ALDERSHOT-NY", standalone: false }, visibility: { exposure-path: all }, seed: 0 }
     expect:
       status: complete
@@ -125,6 +129,7 @@ cases:
   - id: "NSET:NS-ALDERSHOT-TKY"
     source: "recorder: Drishti 3813b8735 (ExposureBook, ExposureScopes, ExposureCalc), paths in (trade, grid index) order"
     reference: false
+    laws: []                 # the recorded bits only: the laws run on the hand cases (tck/cases), not on 8,000 positions
     request: { outputs: [ exposure-summary, exposure-profile ], params: { scope: "NSET:NS-ALDERSHOT-TKY", standalone: false }, visibility: { exposure-path: all }, seed: 0 }
     expect:
       status: complete
@@ -152,6 +157,7 @@ cases:
   - id: "NSET:NS-AURORA-TKY"
     source: "recorder: Drishti 3813b8735 (ExposureBook, ExposureScopes, ExposureCalc), paths in (trade, grid index) order"
     reference: false
+    laws: []                 # the recorded bits only: the laws run on the hand cases (tck/cases), not on 8,000 positions
     request: { outputs: [ exposure-summary, exposure-profile ], params: { scope: "NSET:NS-AURORA-TKY", standalone: false }, visibility: { exposure-path: all }, seed: 0 }
     expect:
       status: complete
@@ -179,6 +185,7 @@ cases:
   - id: "NSET:NS-CASCADIA-TKY"
     source: "recorder: Drishti 3813b8735 (ExposureBook, ExposureScopes, ExposureCalc), paths in (trade, grid index) order"
     reference: false
+    laws: []                 # the recorded bits only: the laws run on the hand cases (tck/cases), not on 8,000 positions
     request: { outputs: [ exposure-summary, exposure-profile ], params: { scope: "NSET:NS-CASCADIA-TKY", standalone: false }, visibility: { exposure-path: all }, seed: 0 }
     expect:
       status: complete
@@ -206,6 +213,7 @@ cases:
   - id: "NSET:NS-HARBOURLINE-LDN-NY"
     source: "recorder: Drishti 3813b8735 (ExposureBook, ExposureScopes, ExposureCalc), paths in (trade, grid index) order"
     reference: false
+    laws: []                 # the recorded bits only: the laws run on the hand cases (tck/cases), not on 8,000 positions
     request: { outputs: [ exposure-summary, exposure-profile ], params: { scope: "NSET:NS-HARBOURLINE-LDN-NY", standalone: false }, visibility: { exposure-path: all }, seed: 0 }
     expect:
       status: complete
@@ -233,6 +241,7 @@ cases:
   - id: "NSET:NS-KESTREL-FRA"
     source: "recorder: Drishti 3813b8735 (ExposureBook, ExposureScopes, ExposureCalc), paths in (trade, grid index) order"
     reference: false
+    laws: []                 # the recorded bits only: the laws run on the hand cases (tck/cases), not on 8,000 positions
     request: { outputs: [ exposure-summary, exposure-profile ], params: { scope: "NSET:NS-KESTREL-FRA", standalone: false }, visibility: { exposure-path: all }, seed: 0 }
     expect:
       status: complete
