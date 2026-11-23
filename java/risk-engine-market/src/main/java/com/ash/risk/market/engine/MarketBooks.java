@@ -78,13 +78,13 @@ final class MarketBooks {
             double[] p = n.vector();
             double[] v = new double[p.length];
             ScenarioFx.pnlFromPv(n.pv(), p, p.length, r, v);
-            add(b, rules, n, tail(v, w), n.pv() * r.base(), n.text("CURRENCY"));
+            add(b, rules, n, tail(v, w, n), n.pv() * r.base(), n.text("CURRENCY"));
         }
         for (MarketDay.Row n : day.pnl) {
             if (!set.id().equals(n.text("SCENARIO_SET_ID")) || n.vector() == null || !rules.live(n.text("TRADE_STATUS")) || !visible(pnlSee, n)) {
                 continue;
             }
-            add(b, rules, n, tail(n.vector(), w), n.pv(), null);
+            add(b, rules, n, tail(n.vector(), w, n), n.pv(), null);
         }
         VarBook usd = b.build(sums);
         if (currency == null || currency.isBlank() || "USD".equalsIgnoreCase(currency)) {
@@ -105,7 +105,11 @@ final class MarketBooks {
         return see == Filter.ALL || see.test(n::text);
     }
 
-    private static double[] tail(double[] v, int n) {
+    private static double[] tail(double[] v, int n, MarketDay.Row row) {
+        if (v.length < n) {
+            // the set's dates say n scenarios and a row's vector holds fewer: the supplier's error, named (never padded, never cut short)
+            throw new IllegalArgumentException(row.key() + ": its scenario vector holds " + v.length + " values and the scenario set's window needs " + n);
+        }
         return n == v.length ? v.clone() : Arrays.copyOfRange(v, v.length - n, v.length);
     }
 
