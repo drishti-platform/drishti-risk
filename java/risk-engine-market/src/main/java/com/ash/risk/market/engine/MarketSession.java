@@ -183,6 +183,9 @@ final class MarketSession implements Session, Explaining {
         Request request = c.request;
         MarketOptions o = engine.options();
         MarketTables t = new MarketTables(engine.descriptor(), o, engine.sums());
+        if (MarketScopes.OUTPUTS.contains(out)) {
+            return new MarketScopes(engine.descriptor(), o, engine.sums(), this).table(c.request, c.control, out);
+        }
         if (BOOK.contains(out)) {
             MarketBooks.Built b = out.equals("node-var-horizon") ? c.horizon() : c.book();
             if (b == null) {
@@ -270,7 +273,7 @@ final class MarketSession implements Session, Explaining {
     /** What the outputs asked need and the date does not have, by input and output: the answer names it; nothing is substituted. */
     private Map<String, Missing> missing(Request request) {
         Map<String, Missing> out = new LinkedHashMap<>();
-        List<String> book = request.outputs().stream().filter(BOOK::contains).toList();
+        List<String> book = request.outputs().stream().filter(x -> BOOK.contains(x) || MarketScopes.OUTPUTS.contains(x)).toList();
         if (!book.isEmpty()) {
             for (String name : List.of(MarketDay.SCENARIO_SET, MarketDay.FX)) {
                 Missing m = day.missing.get(name);
@@ -332,13 +335,36 @@ final class MarketSession implements Session, Explaining {
     /** The book of a request (of {@code over} when given: the stress set), built once per key. Null when the reporting currency has no FX. */
     MarketBooks.Built book(Request request, Control control, MarketDay.ScenarioSet over) throws EngineException {
         Filter[] see = visibility(request);
+        // a caller who sees every row shares the book of every row (one book, the visibility a selection: EN-63)
+        String signature = see[0] == Filter.ALL && see[1] == Filter.ALL ? ALL : request.visibility().signature();
+        return book(request, control, over, see, signature,
+                String.valueOf(request.param("currency")).toUpperCase(java.util.Locale.ROOT));
+    }
+
+    /** The visibility signature of the one book every caller's row set selects from (EN-63: visibility a selection, never a book). */
+    static final String ALL = "\u0000all";
+
+    /**
+     * The date's book of every row (no visibility applied) in {@code currency}: the ordinals a host's row set names (EN-68). A caller's
+     * visibility is then a selection over it ({@link MarketScopes#visible}), as Drishti's in-tree book applies it.
+     */
+    MarketBooks.Built allBook(Request request, Control control, String currency) throws EngineException {
+        return book(request, control, null, new Filter[] {Filter.ALL, Filter.ALL}, ALL, currency);
+    }
+
+    MarketDay day() {
+        return day;
+    }
+
+    private MarketBooks.Built book(Request request, Control control, MarketDay.ScenarioSet over, Filter[] see, String signature,
+            String currency) throws EngineException {
         MarketDay.ScenarioSet set = over != null ? over : day.set(String.valueOf(request.param("scenario-set")));
         if (set == null) {
             throw new EngineException("ENG-3005", Kind.REFUSED, "the date has no such scenario set");
         }
         int window = ((Number) request.param("window")).intValue();
-        String currency = String.valueOf(request.param("currency")).toUpperCase(java.util.Locale.ROOT);
-        MarketBooks.Key key = new MarketBooks.Key(set.id(), window, currency, request.visibility().signature());
+        window = window <= 0 || window >= set.dates().size() ? 0 : window;    // the whole set however asked: one book
+        MarketBooks.Key key = new MarketBooks.Key(set.id(), window, currency, signature);
         MarketBooks.Built have = books.get(key);
         if (have != null) {
             engine.meter().cacheHit();

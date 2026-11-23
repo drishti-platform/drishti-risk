@@ -101,6 +101,12 @@ final class MarketBooks {
         return new Built(converted, cut, wfx);
     }
 
+    /** The id a row is kept under in the book: its trade, else (a position sent whole) its position. */
+    static String tradeKey(MarketDay.Row n) {
+        String trade = n.text("TRADE_ID");
+        return trade != null ? trade : n.text("POSITION_ID");
+    }
+
     private static boolean visible(Filter see, MarketDay.Row n) {
         return see == Filter.ALL || see.test(n::text);
     }

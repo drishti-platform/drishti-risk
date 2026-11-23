@@ -213,6 +213,8 @@ params:
   girr-correlation: { type: enum, options: [ table, exact ], default: table, label: GIRR correlation }
   curvature-source: { type: enum, options: [ revaluation, gamma ], default: revaluation, label: Curvature source }
   attribute: { type: text, default: DESK, label: Contribution attribute }
+  against: { type: list, items: int, label: Against, help: "A second row set (ordinals of scope-index) the rows are measured against: the firm for a desk, an index's rows for a position." }
+  rows: { type: list, items: int, label: Rows, help: "The ordinals of scope-index a scope resolved to (the host resolves every scope kind; the caller's visibility selects from them)." }
   trades:
     type: table
     contract: risk/what-if-vector@1
@@ -478,6 +480,98 @@ outputs:
     columns:
       - { name: VALUE, type: string, nullable: false, label: Value }
       - { name: CONTRIBUTION, type: number, nullable: false, label: Contribution, measure: true }
+  scope-index:
+    title: The rows a scope is resolved over
+    about: One row per trade (or position sent whole) of the date's book of every row, in the book's canonical order; ORDINAL is what a row set names. The host resolves every scope kind over it (EN-68).
+    params: [ scenario-set, window ]
+    needs: [ scenario-set, fx-scenario ]
+    key: [ ORDINAL ]
+    columns:
+      - { name: ORDINAL, type: integer, nullable: false, label: Row }
+      - { name: TRADE_ID, type: string, nullable: false, label: Trade }
+      - { name: POSITION, type: integer, nullable: false, label: Position index }
+      - { name: SUPPLIED, type: boolean, nullable: false, label: Sent whole as a position }
+      - { name: CANCELLED, type: boolean, nullable: false, label: Cancelled }
+      - { name: COUNTERPARTY, type: string, nullable: true, label: Counterparty }
+      - { name: LEGAL_ENTITY, type: string, nullable: true, label: Legal entity }
+  scope-positions:
+    title: The positions of the book
+    about: One row per position (derived by the position rules, or sent whole); RUNS are its rows as from, to pairs of ordinals.
+    params: [ scenario-set, window ]
+    needs: [ scenario-set, fx-scenario ]
+    key: [ POSITION ]
+    columns:
+      - { name: POSITION, type: integer, nullable: false, label: Position index }
+      - { name: POSITION_ID, type: string, nullable: false, label: Position }
+      - { name: RUNS, type: list, nullable: false, label: Rows (from, to pairs) }
+  scope-position-values:
+    title: The positions' columns
+    about: Each position's columns, one row per value (texts in TEXT, numbers in NUMBER), for the rules a scope may name (WHERE).
+    params: [ scenario-set, window ]
+    needs: [ scenario-set, fx-scenario ]
+    key: [ POSITION, COLUMN ]
+    columns:
+      - { name: POSITION, type: integer, nullable: false, label: Position index }
+      - { name: COLUMN, type: string, nullable: false, label: Column }
+      - { name: TEXT, type: string, nullable: true, label: Text }
+      - { name: NUMBER, type: number, nullable: true, label: Number }
+  scope-nodes:
+    title: The hierarchies' nodes as rows
+    about: One row per node of every hierarchy; RUNS are its member rows as from, to pairs of ordinals of scope-index.
+    params: [ scenario-set, window ]
+    needs: [ scenario-set, fx-scenario ]
+    key: [ NODE_ID ]
+    columns:
+      - { name: NODE_ID, type: string, nullable: false, label: Node }
+      - { name: HIERARCHY, type: string, nullable: false, label: Hierarchy }
+      - { name: PARENT, type: string, nullable: true, label: Parent }
+      - { name: LEVEL, type: string, nullable: true, label: Level }
+      - { name: NAME, type: string, nullable: true, label: Name }
+      - { name: LIMIT, type: number, nullable: true, label: Limit (USD) }
+      - { name: RUNS, type: list, nullable: false, label: Member rows (from, to pairs) }
+  scope-words:
+    title: The hierarchies' scope words
+    about: Each configured hierarchy's word (LL) and its hierarchy id, as a scope names its nodes (LL:0042).
+    params: [ ]
+    key: [ WORD ]
+    columns:
+      - { name: WORD, type: string, nullable: false, label: Word }
+      - { name: HIERARCHY, type: string, nullable: false, label: Hierarchy }
+  scope-limits:
+    title: The system baskets' VaR limits
+    about: The var-limit rows of hierarchy PORTFOLIO, by basket id (USD).
+    params: [ ]
+    key: [ BASKET_ID ]
+    columns:
+      - { name: BASKET_ID, type: string, nullable: false, label: Basket }
+      - { name: LIMIT, type: number, nullable: false, label: Limit (USD) }
+  scope-var:
+    title: VaR and ES of a row set
+    about: The VaR and ES of the rows named (any scope the host resolved), seen through the caller's visibility; a node whole takes its stored aggregate, anything else the planner's sum. PNL is the summed scenario P&L (the scope's path).
+    params: [ scenario-set, window, currency, rows, node ]
+    needs: [ scenario-set, fx-scenario ]
+    key: [ MEMBERS ]
+    columns:
+      - { name: MEMBERS, type: integer, nullable: false, label: Members }
+      - { name: HIDDEN, type: integer, nullable: false, label: Rows the caller may not see }
+      - { name: VAR, type: number, nullable: false, label: VaR, measure: true }
+      - { name: ES, type: number, nullable: false, label: Expected shortfall, measure: true }
+      - { name: VAR_SCENARIO, type: integer, nullable: true, label: VaR scenario }
+      - { name: PNL, type: list, nullable: false, label: Scenario P&L }
+  scope-correlation:
+    title: Correlation and beta of a row set against another
+    about: The Pearson correlation of the rows' summed scenario P&L with the other row set's, and the beta (covariance over the other's variance), over the same scenarios and currency, each seen through the caller's visibility.
+    params: [ scenario-set, window, currency, rows, node, against ]
+    needs: [ scenario-set, fx-scenario ]
+    key: [ MEMBERS ]
+    columns:
+      - { name: MEMBERS, type: integer, nullable: false, label: Members }
+      - { name: AGAINST_MEMBERS, type: integer, nullable: false, label: Members of the other set }
+      - { name: SCENARIOS, type: integer, nullable: false, label: Scenarios }
+      - { name: CORRELATION, type: number, nullable: true, label: Correlation, measure: true }
+      - { name: BETA, type: number, nullable: true, label: Beta, measure: true }
+      - { name: VOLATILITY, type: number, nullable: true, label: Volatility of the P&L }
+      - { name: AGAINST_VOLATILITY, type: number, nullable: true, label: Volatility of the other's P&L }
   what-if:
     title: What-if on supplied vectors
     about: A node's VaR and ES before and after hypothetical trades whose scenario P&L the caller supplies (the engine prices nothing), each trade's standalone, incremental and component VaR, and the stressed VaR of the worst window before and after.
