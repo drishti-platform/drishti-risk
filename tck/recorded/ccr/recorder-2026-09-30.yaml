@@ -1,0 +1,259 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Risk. Proprietary: see LICENSE.
+# Written by tools/split/recorder/RiskRecorder.java from Drishti 3813b8735; do not edit by hand.
+suite: ccr/recorder-2026-09-30
+engine: ccr
+since: "0.1"
+description: Drishti's exposure figures and profiles for the bank and every netting set.
+given:
+  snapshot: { date: "2026-09-30" }
+  inputs:
+    simulation-run: { file: ../../data/ccr/2026-09-30/simulation-run.jsonl.gz }
+    exposure-path: { file: ../../data/ccr/2026-09-30/exposure-path.jsonl.gz }
+    netting-set: { file: ../../data/ccr/2026-09-30/netting-set.jsonl.gz }
+    csa: { file: ../../data/ccr/2026-09-30/csa.jsonl.gz }
+    collateral-balance: { file: ../../data/ccr/2026-09-30/collateral-balance.jsonl.gz }
+    trade-valuation: { file: ../../data/ccr/2026-09-30/trade-valuation.jsonl.gz }
+cases:
+  - id: "BANK"
+    source: "recorder: Drishti 3813b8735 (ExposureBook, ExposureScopes, ExposureCalc), paths in (trade, grid index) order"
+    reference: true
+    request: { outputs: [ exposure-summary, exposure-profile ], params: { scope: "BANK", standalone: false }, visibility: { exposure-path: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        exposure-summary:
+          columns: [ SCOPE, TRADES, CE, EPE, EEPE, PEAK_EE, PEAK_PFE, PEAK_PFE_DATE ]
+          rows:
+            - [ "BANK", 523, "0x41c59afe4b747ade", "0x41c85aa07d05f30a", "0x41c85c108b095393", "0x41c8e1b9a90851ec", "0x41d42f3be3000000", "2027-09-30" ]
+        exposure-profile:
+          columns: [ POINT, DATE, TENOR, EE, ENE, EEE, PFE, EE_UNCOLL ]
+          rows:
+            - [ 0, "2026-10-07", "1W", "0x41c6414a874f5c29", "0xc1a4512908fd70a4", "0x41c6414a874f5c29", "0x41c92a56e1000000", "0x41c6414a874f5c29" ]
+            - [ 1, "2026-10-14", "2W", "0x41c6d3cd504f5c29", "0xc1a341bc176147ae", "0x41c6d3cd504f5c29", "0x41cabb70c3000000", "0x41c6d3cd504f5c29" ]
+            - [ 2, "2026-10-30", "1M", "0x41c752bfdad66666", "0xc1a428e3aee3d70a", "0x41c752bfdad66666", "0x41cdcd7ca3800000", "0x41c752bfdad66666" ]
+            - [ 3, "2026-11-30", "2M", "0x41c74f0ef23f5c29", "0xc1a484f5f287ae14", "0x41c752bfdad66666", "0x41cef3c4f8800000", "0x41c74f0ef23f5c29" ]
+            - [ 4, "2026-12-30", "3M", "0x41c7451242d1eb85", "0xc1a4ed6a656b851f", "0x41c752bfdad66666", "0x41d022cebb400000", "0x41c7451242d1eb85" ]
+            - [ 5, "2027-03-30", "6M", "0x41c8a228c33d70a4", "0xc1a82228b62147ae", "0x41c8a228c33d70a4", "0x41d1eb1bc0000000", "0x41c8a228c33d70a4" ]
+            - [ 6, "2027-06-30", "9M", "0x41c8b6baece3d70a", "0xc1a9b6c1de7ae148", "0x41c8b6baece3d70a", "0x41d357d9d8000000", "0x41c8b6baece3d70a" ]
+            - [ 7, "2027-09-30", "1Y", "0x41c8e1b9a90851ec", "0xc1aa39821351eb85", "0x41c8e1b9a90851ec", "0x41d42f3be3000000", "0x41c8e1b9a90851ec" ]
+            - [ 8, "2028-09-29", "2Y", "0x41c7ce04497eb852", "0xc1ab57a3215eb852", "0x41c8e1b9a90851ec", "0x41d37fcbe6800000", "0x41c7ce04497eb852" ]
+            - [ 9, "2029-09-28", "3Y", "0x41c46e76cf8ae148", "0xc1aa6c4790d9999a", "0x41c8e1b9a90851ec", "0x41d26d869b000000", "0x41c46e76cf8ae148" ]
+            - [ 10, "2031-09-30", "5Y", "0x41b75100ae11eb85", "0xc1a64d52106147ae", "0x41c8e1b9a90851ec", "0x41c5b1f003000000", "0x41b75100ae11eb85" ]
+            - [ 11, "2033-09-30", "7Y", "0x41a4dc54a16147ae", "0xc197d37374000000", "0x41c8e1b9a90851ec", "0x41b786cbc0000000", "0x41a4dc54a16147ae" ]
+            - [ 12, "2036-09-30", "10Y", "0x416bd2f6fbae147b", "0xc16577e859eb851f", "0x41c8e1b9a90851ec", "0x4182e7f330000000", "0x416bd2f6fbae147b" ]
+  - id: "NSET:NS-ALDERSHOT-FRA"
+    source: "recorder: Drishti 3813b8735 (ExposureBook, ExposureScopes, ExposureCalc), paths in (trade, grid index) order"
+    reference: false
+    request: { outputs: [ exposure-summary, exposure-profile ], params: { scope: "NSET:NS-ALDERSHOT-FRA", standalone: false }, visibility: { exposure-path: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        exposure-summary:
+          columns: [ SCOPE, TRADES, CE, EPE, EEPE, PEAK_EE, PEAK_PFE, PEAK_PFE_DATE ]
+          rows:
+            - [ "NSET:NS-ALDERSHOT-FRA", 35, "0x0000000000000000", "0x413244dc5db4a629", "0x4155376371373165", "0x4156556ea3333333", "0x416d264760000000", "2026-10-14" ]
+        exposure-profile:
+          columns: [ POINT, DATE, TENOR, EE, ENE, EEE, PFE, EE_UNCOLL ]
+          rows:
+            - [ 0, "2026-10-07", "1W", "0x40d99b46b851eb85", "0xc16dd4daac000000", "0x40d99b46b851eb85", "0x0000000000000000", "0x40d99b46b851eb85" ]
+            - [ 1, "2026-10-14", "2W", "0x41532ffa9051eb85", "0xc1328df2fae147ae", "0x41532ffa9051eb85", "0x416d264760000000", "0x41532ffa9051eb85" ]
+            - [ 2, "2026-10-30", "1M", "0x4156556ea3333333", "0xc11447c8147ae148", "0x4156556ea3333333", "0x416990e840000000", "0x4156556ea3333333" ]
+            - [ 3, "2026-11-30", "2M", "0x413d1d2fbae147ae", "0xc12068d5028f5c29", "0x4156556ea3333333", "0x415633c9c0000000", "0x413d1d2fbae147ae" ]
+            - [ 4, "2026-12-30", "3M", "0x40f182279999999a", "0xc11e0ac89eb851ec", "0x4156556ea3333333", "0x411c0bac00000000", "0x40f182279999999a" ]
+            - [ 5, "2027-03-30", "6M", "0x0000000000000000", "0x0000000000000000", "0x4156556ea3333333", "0x0000000000000000", "0x0000000000000000" ]
+            - [ 6, "2027-06-30", "9M", "0x0000000000000000", "0x0000000000000000", "0x4156556ea3333333", "0x0000000000000000", "0x0000000000000000" ]
+            - [ 7, "2027-09-30", "1Y", "0x0000000000000000", "0x0000000000000000", "0x4156556ea3333333", "0x0000000000000000", "0x0000000000000000" ]
+            - [ 8, "2028-09-29", "2Y", "0x0000000000000000", "0x0000000000000000", "0x4156556ea3333333", "0x0000000000000000", "0x0000000000000000" ]
+            - [ 9, "2029-09-28", "3Y", "0x0000000000000000", "0x0000000000000000", "0x4156556ea3333333", "0x0000000000000000", "0x0000000000000000" ]
+            - [ 10, "2031-09-30", "5Y", "0x0000000000000000", "0x0000000000000000", "0x4156556ea3333333", "0x0000000000000000", "0x0000000000000000" ]
+            - [ 11, "2033-09-30", "7Y", "0x0000000000000000", "0x0000000000000000", "0x4156556ea3333333", "0x0000000000000000", "0x0000000000000000" ]
+            - [ 12, "2036-09-30", "10Y", "0x0000000000000000", "0x0000000000000000", "0x4156556ea3333333", "0x0000000000000000", "0x0000000000000000" ]
+  - id: "NSET:NS-ALDERSHOT-LDN"
+    source: "recorder: Drishti 3813b8735 (ExposureBook, ExposureScopes, ExposureCalc), paths in (trade, grid index) order"
+    reference: false
+    request: { outputs: [ exposure-summary, exposure-profile ], params: { scope: "NSET:NS-ALDERSHOT-LDN", standalone: false }, visibility: { exposure-path: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        exposure-summary:
+          columns: [ SCOPE, TRADES, CE, EPE, EEPE, PEAK_EE, PEAK_PFE, PEAK_PFE_DATE ]
+          rows:
+            - [ "NSET:NS-ALDERSHOT-LDN", 159, "0x0000000000000000", "0x417e8a068d14c9e2", "0x417e8a068d14c9e2", "0x41982017f847ae14", "0x41bc860be0000000", "2029-09-28" ]
+        exposure-profile:
+          columns: [ POINT, DATE, TENOR, EE, ENE, EEE, PFE, EE_UNCOLL ]
+          rows:
+            - [ 0, "2026-10-07", "1W", "0x0000000000000000", "0xc1a197cdd7a66666", "0x0000000000000000", "0x0000000000000000", "0x0000000000000000" ]
+            - [ 1, "2026-10-14", "2W", "0x0000000000000000", "0xc1a189ecedd1eb85", "0x0000000000000000", "0x0000000000000000", "0x0000000000000000" ]
+            - [ 2, "2026-10-30", "1M", "0x4114f5c4cccccccd", "0xc1a1036902ae147b", "0x4114f5c4cccccccd", "0x0000000000000000", "0x4114f5c4cccccccd" ]
+            - [ 3, "2026-11-30", "2M", "0x414af9b0447ae148", "0xc19e9b7e80a8f5c3", "0x414af9b0447ae148", "0x41799af270000000", "0x414af9b0447ae148" ]
+            - [ 4, "2026-12-30", "3M", "0x4162796214000000", "0xc19cb7ca69333333", "0x4162796214000000", "0x4190f57550000000", "0x4162796214000000" ]
+            - [ 5, "2027-03-30", "6M", "0x41760944c4a3d70a", "0xc19bebc0c947ae14", "0x41760944c4a3d70a", "0x41a147fd80000000", "0x41760944c4a3d70a" ]
+            - [ 6, "2027-06-30", "9M", "0x41836cf321851eb8", "0xc199e40ad5fae148", "0x41836cf321851eb8", "0x41a76d7eb0000000", "0x41836cf321851eb8" ]
+            - [ 7, "2027-09-30", "1Y", "0x418c460c14333333", "0xc198d92a378f5c29", "0x418c460c14333333", "0x41b0ce9263000000", "0x418c460c14333333" ]
+            - [ 8, "2028-09-29", "2Y", "0x41978caf5deb851f", "0xc195517fd8d70a3d", "0x41978caf5deb851f", "0x41ba20d8c9000000", "0x41978caf5deb851f" ]
+            - [ 9, "2029-09-28", "3Y", "0x41982017f847ae14", "0xc195309c9d4ccccd", "0x41982017f847ae14", "0x41bc860be0000000", "0x41982017f847ae14" ]
+            - [ 10, "2031-09-30", "5Y", "0x4194ad3265851eb8", "0xc1931b32dc5c28f6", "0x41982017f847ae14", "0x41b46f509e000000", "0x4194ad3265851eb8" ]
+            - [ 11, "2033-09-30", "7Y", "0x41888576a399999a", "0xc1819a9bdb5c28f6", "0x41982017f847ae14", "0x41a497877a000000", "0x41888576a399999a" ]
+            - [ 12, "2036-09-30", "10Y", "0x415b02915051eb85", "0xc14f15c846666666", "0x41982017f847ae14", "0x4179974550000000", "0x415b02915051eb85" ]
+  - id: "NSET:NS-ALDERSHOT-NY"
+    source: "recorder: Drishti 3813b8735 (ExposureBook, ExposureScopes, ExposureCalc), paths in (trade, grid index) order"
+    reference: false
+    request: { outputs: [ exposure-summary, exposure-profile ], params: { scope: "NSET:NS-ALDERSHOT-NY", standalone: false }, visibility: { exposure-path: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        exposure-summary:
+          columns: [ SCOPE, TRADES, CE, EPE, EEPE, PEAK_EE, PEAK_PFE, PEAK_PFE_DATE ]
+          rows:
+            - [ "NSET:NS-ALDERSHOT-NY", 254, "0x41c301d4c467ae11", "0x41c203fa3f05a47c", "0x41c36becb3f47ae2", "0x41c36becb3f47ae1", "0x41cd2947b2000000", "2027-06-30" ]
+        exposure-profile:
+          columns: [ POINT, DATE, TENOR, EE, ENE, EEE, PFE, EE_UNCOLL ]
+          rows:
+            - [ 0, "2026-10-07", "1W", "0x41c36becb3f47ae1", "0x0000000000000000", "0x41c36becb3f47ae1", "0x41c64c674b800000", "0x41c36becb3f47ae1" ]
+            - [ 1, "2026-10-14", "2W", "0x41c35203b635c28f", "0x0000000000000000", "0x41c36becb3f47ae1", "0x41c7425a74800000", "0x41c35203b635c28f" ]
+            - [ 2, "2026-10-30", "1M", "0x41c3547ce20b851f", "0x0000000000000000", "0x41c36becb3f47ae1", "0x41c8eb85a5000000", "0x41c3547ce20b851f" ]
+            - [ 3, "2026-11-30", "2M", "0x41c2ce08dcf70a3d", "0x0000000000000000", "0x41c36becb3f47ae1", "0x41ca03a519000000", "0x41c2ce08dcf70a3d" ]
+            - [ 4, "2026-12-30", "3M", "0x41c26578ce6e147b", "0x0000000000000000", "0x41c36becb3f47ae1", "0x41cae6bfe1800000", "0x41c26578ce6e147b" ]
+            - [ 5, "2027-03-30", "6M", "0x41c2797a59c5c28f", "0x0000000000000000", "0x41c36becb3f47ae1", "0x41cd018c78000000", "0x41c2797a59c5c28f" ]
+            - [ 6, "2027-06-30", "9M", "0x41c19e4891551eb8", "0xc12d380ab851eb85", "0x41c36becb3f47ae1", "0x41cd2947b2000000", "0x41c19e4891551eb8" ]
+            - [ 7, "2027-09-30", "1Y", "0x41c12385d3b851ec", "0xc118fd4d051eb852", "0x41c36becb3f47ae1", "0x41cbab6187800000", "0x41c12385d3b851ec" ]
+            - [ 8, "2028-09-29", "2Y", "0x41bd4cb8f1d9999a", "0xc0ea1dc2e147ae14", "0x41c36becb3f47ae1", "0x41c90ece20800000", "0x41bd4cb8f1d9999a" ]
+            - [ 9, "2029-09-28", "3Y", "0x41b75afcf6aa3d71", "0xc13078e0c0000000", "0x41c36becb3f47ae1", "0x41c358d273800000", "0x41b75afcf6aa3d71" ]
+            - [ 10, "2031-09-30", "5Y", "0x41a3836f374f5c29", "0xc1452780151eb852", "0x41c36becb3f47ae1", "0x41b2736d50000000", "0x41a3836f374f5c29" ]
+            - [ 11, "2033-09-30", "7Y", "0x4186ad1a5e99999a", "0xc1405b8b5a3d70a4", "0x41c36becb3f47ae1", "0x4198262aa0000000", "0x4186ad1a5e99999a" ]
+            - [ 12, "2036-09-30", "10Y", "0x4136ab2783d70a3d", "0xc138cc72ae147ae1", "0x41c36becb3f47ae1", "0x4157b836c0000000", "0x4136ab2783d70a3d" ]
+  - id: "NSET:NS-ALDERSHOT-TKY"
+    source: "recorder: Drishti 3813b8735 (ExposureBook, ExposureScopes, ExposureCalc), paths in (trade, grid index) order"
+    reference: false
+    request: { outputs: [ exposure-summary, exposure-profile ], params: { scope: "NSET:NS-ALDERSHOT-TKY", standalone: false }, visibility: { exposure-path: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        exposure-summary:
+          columns: [ SCOPE, TRADES, CE, EPE, EEPE, PEAK_EE, PEAK_PFE, PEAK_PFE_DATE ]
+          rows:
+            - [ "NSET:NS-ALDERSHOT-TKY", 21, "0x4184271d0fffffff", "0x418d092f5a9888af", "0x418d0d42f70b38d0", "0x4190eb9a04b33333", "0x41ade285d8000000", "2028-09-29" ]
+        exposure-profile:
+          columns: [ POINT, DATE, TENOR, EE, ENE, EEE, PFE, EE_UNCOLL ]
+          rows:
+            - [ 0, "2026-10-07", "1W", "0x418374ffc8eb851f", "0xc115aa309eb851ec", "0x4184271d0fffffff", "0x419195f80c000000", "0x418374ffc8eb851f" ]
+            - [ 1, "2026-10-14", "2W", "0x41841b47dec28f5c", "0xc130d8fea28f5c29", "0x4184271d0fffffff", "0x4195888a7c000000", "0x41841b47dec28f5c" ]
+            - [ 2, "2026-10-30", "1M", "0x41856f116499999a", "0xc14defafbd70a3d7", "0x41856f116499999a", "0x4197d8f6dc000000", "0x41856f116499999a" ]
+            - [ 3, "2026-11-30", "2M", "0x4189b0e5ffb851ec", "0xc15d6be05e666666", "0x4189b0e5ffb851ec", "0x41a048c9d4000000", "0x4189b0e5ffb851ec" ]
+            - [ 4, "2026-12-30", "3M", "0x418aab443d147ae1", "0xc1638413bb0a3d71", "0x418aab443d147ae1", "0x41a20ac260000000", "0x418aab443d147ae1" ]
+            - [ 5, "2027-03-30", "6M", "0x418e7c3da9cccccd", "0xc170444d6fd70a3d", "0x418e7c3da9cccccd", "0x41a650b1a0000000", "0x418e7c3da9cccccd" ]
+            - [ 6, "2027-06-30", "9M", "0x418ea516a4851eb8", "0xc17a17befb70a3d7", "0x418ea516a4851eb8", "0x41aa47c7e4000000", "0x418ea516a4851eb8" ]
+            - [ 7, "2027-09-30", "1Y", "0x418ea35e11ae147b", "0xc17e62684347ae14", "0x418ea516a4851eb8", "0x41a9adf8ec000000", "0x418ea35e11ae147b" ]
+            - [ 8, "2028-09-29", "2Y", "0x419013c391ae147b", "0xc180e2c84570a3d7", "0x419013c391ae147b", "0x41ade285d8000000", "0x419013c391ae147b" ]
+            - [ 9, "2029-09-28", "3Y", "0x4190eb9a04b33333", "0xc1818470cb51eb85", "0x4190eb9a04b33333", "0x41ac84636c000000", "0x4190eb9a04b33333" ]
+            - [ 10, "2031-09-30", "5Y", "0x41898f0bccc28f5c", "0xc1803a4830c28f5c", "0x4190eb9a04b33333", "0x41a5fc6d08000000", "0x41898f0bccc28f5c" ]
+            - [ 11, "2033-09-30", "7Y", "0x41813ea6b3f5c28f", "0xc179a7680d1eb852", "0x4190eb9a04b33333", "0x41a086e09a000000", "0x41813ea6b3f5c28f" ]
+            - [ 12, "2036-09-30", "10Y", "0x415134d098000000", "0xc14df1126eb851ec", "0x4190eb9a04b33333", "0x4170b13700000000", "0x415134d098000000" ]
+  - id: "NSET:NS-AURORA-TKY"
+    source: "recorder: Drishti 3813b8735 (ExposureBook, ExposureScopes, ExposureCalc), paths in (trade, grid index) order"
+    reference: false
+    request: { outputs: [ exposure-summary, exposure-profile ], params: { scope: "NSET:NS-AURORA-TKY", standalone: false }, visibility: { exposure-path: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        exposure-summary:
+          columns: [ SCOPE, TRADES, CE, EPE, EEPE, PEAK_EE, PEAK_PFE, PEAK_PFE_DATE ]
+          rows:
+            - [ "NSET:NS-AURORA-TKY", 9, "0x4167a9f8ac7ae149", "0x418c3d5f7044503d", "0x418c730b8817fca3", "0x4190f46d6e28f5c3", "0x41b0bd0501000000", "2027-06-30" ]
+        exposure-profile:
+          columns: [ POINT, DATE, TENOR, EE, ENE, EEE, PFE, EE_UNCOLL ]
+          rows:
+            - [ 0, "2026-10-07", "1W", "0x417409a6fb5c28f6", "0xc154d3fced70a3d7", "0x417409a6fb5c28f6", "0x41907f32b4000000", "0x417409a6fb5c28f6" ]
+            - [ 1, "2026-10-14", "2W", "0x4176f3fa910a3d71", "0xc162dc5da147ae14", "0x4176f3fa910a3d71", "0x41956d63bc000000", "0x4176f3fa910a3d71" ]
+            - [ 2, "2026-10-30", "1M", "0x417e39ad6b333333", "0xc17077783bc28f5c", "0x417e39ad6b333333", "0x419c70e8d8000000", "0x417e39ad6b333333" ]
+            - [ 3, "2026-11-30", "2M", "0x4182a038b8b851ec", "0xc179b29b6d99999a", "0x4182a038b8b851ec", "0x41a0085226000000", "0x4182a038b8b851ec" ]
+            - [ 4, "2026-12-30", "3M", "0x418667e3440a3d71", "0xc17c233ca4a3d70a", "0x418667e3440a3d71", "0x41a41b2112000000", "0x418667e3440a3d71" ]
+            - [ 5, "2027-03-30", "6M", "0x418bcf20ba851eb8", "0xc185176527000000", "0x418bcf20ba851eb8", "0x41a8bdcfc4000000", "0x418bcf20ba851eb8" ]
+            - [ 6, "2027-06-30", "9M", "0x4190f46d6e28f5c3", "0xc18573baefa3d70a", "0x4190f46d6e28f5c3", "0x41b0bd0501000000", "0x4190f46d6e28f5c3" ]
+            - [ 7, "2027-09-30", "1Y", "0x419089f54475c28f", "0xc185b535eeeb851f", "0x4190f46d6e28f5c3", "0x41aec8049c000000", "0x419089f54475c28f" ]
+            - [ 8, "2028-09-29", "2Y", "0x419060bf44b33333", "0xc18568ac7270a3d7", "0x4190f46d6e28f5c3", "0x41ada1f978000000", "0x419060bf44b33333" ]
+            - [ 9, "2029-09-28", "3Y", "0x418c10b422ae147b", "0xc1814445d499999a", "0x4190f46d6e28f5c3", "0x41aa008ce6000000", "0x418c10b422ae147b" ]
+            - [ 10, "2031-09-30", "5Y", "0x4180a70ae628f5c3", "0xc177e63fbc000000", "0x4190f46d6e28f5c3", "0x419e7c3fbc000000", "0x4180a70ae628f5c3" ]
+            - [ 11, "2033-09-30", "7Y", "0x4169415ab28f5c29", "0xc163c9a2330a3d71", "0x4190f46d6e28f5c3", "0x4187c06470000000", "0x4169415ab28f5c29" ]
+            - [ 12, "2036-09-30", "10Y", "0x0000000000000000", "0x0000000000000000", "0x4190f46d6e28f5c3", "0x0000000000000000", "0x0000000000000000" ]
+  - id: "NSET:NS-CASCADIA-TKY"
+    source: "recorder: Drishti 3813b8735 (ExposureBook, ExposureScopes, ExposureCalc), paths in (trade, grid index) order"
+    reference: false
+    request: { outputs: [ exposure-summary, exposure-profile ], params: { scope: "NSET:NS-CASCADIA-TKY", standalone: false }, visibility: { exposure-path: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        exposure-summary:
+          columns: [ SCOPE, TRADES, CE, EPE, EEPE, PEAK_EE, PEAK_PFE, PEAK_PFE_DATE ]
+          rows:
+            - [ "NSET:NS-CASCADIA-TKY", 13, "0x417f01fa6b5c28f6", "0x418bd68bfd074b54", "0x418bd7fa11d5b181", "0x41913beecaa3d70a", "0x41b01ab9b7000000", "2028-09-29" ]
+        exposure-profile:
+          columns: [ POINT, DATE, TENOR, EE, ENE, EEE, PFE, EE_UNCOLL ]
+          rows:
+            - [ 0, "2026-10-07", "1W", "0x417e6cd95f47ae14", "0xc125fe586147ae14", "0x417f01fa6b5c28f6", "0x41900efaa4000000", "0x417e6cd95f47ae14" ]
+            - [ 1, "2026-10-14", "2W", "0x4181286c0570a3d7", "0xc140a6ef30000000", "0x4181286c0570a3d7", "0x4193b46d60000000", "0x4181286c0570a3d7" ]
+            - [ 2, "2026-10-30", "1M", "0x41824517b4c28f5c", "0xc15294ac30a3d70a", "0x41824517b4c28f5c", "0x4198b92714000000", "0x41824517b4c28f5c" ]
+            - [ 3, "2026-11-30", "2M", "0x41860cb5c2e147ae", "0xc1604b9de999999a", "0x41860cb5c2e147ae", "0x419fede3fc000000", "0x41860cb5c2e147ae" ]
+            - [ 4, "2026-12-30", "3M", "0x4186945161147ae1", "0xc16c5c53cb5c28f6", "0x4186945161147ae1", "0x41a26fb83e000000", "0x4186945161147ae1" ]
+            - [ 5, "2027-03-30", "6M", "0x418d383754ae147b", "0xc176ed71decccccd", "0x418d383754ae147b", "0x41a79c4d2a000000", "0x418d383754ae147b" ]
+            - [ 6, "2027-06-30", "9M", "0x418d89b149ae147b", "0xc1801d8f4d0a3d71", "0x418d89b149ae147b", "0x41abe8fc88000000", "0x418d89b149ae147b" ]
+            - [ 7, "2027-09-30", "1Y", "0x418fe3ab0eb851ec", "0xc1821a401d8f5c29", "0x418fe3ab0eb851ec", "0x41acc70ede000000", "0x418fe3ab0eb851ec" ]
+            - [ 8, "2028-09-29", "2Y", "0x41913beecaa3d70a", "0xc18c697147d70a3d", "0x41913beecaa3d70a", "0x41b01ab9b7000000", "0x41913beecaa3d70a" ]
+            - [ 9, "2029-09-28", "3Y", "0x418de76d26b851ec", "0xc18c036762e147ae", "0x41913beecaa3d70a", "0x41abf2cca0000000", "0x418de76d26b851ec" ]
+            - [ 10, "2031-09-30", "5Y", "0x4188e9cd155c28f6", "0xc1857f0278b851ec", "0x41913beecaa3d70a", "0x41aa9764a8000000", "0x4188e9cd155c28f6" ]
+            - [ 11, "2033-09-30", "7Y", "0x41795f884570a3d7", "0xc17680eb875c28f6", "0x41913beecaa3d70a", "0x419779f6a0000000", "0x41795f884570a3d7" ]
+            - [ 12, "2036-09-30", "10Y", "0x41370f08b851eb85", "0xc138e51ab70a3d71", "0x41913beecaa3d70a", "0x4158273940000000", "0x41370f08b851eb85" ]
+  - id: "NSET:NS-HARBOURLINE-LDN-NY"
+    source: "recorder: Drishti 3813b8735 (ExposureBook, ExposureScopes, ExposureCalc), paths in (trade, grid index) order"
+    reference: false
+    request: { outputs: [ exposure-summary, exposure-profile ], params: { scope: "NSET:NS-HARBOURLINE-LDN-NY", standalone: false }, visibility: { exposure-path: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        exposure-summary:
+          columns: [ SCOPE, TRADES, CE, EPE, EEPE, PEAK_EE, PEAK_PFE, PEAK_PFE_DATE ]
+          rows:
+            - [ "NSET:NS-HARBOURLINE-LDN-NY", 3, "0x0000000000000000", "0x40d70cb7f0838559", "0x40e34e7aed9fc5a6", "0x40e35dc6147ae148", "0x4101181800000000", "2026-10-14" ]
+        exposure-profile:
+          columns: [ POINT, DATE, TENOR, EE, ENE, EEE, PFE, EE_UNCOLL ]
+          rows:
+            - [ 0, "2026-10-07", "1W", "0x40e04052e147ae14", "0xc0d8c0bbd70a3d71", "0x40e04052e147ae14", "0x40fe44a000000000", "0x40e04052e147ae14" ]
+            - [ 1, "2026-10-14", "2W", "0x40e35dc6147ae148", "0xc0d3f5f000000000", "0x40e35dc6147ae148", "0x4101181800000000", "0x40e35dc6147ae148" ]
+            - [ 2, "2026-10-30", "1M", "0x40e2a907ae147ae1", "0xc07d01c28f5c28f6", "0x40e35dc6147ae148", "0x40f1c35000000000", "0x40e2a907ae147ae1" ]
+            - [ 3, "2026-11-30", "2M", "0x40e04f36147ae148", "0xc07fcd999999999a", "0x40e35dc6147ae148", "0x40efd90000000000", "0x40e04f36147ae148" ]
+            - [ 4, "2026-12-30", "3M", "0x40dc07f851eb851f", "0xc08cae851eb851ec", "0x40e35dc6147ae148", "0x40ef034000000000", "0x40dc07f851eb851f" ]
+            - [ 5, "2027-03-30", "6M", "0x40d573e147ae147b", "0xc0bb8ef47ae147ae", "0x40e35dc6147ae148", "0x40f01c4000000000", "0x40d573e147ae147b" ]
+            - [ 6, "2027-06-30", "9M", "0x40d47e670a3d70a4", "0xc0bcfd15c28f5c29", "0x40e35dc6147ae148", "0x40f2176000000000", "0x40d47e670a3d70a4" ]
+            - [ 7, "2027-09-30", "1Y", "0x40d1ecbbd70a3d71", "0xc0c0f16000000000", "0x40e35dc6147ae148", "0x40f0497000000000", "0x40d1ecbbd70a3d71" ]
+            - [ 8, "2028-09-29", "2Y", "0x409d859eb851eb85", "0xc08f635c28f5c28f", "0x40e35dc6147ae148", "0x40b7cb0000000000", "0x409d859eb851eb85" ]
+            - [ 9, "2029-09-28", "3Y", "0x0000000000000000", "0x0000000000000000", "0x40e35dc6147ae148", "0x0000000000000000", "0x0000000000000000" ]
+            - [ 10, "2031-09-30", "5Y", "0x0000000000000000", "0x0000000000000000", "0x40e35dc6147ae148", "0x0000000000000000", "0x0000000000000000" ]
+            - [ 11, "2033-09-30", "7Y", "0x0000000000000000", "0x0000000000000000", "0x40e35dc6147ae148", "0x0000000000000000", "0x0000000000000000" ]
+            - [ 12, "2036-09-30", "10Y", "0x0000000000000000", "0x0000000000000000", "0x40e35dc6147ae148", "0x0000000000000000", "0x0000000000000000" ]
+  - id: "NSET:NS-KESTREL-FRA"
+    source: "recorder: Drishti 3813b8735 (ExposureBook, ExposureScopes, ExposureCalc), paths in (trade, grid index) order"
+    reference: false
+    request: { outputs: [ exposure-summary, exposure-profile ], params: { scope: "NSET:NS-KESTREL-FRA", standalone: false }, visibility: { exposure-path: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        exposure-summary:
+          columns: [ SCOPE, TRADES, CE, EPE, EEPE, PEAK_EE, PEAK_PFE, PEAK_PFE_DATE ]
+          rows:
+            - [ "NSET:NS-KESTREL-FRA", 29, "0x0000000000000000", "0x414e7a22a8d13a64", "0x4167268e0c18e87a", "0x416867b077333333", "0x4171149c30000000", "2026-10-30" ]
+        exposure-profile:
+          columns: [ POINT, DATE, TENOR, EE, ENE, EEE, PFE, EE_UNCOLL ]
+          rows:
+            - [ 0, "2026-10-07", "1W", "0x4133cb383c28f5c3", "0xc123d4289c28f5c3", "0x4133cb383c28f5c3", "0x414f1a9c00000000", "0x4133cb383c28f5c3" ]
+            - [ 1, "2026-10-14", "2W", "0x4163d046c547ae14", "0x0000000000000000", "0x4163d046c547ae14", "0x416d7a65a0000000", "0x4163d046c547ae14" ]
+            - [ 2, "2026-10-30", "1M", "0x416867b077333333", "0x0000000000000000", "0x416867b077333333", "0x4171149c30000000", "0x416867b077333333" ]
+            - [ 3, "2026-11-30", "2M", "0x4158afa44c7ae148", "0xc0c7650f5c28f5c3", "0x416867b077333333", "0x41651f6b80000000", "0x4158afa44c7ae148" ]
+            - [ 4, "2026-12-30", "3M", "0x414a783cc3333333", "0xc09527cccccccccd", "0x416867b077333333", "0x4156c5f300000000", "0x414a783cc3333333" ]
+            - [ 5, "2027-03-30", "6M", "0x0000000000000000", "0x0000000000000000", "0x416867b077333333", "0x0000000000000000", "0x0000000000000000" ]
+            - [ 6, "2027-06-30", "9M", "0x0000000000000000", "0x0000000000000000", "0x416867b077333333", "0x0000000000000000", "0x0000000000000000" ]
+            - [ 7, "2027-09-30", "1Y", "0x0000000000000000", "0x0000000000000000", "0x416867b077333333", "0x0000000000000000", "0x0000000000000000" ]
+            - [ 8, "2028-09-29", "2Y", "0x0000000000000000", "0x0000000000000000", "0x416867b077333333", "0x0000000000000000", "0x0000000000000000" ]
+            - [ 9, "2029-09-28", "3Y", "0x0000000000000000", "0x0000000000000000", "0x416867b077333333", "0x0000000000000000", "0x0000000000000000" ]
+            - [ 10, "2031-09-30", "5Y", "0x0000000000000000", "0x0000000000000000", "0x416867b077333333", "0x0000000000000000", "0x0000000000000000" ]
+            - [ 11, "2033-09-30", "7Y", "0x0000000000000000", "0x0000000000000000", "0x416867b077333333", "0x0000000000000000", "0x0000000000000000" ]
+            - [ 12, "2036-09-30", "10Y", "0x0000000000000000", "0x0000000000000000", "0x416867b077333333", "0x0000000000000000", "0x0000000000000000" ]

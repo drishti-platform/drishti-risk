@@ -61,10 +61,10 @@ import java.util.TreeSet;
  *
  * <p>It does three things:
  * <ol>
- * <li><b>Exports the inputs</b> under the engines' contracts: {@code tck/data/<engine>/<date>/<input>.jsonl} (scenario PVs of every set,
+ * <li><b>Exports the inputs</b> under the engines' contracts: {@code tck/data/<engine>/<date>/<input>.jsonl.gz} (scenario PVs of every set,
  * the scenario sets with their dates joined by commas, the FX, the limits, the system baskets with the scope Drishti's store derives;
  * the exposure paths, the run, the netting sets, the CSAs, each balance's holdings after haircut as Drishti's loader reads them, each
- * trade's MtM today from its netting set). The files are not committed (tens of MB); the recorder writes them again.</li>
+ * trade's MtM today from its netting set). Gzipped and committed (the kit reads them; about 62 MB), so the cases run without Drishti.</li>
  * <li><b>Records the answers</b> as kit cases, {@code tck/recorded/<engine>/recorder-<date>.yaml}: market risk for 509 and 250 scenarios
  * in USD and EUR (headline, node-var, node-components, basket-var), CCR for the bank and every netting set (exposure-summary,
  * exposure-profile). Rows are added in the engines' canonical order (each input sorted by its key), so the engines must give these bits.</li>
@@ -443,12 +443,12 @@ public final class RiskRecorder {
                 + "# Written by tools/split/recorder/RiskRecorder.java from Drishti 3813b8735; do not edit by hand.\n"
                 + "suite: ccr/recorder-" + date + "\nengine: ccr\nsince: \"0.1\"\ndescription: Drishti's exposure figures and profiles for the bank and every netting set.\n"
                 + "given:\n  snapshot: { date: \"" + date + "\" }\n  inputs:\n"
-                + "    simulation-run: { file: ../../data/ccr/" + date + "/simulation-run.jsonl }\n"
-                + "    exposure-path: { file: ../../data/ccr/" + date + "/exposure-path.jsonl }\n"
-                + "    netting-set: { file: ../../data/ccr/" + date + "/netting-set.jsonl }\n"
-                + "    csa: { file: ../../data/ccr/" + date + "/csa.jsonl }\n"
-                + "    collateral-balance: { file: ../../data/ccr/" + date + "/collateral-balance.jsonl }\n"
-                + "    trade-valuation: { file: ../../data/ccr/" + date + "/trade-valuation.jsonl }\ncases:\n";
+                + "    simulation-run: { file: ../../data/ccr/" + date + "/simulation-run.jsonl.gz }\n"
+                + "    exposure-path: { file: ../../data/ccr/" + date + "/exposure-path.jsonl.gz }\n"
+                + "    netting-set: { file: ../../data/ccr/" + date + "/netting-set.jsonl.gz }\n"
+                + "    csa: { file: ../../data/ccr/" + date + "/csa.jsonl.gz }\n"
+                + "    collateral-balance: { file: ../../data/ccr/" + date + "/collateral-balance.jsonl.gz }\n"
+                + "    trade-valuation: { file: ../../data/ccr/" + date + "/trade-valuation.jsonl.gz }\ncases:\n";
         write(risk.resolve("tck/recorded/ccr/recorder-" + date + ".yaml"), head + y);
     }
 
@@ -537,7 +537,7 @@ public final class RiskRecorder {
         }
         h.append("  inputs:\n");
         for (String in : List.of("scenario-pv", "pnl-vector", "scenario-set", "fx-scenario", "var-limit", "system-basket")) {
-            h.append("    ").append(in).append(": { file: ../../data/").append(engine).append('/').append(date).append('/').append(in).append(".jsonl }\n");
+            h.append("    ").append(in).append(": { file: ../../data/").append(engine).append('/').append(date).append('/').append(in).append(".jsonl.gz }\n");
         }
         h.append("cases:\n");
         return h.toString();
@@ -602,8 +602,10 @@ public final class RiskRecorder {
         }
     }
 
+    /** Writes {@code file}{@code .gz}: gzip with no name and no time in its header, so a second run writes the same rows. */
     static void jsonl(Path file, List<JsonNode> rows) throws IOException {
-        try (Writer w = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
+        try (Writer w = new java.io.OutputStreamWriter(new java.util.zip.GZIPOutputStream(Files.newOutputStream(
+                file.resolveSibling(file.getFileName() + ".gz"))), StandardCharsets.UTF_8)) {
             for (JsonNode n : rows) {
                 w.write(JSON.writeValueAsString(n));
                 w.write('\n');
