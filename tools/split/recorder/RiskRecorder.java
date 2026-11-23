@@ -369,9 +369,11 @@ public final class RiskRecorder {
         JsonNode run = read(data.resolve("simulation-run"), date).get(0);
         List<JsonNode> paths = new ArrayList<>(read(data.resolve("exposure-path"), date));
         paths.sort(Comparator.comparing((JsonNode n) -> n.path("TRADE_ID").asText()).thenComparingInt(n -> n.path("GRID_INDEX").asInt()));
-        Map<String, JsonNode> sets = byKey(read(data.resolve("netting-set"), date), "NETTING_SET_ID");
-        Map<String, JsonNode> csas = byKey(read(data.resolve("csa"), date), "CSA_ID");
-        Map<String, JsonNode> balances = byKey(read(data.resolve("collateral-balance"), date), "BALANCE_ID");
+        // the reference kinds as Drishti's exposure loader reads them: each record's latest version on or before the date (a CSA is
+        // loaded once, on 2026-07-08; the later daily files are empty), never the date's file alone
+        Map<String, JsonNode> sets = byKey(readAsOf(data.resolve("netting-set"), date), "NETTING_SET_ID");
+        Map<String, JsonNode> csas = byKey(readAsOf(data.resolve("csa"), date), "CSA_ID");
+        Map<String, JsonNode> balances = byKey(readAsOf(data.resolve("collateral-balance"), date), "BALANCE_ID");
         Map<String, Double> mtm0 = new TreeMap<>();
         sets.values().forEach(s -> s.path("TRADES").forEach(t -> mtm0.put(t.path("TRADE_ID").asText(), t.path("MTM").asDouble())));
         exportCcr(date, run, paths, sets, csas, balances, mtm0);
@@ -551,6 +553,18 @@ public final class RiskRecorder {
             return out;
         }
         for (String line : FeedFiles.lines(folder, p -> p.date().equals(date))) {
+            out.add(JSON.readTree(line));
+        }
+        return out;
+    }
+
+    /** Every row of the files dated on or before {@code date}, oldest first (byKey then keeps each record's latest version). */
+    static List<JsonNode> readAsOf(Path folder, String date) throws IOException {
+        List<JsonNode> out = new ArrayList<>();
+        if (!Files.isDirectory(folder)) {
+            return out;
+        }
+        for (String line : FeedFiles.lines(folder, p -> p.date().compareTo(date) <= 0)) {
             out.add(JSON.readTree(line));
         }
         return out;
