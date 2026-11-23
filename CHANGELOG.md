@@ -5,7 +5,9 @@
 
 - `ccr` (R2, Drishti's exposure routes on the engine): `exposure-summary` and `exposure-profile` take the measure parameters
   `confidence` (the PFE confidence; 0: the engine's `pfe-confidence`) and `collateral` (lagged, current or none, the uncollateralised view;
-  empty: the engine's `model`), as Drishti's `q` and `collateral`; the book is the same, only the measures read it differently. The
+  empty: the engine's `model`), as Drishti's `q` and `collateral`; the book is the same, only the measures read it differently. A new
+  output `counterparty-summary` gives every counterparty's figures (the counterparty grain of the Exposure Home: netting sets, trades, CE,
+  EPE, EEPE, peak EE, peak PFE and its date), each as `exposure-summary` of `CPTY:<id>`; credit limits stay the host's to join. The
   pre-deal check reads a netting set summed whole from the book's matrices as the set alone (its exposure and negative matrices), as
   Drishti's what-if does: the kit's three pre-deal cases that failed with a null matrix give their worked answers.
 - The engines' remaining outputs (R1, branch `r1/outputs`), each with its descriptor entries, explanation and workbook part:
