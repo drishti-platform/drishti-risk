@@ -177,7 +177,7 @@ outputs:
       - { name: PEAK_PFE, type: number, nullable: false, label: Peak PFE, measure: true }
   counterparty-summary:
     title: Exposure figures of every counterparty
-    about: One row per counterparty with paths the request sees (its netting sets netted each, then added), in counterparty order; the same figures as exposure-summary of CPTY:<id>. Credit limits are the host's reference data, joined by the host.
+    about: One row per counterparty with paths the request sees (its netting sets netted each, then added), in counterparty order; the same figures as exposure-summary of CPTY:<id>, and the counterparty's stored credit limit (credit-limit, the first by id; empty without one or without the input).
     params: [ confidence, collateral ]
     key: [ COUNTERPARTY ]
     columns:
@@ -190,6 +190,8 @@ outputs:
       - { name: PEAK_EE, type: number, nullable: false, label: Peak EE, measure: true }
       - { name: PEAK_PFE, type: number, nullable: false, label: Peak PFE, measure: true }
       - { name: PEAK_PFE_DATE, type: date, nullable: true, label: Peak PFE date }
+      - { name: LIMIT_ID, type: string, nullable: true, label: Credit limit }
+      - { name: LIMIT, type: number, nullable: true, label: Limit amount }
   netting-set-collateral:
     title: Netting and collateral by netting set
     about: Each netting set's CSA terms, collateral and initial margin held, its MtM today, current exposure uncollateralised and collateralised, and EPE and peak PFE without and with collateral (the collateral's benefit).

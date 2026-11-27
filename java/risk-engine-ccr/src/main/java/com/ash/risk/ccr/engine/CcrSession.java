@@ -347,7 +347,7 @@ final class CcrSession implements Session, Explaining {
     /**
      * Every counterparty the book holds (its netting sets with paths the request sees), in counterparty order: each one the scope
      * {@code CPTY:<id>} evaluated as exposure-summary evaluates it (its sets netted each, then added in the book's order), under the
-     * request's confidence and collateral model.
+     * request's confidence and collateral model; beside it the counterparty's stored credit limit (the pre-deal check's).
      */
     private Table counterparties(ExposureBook b, Request request, Control control) throws EngineException {
         ExposureCalc.Params prm = params(request);
@@ -365,7 +365,9 @@ final class CcrSession implements Session, Explaining {
             ExposureMath.Stats s = r.stats;
             int q = s.at(prm.q());
             String peakDate = s.peakAt[q] < 0 ? null : g.date(g.primaryAt(s.peakAt[q])).toString();
-            t.row(cp, (long) r.pieces.size(), (long) r.trades.size(), s.ce, s.epe, s.eepe, s.peakEe, s.peakPfe[q], peakDate);
+            CcrExtras.Limit l = day.extras.limits.get(cp);
+            t.row(cp, (long) r.pieces.size(), (long) r.trades.size(), s.ce, s.epe, s.eepe, s.peakEe, s.peakPfe[q], peakDate, l == null ? null : l.id(),
+                    l == null ? null : l.amount());
         }
         return t.build();
     }

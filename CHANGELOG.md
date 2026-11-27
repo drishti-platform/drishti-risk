@@ -3,6 +3,8 @@
 
 ## 0.1.0 (unreleased)
 
+- `ccr`: `counterparty-summary` adds `LIMIT_ID` and `LIMIT`, the counterparty's stored credit limit as the pre-deal check reads it
+  (`credit-limit`, the first by id; empty without one), so a host's exposure Home joins nothing itself (R2, Drishti's role Homes).
 - `ccr` (R2 MC-12, exposure): option `vector-tier` (`heap`, the default: float64 netting-set matrices; `mapped`: every value, exposure and
   negative-exposure row float32, rounded once and read into float64 sums in row order, as a host's mapped exposure tier's hot file keeps
   them; half the bytes). `ExposureParityTest.aHeapBookOfFloat32RowsEqualsTheHotFileToTheBit`: every netting set, the counterparty, the
