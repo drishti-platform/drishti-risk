@@ -3,6 +3,12 @@
 
 ## 0.1.0 (unreleased)
 
+- `market-risk` (R2 lane G, part 4): `official-history` and `official-backtest` over `var-history`: a node's official records to the
+  session's date (the latest result version of each date at the engine's confidence, the newest `days`), each record's VaR, ES and
+  hypothetical P&L as stored, and their backtest (each day's hypothetical P&L against the record before: days, exceptions, the scaled
+  Basel light, Kupiec's and Christoffersen's tests within relative 1e-12): Drishti's history of a node with official records. The
+  inputs' needs are a `Map.ofEntries` (more than ten outputs need extras).
+
 - `market-risk` (R2 lane G, part 3): `scope-backtest`, the replayed history of a row set (the newest `days` scenario P&Ls, summed as
   `scope-var` sums the rows, against the set's VaR of the date, each day tested against the VaR before it by `Backtest`: days,
   exceptions, the zone with Basel's limits scaled under 250 days, Kupiec's and Christoffersen's tests; in-sample): Drishti's history of

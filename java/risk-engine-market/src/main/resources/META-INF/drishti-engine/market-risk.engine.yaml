@@ -399,6 +399,37 @@ outputs:
       - { name: HYPOTHETICAL, type: number, nullable: false, label: Hypothetical P&L }
       - { name: RTPL, type: number, nullable: true, label: Risk-theoretical P&L }
       - { name: EXCEPTION, type: boolean, nullable: false, label: Exception }
+  official-history:
+    title: A node's official history
+    about: "One row per official date of a node (its latest result version at the engine's confidence, to the date; the newest DAYS of them, oldest first): the record's VaR, ES and hypothetical P&L as stored, never recomputed, and EXCEPTION when the day's hypothetical P&L is below minus the VaR of the record before it (Drishti's history of a node with official records)."
+    shape: series
+    axis: DATE
+    params: [ node, days ]
+    needs: [ var-history ]
+    key: [ NODE_ID, DATE ]
+    columns:
+      - { name: NODE_ID, type: string, nullable: false, label: Node }
+      - { name: DATE, type: date, nullable: false, label: Date }
+      - { name: VAR, type: number, nullable: false, label: Official VaR, measure: true }
+      - { name: ES, type: number, nullable: true, label: Official ES, measure: true }
+      - { name: HYPO_PNL, type: number, nullable: true, label: Hypothetical P&L }
+      - { name: EXCEPTION, type: boolean, nullable: false, label: Exception }
+  official-backtest:
+    title: The backtest of a node's official history
+    about: "The days of official-history tested against the record of the day before (from the second day): the exceptions, the zone (Basel's 4/9 limits scaled for fewer than 250 days), Kupiec's and Christoffersen's tests (the likelihood ratios and p-values within relative 1e-12: the platform's log and exp). One row; none when the node has no official record."
+    params: [ node, days ]
+    needs: [ var-history ]
+    key: [ NODE_ID ]
+    columns:
+      - { name: NODE_ID, type: string, nullable: false, label: Node }
+      - { name: RECORDS, type: integer, nullable: false, label: Official records }
+      - { name: DAYS, type: integer, nullable: false, label: Days tested }
+      - { name: EXCEPTIONS, type: integer, nullable: false, label: Exceptions }
+      - { name: ZONE, type: string, nullable: false, label: Zone }
+      - { name: KUPIEC_LR, type: number, nullable: false, label: Kupiec LR, exact: "relative:1e-12" }
+      - { name: KUPIEC_P, type: number, nullable: false, label: Kupiec p-value, exact: "relative:1e-12" }
+      - { name: CHRISTOFFERSEN_LR, type: number, nullable: false, label: Christoffersen LR, exact: "relative:1e-12" }
+      - { name: CHRISTOFFERSEN_P, type: number, nullable: false, label: Christoffersen p-value, exact: "relative:1e-12" }
   period-stats:
     title: Period statistics of an official measure
     about: For each node of the official records, the measure's value at the period end, its average, high and low over the official dates of the period, the average of the last N business days' VaR and of the last weeks' stressed VaR the capital formula takes, and the weekdays without a record.

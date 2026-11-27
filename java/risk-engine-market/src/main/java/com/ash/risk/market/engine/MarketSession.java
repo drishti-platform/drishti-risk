@@ -57,16 +57,18 @@ final class MarketSession implements Session, Explaining {
     static final Set<String> BOOK = Set.of("node-var", "node-components", "basket-var", "headline", "node-pvar", "node-pvar-components",
             "node-var-horizon", "what-if");
     /** The inputs each other output cannot be answered without. */
-    static final Map<String, List<String>> NEEDS = Map.of(
-            "backtest", List.of(MarketExtras.HISTORY, MarketExtras.DESK_PNL),
-            "backtest-days", List.of(MarketExtras.HISTORY, MarketExtras.DESK_PNL),
-            "period-stats", List.of(MarketExtras.HISTORY),
-            "regulatory-report", List.of(MarketExtras.HISTORY, MarketExtras.REPORT_ROW),
-            "stress-window", List.of(MarketExtras.PNL_HISTORY),
-            "sensitivity-sum", List.of(MarketExtras.SENSITIVITY, MarketExtras.FACTOR),
-            "sensitivity-ladder", List.of(MarketExtras.SENSITIVITY, MarketExtras.FACTOR),
-            "frtb-sa", List.of(MarketExtras.SENSITIVITY, MarketExtras.FACTOR),
-            "frtb-contributions", List.of(MarketExtras.SENSITIVITY, MarketExtras.FACTOR));
+    static final Map<String, List<String>> NEEDS = Map.ofEntries(
+            Map.entry("backtest", List.of(MarketExtras.HISTORY, MarketExtras.DESK_PNL)),
+            Map.entry("backtest-days", List.of(MarketExtras.HISTORY, MarketExtras.DESK_PNL)),
+            Map.entry("official-history", List.of(MarketExtras.HISTORY)),
+            Map.entry("official-backtest", List.of(MarketExtras.HISTORY)),
+            Map.entry("period-stats", List.of(MarketExtras.HISTORY)),
+            Map.entry("regulatory-report", List.of(MarketExtras.HISTORY, MarketExtras.REPORT_ROW)),
+            Map.entry("stress-window", List.of(MarketExtras.PNL_HISTORY)),
+            Map.entry("sensitivity-sum", List.of(MarketExtras.SENSITIVITY, MarketExtras.FACTOR)),
+            Map.entry("sensitivity-ladder", List.of(MarketExtras.SENSITIVITY, MarketExtras.FACTOR)),
+            Map.entry("frtb-sa", List.of(MarketExtras.SENSITIVITY, MarketExtras.FACTOR)),
+            Map.entry("frtb-contributions", List.of(MarketExtras.SENSITIVITY, MarketExtras.FACTOR)));
 
     private final MarketRiskEngine engine;
     private final Snapshot snapshot;
@@ -216,6 +218,8 @@ final class MarketSession implements Session, Explaining {
         return switch (out) {
             case "backtest" -> h.backtest(backtests(c, h));
             case "backtest-days" -> h.backtestDays(backtests(c, h));
+            case "official-history" -> h.officialDays(c.get("official-history", () -> h.officialHistory(request, see(request, MarketExtras.HISTORY))));
+            case "official-backtest" -> h.officialBacktest(c.get("official-history", () -> h.officialHistory(request, see(request, MarketExtras.HISTORY))));
             case "period-stats" -> h.periodTable(c.get("period-stats", () -> h.periodStats(request, see(request, MarketExtras.HISTORY))));
             case "regulatory-report" -> h.reportTable(c.get("regulatory-report", () -> h.reports(request, see(request, MarketExtras.HISTORY))));
             case "stress-window" -> h.windowTable(c.get("stress-window", () -> h.windows(request, see(request, MarketExtras.PNL_HISTORY))));

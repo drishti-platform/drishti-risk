@@ -235,6 +235,69 @@ final class MarketHistory {
         return n == 0 ? null : new double[] {a, h};
     }
 
+    // ------------------------------------------------------------------------------------------------------------- a node's official history
+
+    /** A node's official records (oldest first, the newest {@code days} of them) and their backtest; {@code backtest} null under two. */
+    record OfficialHistory(String node, List<MarketExtras.Official> records, Backtest backtest) {}
+
+    /**
+     * A node's official history to the session's date ({@code official-history}, {@code official-backtest}): each official date's record of
+     * the node at the engine's confidence (a record without one counts as it), the newest {@code days}, read as stored; the backtest holds
+     * each day's hypothetical P&amp;L against the record of the day before, as Drishti's history of a node with official records does.
+     */
+    OfficialHistory officialHistory(Request request, Filter see) throws EngineException {
+        String node = String.valueOf(request.param("node"));
+        if (node.isBlank() || node.equals("null")) {
+            throw new EngineException("ENG-3001", Kind.REFUSED, "official-history needs node: a node id of the official records");
+        }
+        Object d = request.param("days");
+        int days = d instanceof Number n ? n.intValue() : 250;
+        if (days < 2) {
+            throw new EngineException("ENG-3001", Kind.REFUSED, "days is 2 or more, not " + days);
+        }
+        double q = options.calc().confidence();
+        List<MarketExtras.Official> list = new ArrayList<>();
+        for (Map<String, Map<Double, MarketExtras.Official>> date : officials(see).values()) {
+            MarketExtras.Official o = at(date, node, q);
+            if (o != null) {
+                list.add(o);
+            }
+        }
+        while (list.size() > days) {
+            list.remove(0);
+        }
+        if (list.size() < 2) {
+            return new OfficialHistory(node, List.copyOf(list), null);
+        }
+        double[] pnl = new double[list.size()];
+        double[] var = new double[list.size()];
+        for (int i = 0; i < list.size(); i++) {
+            pnl[i] = list.get(i).hypo();
+            var[i] = list.get(i).var();
+        }
+        return new OfficialHistory(node, List.copyOf(list), Backtest.of(pnl, var, q));
+    }
+
+    Table officialDays(OfficialHistory h) {
+        Tables.Builder t = Tables.of(descriptor.schema("official-history"));
+        for (int i = 0; i < h.records().size(); i++) {
+            MarketExtras.Official o = h.records().get(i);
+            t.row(h.node(), o.date().toString(), o.var(), Double.isFinite(o.es()) ? o.es() : null, Double.isFinite(o.hypo()) ? o.hypo() : null,
+                    h.backtest() != null && h.backtest().exceptionFlags()[i]);
+        }
+        return t.build();
+    }
+
+    Table officialBacktest(OfficialHistory h) {
+        Tables.Builder t = Tables.of(descriptor.schema("official-backtest"));
+        Backtest b = h.backtest();
+        if (b != null) {
+            t.row(h.node(), (long) h.records().size(), (long) b.days(), (long) b.exceptions(), b.light(), b.kupiecLr(), b.kupiecPValue(),
+                    b.christoffersenLr(), b.christoffersenPValue());
+        }
+        return t.build();
+    }
+
     Table backtest(List<Test> tests) {
         Tables.Builder t = Tables.of(descriptor.schema("backtest"));
         for (Test x : tests) {
