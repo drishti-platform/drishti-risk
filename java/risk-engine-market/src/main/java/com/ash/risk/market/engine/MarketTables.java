@@ -104,7 +104,9 @@ final class MarketTables {
             ScopeResolver.Resolution r = resolver.resolve("PORT:" + pf.id());
             double[] v = b.vector(r.set(), sums);
             VarCalc.Measures ms = calc.measures(v);
-            Double limit = MarketBooks.limitIn(built, currency, day.basketLimits.get(pf.id()));   // in the reporting currency, as the nodes' limits
+            // the USD limit whatever the currency: Drishti's recorded system-basket golden holds it so (the headline route converts it:
+            // an open decision, R2_CUT_PLAN Appendix A; the recorded bits are never edited)
+            Double limit = day.basketLimits.get(pf.id());
             Double use = limit == null || limit == 0 ? null : ms.var() / limit;
             t.row(pf.id(), pf.name(), pf.type(), pf.owner(), (long) r.set().size(), r.unknown().isEmpty() ? null : String.join(",", r.unknown()),
                     ms.var(), ms.es(), Math.round(ms.var()), Math.round(ms.es()), limit, use);
