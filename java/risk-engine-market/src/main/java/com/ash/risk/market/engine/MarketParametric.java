@@ -84,7 +84,7 @@ final class MarketParametric {
             ParametricVar.Figures f = figures(v);
             for (String c : new TreeSet<>(x.children())) {
                 ParametricVar.Component k = ParametricVar.component(b.aggregate(c), v, f);
-                t.row(x.id(), c, k.rho(), k.componentVar(), k.componentEs(), k.standaloneVar(), k.incrementalVar());
+                t.row(x.id(), c, k.rho(), k.componentVar(), k.componentEs(), k.standaloneVar(), k.incrementalVar(), k.sigma(), k.mu(), k.cov());
             }
         }
         return t.build();

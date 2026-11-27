@@ -317,7 +317,7 @@ outputs:
       - { name: LAST_DAY, type: date, nullable: true, label: Newest scenario day }
   node-pvar-components:
     title: Parametric component VaR of a node's children
-    about: For every node with children (the figures within relative 1e-12, as node-pvar), each child's parametric component VaR z cov/sigma - mu_i (the parts add up to the node's PVAR exactly), component ES, standalone and incremental parametric VaR and its correlation with the node.
+    about: For every node with children (the figures within relative 1e-12, as node-pvar), each child's parametric component VaR z cov/sigma - mu_i (the parts add up to the node's PVAR exactly), component ES, standalone and incremental parametric VaR, its correlation with the node and the moments the component is made of (the child's sigma and mean, its covariance with the node).
     params: [ scenario-set, window, currency ]
     needs: [ scenario-set, fx-scenario ]
     key: [ NODE_ID, CHILD ]
@@ -329,6 +329,9 @@ outputs:
       - { name: COMPONENT_PES, type: number, nullable: false, label: Component PES, measure: true, exact: "relative:1e-12" }
       - { name: STANDALONE_PVAR, type: number, nullable: false, label: Standalone PVaR, measure: true, exact: "relative:1e-12" }
       - { name: INCREMENTAL_PVAR, type: number, nullable: false, label: Incremental PVaR, measure: true, exact: "relative:1e-12" }
+      - { name: SIGMA, type: number, nullable: false, label: Standard deviation of the child, exact: "relative:1e-12" }
+      - { name: MU, type: number, nullable: false, label: Mean of the child, exact: "relative:1e-12" }
+      - { name: COV, type: number, nullable: false, label: Covariance with the node, exact: "relative:1e-12" }
   node-var-horizon:
     title: VaR and ES by node at a horizon, normal or stressed
     about: Every node's VaR and ES on the normal or the stress scenario set, 1-day or 10-day (the 1-day figures times the square root of 10, or overlapping sums of 10 scenario days).
