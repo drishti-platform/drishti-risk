@@ -220,6 +220,52 @@ outputs:
       - { name: PEAK_PFE_DATE, type: date, nullable: true, label: Peak PFE date }
       - { name: LIMIT_ID, type: string, nullable: true, label: Credit limit }
       - { name: LIMIT, type: number, nullable: true, label: Limit amount }
+  exposure-tree:
+    title: The exposure tree
+    about: "Every netting set with paths the request sees (in the book's order), every counterparty (in counterparty order), the bank and every legal entity (in order), each scope evaluated as exposure-summary evaluates it under the request's confidence and collateral model: its netting sets, trades, EPE, peak EE, peak PFE and the peak's tenor, and its flags (comma-separated); NOTE, and no figures, when an interactive answer cannot sum the scope. A host joins its own names, groups and reference netting sets."
+    params: [ confidence, collateral ]
+    key: [ SCOPE ]
+    columns:
+      - { name: SCOPE, type: string, nullable: false, label: Scope }
+      - { name: KIND, type: string, nullable: false, label: Kind }
+      - { name: ID, type: string, nullable: false, label: Id }
+      - { name: NETTING_SETS, type: integer, nullable: true, label: Netting sets }
+      - { name: TRADES, type: integer, nullable: true, label: Trades }
+      - { name: EPE, type: number, nullable: true, label: EPE, measure: true }
+      - { name: PEAK_EE, type: number, nullable: true, label: Peak EE, measure: true }
+      - { name: PEAK_PFE, type: number, nullable: true, label: Peak PFE, measure: true }
+      - { name: PEAK_PFE_TENOR, type: string, nullable: true, label: Peak PFE tenor }
+      - { name: FLAGS, type: string, nullable: false, label: Flags }
+      - { name: NOTE, type: string, nullable: true, label: Note }
+  exposure-tree-ee:
+    title: The exposure tree's EE lines
+    about: Each scope of exposure-tree with figures, its EE at every primary grid point (the tree's sparklines).
+    params: [ confidence, collateral ]
+    key: [ SCOPE, POINT ]
+    columns:
+      - { name: SCOPE, type: string, nullable: false, label: Scope }
+      - { name: POINT, type: integer, nullable: false, label: Point }
+      - { name: EE, type: number, nullable: false, label: EE, measure: true }
+  exposure-run:
+    title: The date's simulation run
+    about: One row: the run's id, the number of paths, the grid's dates and its primary dates, as the book holds them.
+    shape: row
+    key: [ RUN_ID ]
+    columns:
+      - { name: RUN_ID, type: string, nullable: false, label: Run }
+      - { name: PATHS, type: integer, nullable: false, label: Paths }
+      - { name: GRID_DATES, type: integer, nullable: false, label: Grid dates }
+      - { name: PRIMARY_DATES, type: integer, nullable: false, label: Primary dates }
+  exposure-flags:
+    title: A scope's netting sets and flags
+    about: One row for the scope asked, the netting sets it sums and its flags comma-separated (partial, standalone, its netting sets' data-quality flags such as PAST_MATURITY or MPOR_MISMATCH).
+    shape: row
+    params: [ scope, standalone, confidence, collateral ]
+    key: [ SCOPE ]
+    columns:
+      - { name: SCOPE, type: string, nullable: false, label: Scope }
+      - { name: NETTING_SETS, type: integer, nullable: false, label: Netting sets }
+      - { name: FLAGS, type: string, nullable: false, label: Flags }
   netting-set-collateral:
     title: Netting and collateral by netting set
     about: Each netting set's CSA terms, collateral and initial margin held, its MtM today, current exposure uncollateralised and collateralised, and EPE and peak PFE without and with collateral (the collateral's benefit).

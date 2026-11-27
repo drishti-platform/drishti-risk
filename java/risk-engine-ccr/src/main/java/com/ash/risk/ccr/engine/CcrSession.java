@@ -89,6 +89,7 @@ final class CcrSession implements Session, Explaining {
 
     /** The outputs answered from the exposure book (they need the run and the paths). */
     static final Set<String> PATHS = Set.of("exposure-summary", "exposure-profile", "exposure-contributions", "scope-resolution", "netting-set-summary", "counterparty-summary",
+            "exposure-tree", "exposure-tree-ee", "exposure-run", "exposure-flags",
             "netting-set-collateral", "pre-deal", "pre-deal-buckets");
     /** The inputs each output cannot be answered without, beyond the run and the paths. */
     static final Map<String, List<String>> NEEDS = Map.of(
@@ -131,6 +132,7 @@ final class CcrSession implements Session, Explaining {
         CcrPreDeal.Check check;
         List<CcrSimm.Run> simm;
         List<CcrCollateral.View> collateral;
+        List<TreeNode> tree;
 
         Computed(Request request, Control control) {
             this.request = request;
@@ -166,6 +168,13 @@ final class CcrSession implements Session, Explaining {
             return simm;
         }
 
+        List<TreeNode> tree() throws EngineException {
+            if (tree == null) {
+                tree = CcrSession.this.tree(book(), request, control);
+            }
+            return tree;
+        }
+
         List<CcrCollateral.View> collateral() throws EngineException {
             if (collateral == null) {
                 ExposureBook b = book();
@@ -191,6 +200,10 @@ final class CcrSession implements Session, Explaining {
                 case "scope-resolution" -> resolution(c.book(), request);
                 case "netting-set-summary" -> sets(c.book(), control);
                 case "counterparty-summary" -> counterparties(c.book(), request, control);
+                case "exposure-tree" -> treeTable(c.book(), request, c.tree());
+                case "exposure-tree-ee" -> treeEe(c.tree());
+                case "exposure-run" -> run(c.book());
+                case "exposure-flags" -> flags(c.book(), request);
                 case "netting-set-collateral" -> new CcrCollateral(engine.descriptor(), engine.options()).table(c.collateral());
                 case "pre-deal" -> new CcrPreDeal(engine.descriptor(), engine.options(), day).table(c.check());
                 case "pre-deal-buckets" -> new CcrPreDeal(engine.descriptor(), engine.options(), day).buckets(c.check());
@@ -408,6 +421,86 @@ final class CcrSession implements Session, Explaining {
                     l == null ? null : l.amount());
         }
         return t.build();
+    }
+
+    /** One node of the tree: its scope, kind and id, and its evaluation (null, with the note, when an interactive answer cannot sum it). */
+    record TreeNode(String scope, String kind, String id, ExposureCalc.Result result, String note) {}
+
+    /**
+     * The tree of the book the request sees: every netting set with paths (in the book's order), every counterparty (in counterparty
+     * order), the bank, and every legal entity (in order), each evaluated as exposure-summary evaluates its scope, under the request's
+     * confidence and collateral model.
+     */
+    private List<TreeNode> tree(ExposureBook b, Request request, Control control) throws EngineException {
+        ExposureCalc.Params prm = params(request);
+        List<String[]> scopes = new ArrayList<>();
+        java.util.TreeSet<String> cps = new java.util.TreeSet<>();
+        java.util.TreeSet<String> les = new java.util.TreeSet<>();
+        for (ExposureBook.SetInfo si : b.sets()) {
+            scopes.add(new String[] {"NSET:" + si.id(), "netting-set", si.id()});
+            if (si.counterparty() != null) {
+                cps.add(si.counterparty());
+            }
+            if (si.legalEntity() != null) {
+                les.add(si.legalEntity());
+            }
+        }
+        cps.forEach(c -> scopes.add(new String[] {"CPTY:" + c, "counterparty", c}));
+        scopes.add(new String[] {"BANK", "bank", "BANK"});
+        les.forEach(l -> scopes.add(new String[] {"LE:" + l, "legal-entity", l}));
+        List<TreeNode> out = new ArrayList<>();
+        for (String[] s : scopes) {
+            control.check();
+            try {
+                out.add(new TreeNode(s[0], s[1], s[2], evaluate(b, s[0], false, prm), null));
+            } catch (ExposureCalc.TooLarge e) {
+                out.add(new TreeNode(s[0], s[1], s[2], null, e.getMessage()));
+            }
+        }
+        return out;
+    }
+
+    private Table treeTable(ExposureBook b, Request request, List<TreeNode> nodes) throws EngineException {
+        double q = params(request).q();
+        ExposureGrid g = b.grid();
+        Tables.Builder t = Tables.of(engine.descriptor().schema("exposure-tree"));
+        for (TreeNode n : nodes) {
+            if (n.result() == null) {
+                t.row(n.scope(), n.kind(), n.id(), null, null, null, null, null, null, "", n.note());
+                continue;
+            }
+            ExposureMath.Stats s = n.result().stats;
+            int a = s.at(q);
+            String tenor = s.peakAt[a] < 0 ? null : g.tenor(g.primaryAt(s.peakAt[a]));
+            t.row(n.scope(), n.kind(), n.id(), (long) n.result().pieces.size(), (long) n.result().trades.size(), s.epe, s.peakEe, s.peakPfe[a], tenor,
+                    String.join(",", n.result().flags), null);
+        }
+        return t.build();
+    }
+
+    private Table treeEe(List<TreeNode> nodes) {
+        Tables.Builder t = Tables.of(engine.descriptor().schema("exposure-tree-ee"));
+        for (TreeNode n : nodes) {
+            if (n.result() != null) {
+                double[] ee = n.result().stats.ee;
+                for (int i = 0; i < ee.length; i++) {
+                    t.row(n.scope(), (long) i, ee[i]);
+                }
+            }
+        }
+        return t.build();
+    }
+
+    /** The date's run as the book holds it: its id, the number of paths, the grid's dates and primary dates. */
+    private Table run(ExposureBook b) {
+        return Tables.of(engine.descriptor().schema("exposure-run")).row(b.runId(), (long) b.paths(), (long) b.grid().size(),
+                (long) b.grid().primaryCount()).build();
+    }
+
+    /** The scope's netting sets and flags (partial, standalone, each of its netting sets' data-quality flags), as the evaluation gives them. */
+    private Table flags(ExposureBook b, Request request) throws EngineException {
+        Evaluated e = evaluate(b, request);
+        return Tables.of(engine.descriptor().schema("exposure-flags")).row(e.scope(), (long) e.result().pieces.size(), String.join(",", e.result().flags)).build();
     }
 
     @Override

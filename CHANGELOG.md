@@ -3,6 +3,11 @@
 
 ## 0.1.0 (unreleased)
 
+- `ccr`: new outputs `exposure-tree` (every netting set with paths, every counterparty, the bank and every legal entity the request
+  sees, each evaluated as `exposure-summary` evaluates its scope: netting sets, trades, EPE, peak EE, peak PFE and its tenor, flags; a
+  note instead when an interactive answer cannot sum it), `exposure-tree-ee` (each node's EE at every primary point), `exposure-run`
+  (the run's id, paths, grid and primary dates) and `exposure-flags` (a scope's netting sets and flags), for Drishti's exposure tree,
+  its netting-set pages and the contributions route's audit line on the engine path (R2).
 - `ccr`: new outputs `exposure-contributions` (a scope's parts by netting set, counterparty, legal entity, trade or asset and each part's
   contribution to EE, EPE or PFE, its share and incremental PFE, in the calculation's order `RANK`; params `by`, `figure`, `at`) and
   `scope-resolution` (a scope's canonical text, kind, id and trades), for Drishti's `/scope/contributions` on the engine path (R2).
