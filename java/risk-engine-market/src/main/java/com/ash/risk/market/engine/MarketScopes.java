@@ -55,7 +55,7 @@ final class MarketScopes {
 
     static final Set<String> OUTPUTS = Set.of("scope-index", "scope-positions", "scope-position-values", "scope-nodes", "scope-words",
             "scope-limits", "scope-var", "scope-correlation", "scope-path", "scope-scenarios",
-            "scope-contributions", "scope-backtest");
+            "scope-contributions", "scope-backtest", "scope-pmatrix");
 
     private final Descriptor descriptor;
     private final MarketOptions options;
@@ -101,6 +101,7 @@ final class MarketScopes {
             case "scope-scenarios" -> scenarios(usd);
             case "scope-contributions" -> scopeContributions(request, control, usd);
             case "scope-backtest" -> scopeBacktest(request, control, usd);
+            case "scope-pmatrix" -> scopeMatrix(request, control, usd);
             default -> scopeVar(request, control, usd);
         };
     }
@@ -254,6 +255,43 @@ final class MarketScopes {
         Tables.Builder t = Tables.of(descriptor.schema("scope-backtest"));
         t.row((long) a.members(), (long) (v.length - n), ms.var(), ms.es(), (long) bt.days(), (long) bt.exceptions(), bt.light(), bt.kupiecLr(),
                 bt.kupiecPValue(), bt.christoffersenLr(), bt.christoffersenPValue(), pnl, flags);
+        return t.build();
+    }
+
+    /**
+     * The parts' parametric covariance and correlation matrix ({@code parts}: row sets ended by -1, in the host's order; {@code part-nodes}:
+     * a part's node, for its stored aggregate when whole): each part summed as {@link #scopeVar} sums a row set, the matrix by
+     * {@code ParametricVar.matrix} (one {@code dgemm} through the bound linear algebra, named in {@code ENGINE}). One row per pair.
+     */
+    private Table scopeMatrix(Request request, Control control, MarketBooks.Built usd) throws EngineException {
+        if (!(request.param("parts") instanceof Collection<?> all)) {
+            throw new EngineException("ENG-3001", Kind.REFUSED, "scope-pmatrix needs parts: row sets of scope-index, each ended by -1");
+        }
+        Object pn = request.param("part-nodes");
+        String[] nodes = pn == null || String.valueOf(pn).isEmpty() ? new String[0] : String.valueOf(pn).split(",", -1);
+        List<double[]> vectors = new ArrayList<>();
+        List<Object> one = new ArrayList<>();
+        for (Object x : all) {
+            if (((Number) x).intValue() >= 0) {
+                one.add(x);
+                continue;
+            }
+            int i = vectors.size();
+            Summed s = summed(request, control, usd, one, i < nodes.length ? nodes[i] : null);
+            if (s == null) {
+                return null;
+            }
+            vectors.add(s.v());
+            one = new ArrayList<>();
+        }
+        com.ash.risk.kernel.linalg.LinearAlgebra la = com.ash.risk.kernel.linalg.Blas.get();
+        double[][][] cm = com.ash.risk.market.calc.ParametricVar.matrix(vectors, options.parametric(), la);
+        Tables.Builder t = Tables.of(descriptor.schema("scope-pmatrix"));
+        for (int i = 0; i < vectors.size(); i++) {
+            for (int j = 0; j < vectors.size(); j++) {
+                t.row((long) i, (long) j, cm[0][i][j], cm[1][i][j], la.name());
+            }
+        }
         return t.build();
     }
 

@@ -695,6 +695,18 @@ outputs:
       - { name: COMPONENT_ES, type: number, nullable: false, label: Component ES, measure: true }
       - { name: PCT, type: number, nullable: false, label: Share of the VaR }
       - { name: INCREMENTAL_VAR, type: number, nullable: false, label: Incremental VaR, measure: true }
+  scope-pmatrix:
+    title: The parametric covariance and correlation of a row set's parts
+    about: "Each pair of the parts (row sets in the host's order, each summed as scope-var sums a row set), its covariance and correlation from ParametricVar.matrix: one dgemm through the bound linear algebra (OpenBLAS where bound, Java otherwise; within relative 1e-12 of another), named in ENGINE."
+    params: [ scenario-set, window, currency, parts, part-nodes ]
+    needs: [ scenario-set, fx-scenario ]
+    key: [ I, J ]
+    columns:
+      - { name: I, type: integer, nullable: false, label: Part }
+      - { name: J, type: integer, nullable: false, label: Other part }
+      - { name: COVARIANCE, type: number, nullable: false, label: Covariance, exact: "relative:1e-12" }
+      - { name: CORRELATION, type: number, nullable: false, label: Correlation, exact: "relative:1e-12" }
+      - { name: ENGINE, type: string, nullable: false, label: Linear algebra }
   scope-scenarios:
     title: The scenario dates of a window
     about: One row per scenario of the set's window, oldest first (INDEX is the position in a scope's PNL).

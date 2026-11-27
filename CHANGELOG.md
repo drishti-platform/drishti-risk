@@ -14,7 +14,9 @@
   each component is made of (`SIGMA`, `MU`, `COV`): Drishti's contributions' parametric columns on the engine path. `node-pvar` takes
   `stressed`, `horizon` and `ten-day-method`: each node's fit through that lens (the lens's own vectors on the normal or the stress set;
   `HVAR` and `K` the lens's), Drishti's parametric block through a horizon or the stress set; its cells through a lens are not explained
-  and have no workbook part yet (refused in words).
+  and have no workbook part yet (refused in words). `scope-pmatrix`: the parts' parametric covariance and correlation (row sets in the
+  host's order, each summed as `scope-var` sums it; one `dgemm` through the bound linear algebra, named): Drishti's contributions'
+  `matrix=true` on the engine path.
 
 - `market-risk` (R2 lane G, part 3): `scope-backtest`, the replayed history of a row set (the newest `days` scenario P&Ls, summed as
   `scope-var` sums the rows, against the set's VaR of the date, each day tested against the VaR before it by `Backtest`: days,
