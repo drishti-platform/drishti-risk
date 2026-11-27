@@ -55,7 +55,7 @@ final class MarketScopes {
 
     static final Set<String> OUTPUTS = Set.of("scope-index", "scope-positions", "scope-position-values", "scope-nodes", "scope-words",
             "scope-limits", "scope-var", "scope-correlation", "scope-path", "scope-scenarios",
-            "scope-contributions", "scope-backtest", "scope-pmatrix");
+            "scope-contributions", "scope-backtest", "scope-pmatrix", "scope-pcomponents");
 
     private final Descriptor descriptor;
     private final MarketOptions options;
@@ -102,6 +102,7 @@ final class MarketScopes {
             case "scope-contributions" -> scopeContributions(request, control, usd);
             case "scope-backtest" -> scopeBacktest(request, control, usd);
             case "scope-pmatrix" -> scopeMatrix(request, control, usd);
+            case "scope-pcomponents" -> scopeComponents(request, control, usd);
             default -> scopeVar(request, control, usd);
         };
     }
@@ -334,6 +335,44 @@ final class MarketScopes {
             VarCalc.Contribution c = cs.get(i);
             t.row((long) i, (long) members.get(i), c.standaloneVar(), c.standaloneEs(), c.componentVar(), c.componentEs(), c.pct(),
                     c.incrementalVar());
+        }
+        return t.build();
+    }
+
+    /**
+     * Each part's parametric component in the rows' set ({@code parts}: row sets ended by -1; {@code part-nodes}: a part's node, for its
+     * stored aggregate when whole): every part summed as {@link #scopeVar} sums a row set, measured by {@code ParametricVar.component}
+     * against the set's own normal fit (as node-pvar-components measures a node's children; Drishti's parametric columns of a scope's
+     * positions). Within relative 1e-12, as node-pvar.
+     */
+    private Table scopeComponents(Request request, Control control, MarketBooks.Built usd) throws EngineException {
+        Summed a = summed(request, control, usd, request.param("rows"), request.param("node"));
+        if (a == null) {
+            return null;
+        }
+        if (!(request.param("parts") instanceof Collection<?> all)) {
+            throw new EngineException("ENG-3001", Kind.REFUSED, "scope-pcomponents needs parts: row sets of scope-index, each ended by -1");
+        }
+        Object pn = request.param("part-nodes");
+        String[] nodes = pn == null || String.valueOf(pn).isEmpty() ? new String[0] : String.valueOf(pn).split(",", -1);
+        com.ash.risk.market.calc.ParametricVar.Figures f = com.ash.risk.market.calc.ParametricVar.of(a.v(), options.calc().confidence(),
+                options.calc().esConfidence(), options.parametric());
+        Tables.Builder t = Tables.of(descriptor.schema("scope-pcomponents"));
+        List<Object> one = new ArrayList<>();
+        int i = 0;
+        for (Object x : all) {
+            if (((Number) x).intValue() >= 0) {
+                one.add(x);
+                continue;
+            }
+            Summed s = summed(request, control, usd, one, i < nodes.length ? nodes[i] : null);
+            if (s == null) {
+                return null;
+            }
+            com.ash.risk.market.calc.ParametricVar.Component k = com.ash.risk.market.calc.ParametricVar.component(s.v(), a.v(), f);
+            t.row((long) i, k.rho(), k.componentVar(), k.componentEs(), k.standaloneVar(), k.incrementalVar(), k.sigma(), k.mu(), k.cov());
+            i++;
+            one = new ArrayList<>();
         }
         return t.build();
     }

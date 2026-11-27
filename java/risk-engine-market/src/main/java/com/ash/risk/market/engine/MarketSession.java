@@ -237,7 +237,12 @@ final class MarketSession implements Session, Explaining {
 
     /** True when a request asks a horizon or the stress set (node-pvar then fits each node's vector through that lens). */
     private static boolean lensed(Request request) {
-        return Boolean.TRUE.equals(request.param("stressed")) || "10d".equals(String.valueOf(request.param("horizon")));
+        return Boolean.TRUE.equals(request.param("stressed")) || "10d".equals(String.valueOf(request.param("horizon")))
+                || nonZero(request.param("lens-confidence")) || nonZero(request.param("lens-es-confidence"));
+    }
+
+    private static boolean nonZero(Object q) {
+        return q instanceof Number n ? n.doubleValue() != 0 : q != null && !String.valueOf(q).isBlank() && Double.parseDouble(String.valueOf(q)) != 0;
     }
 
     private String setOf(Request request) {

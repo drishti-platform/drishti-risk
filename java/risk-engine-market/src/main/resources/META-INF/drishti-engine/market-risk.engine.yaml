@@ -202,6 +202,8 @@ params:
   stressed: { type: bool, default: false, label: Stressed, help: "True: the date's stress scenario set (stressed VaR)." }
   horizon: { type: enum, options: [ 1d, 10d ], default: 1d, label: Horizon }
   ten-day-method: { type: enum, options: [ sqrt10, sum ], default: sqrt10, label: 10-day method, help: "sqrt10: the 1-day figures times the square root of 10; sum: overlapping windows of 10 scenario days." }
+  lens-confidence: { type: number, default: 0, min: 0, max: 0.9999, label: Lens VaR confidence, help: "Another VaR confidence the host offers (0.975, 0.99, ...) for node-var-horizon and node-pvar; 0: the configured confidence." }
+  lens-es-confidence: { type: number, default: 0, min: 0, max: 0.9999, label: Lens ES confidence, help: "Another ES confidence the host offers; 0: the configured es-confidence." }
   node: { type: text, default: "", label: Node, help: "A node id; empty: every hierarchy's root (or every node the output covers)." }
   period: { type: text, default: "", label: Period, help: "FY2026, FY2026Q1 or 2026-01-01..2026-03-31; empty: the fiscal year of the date." }
   measure: { type: enum, options: [ var, es, svar, ses ], default: var, label: Official measure }
@@ -294,7 +296,7 @@ outputs:
   node-pvar:
     title: Parametric VaR and ES by hierarchy node
     about: For every node, the normal (variance-covariance) VaR z sigma - mu (z, PVAR and PES within relative 1e-12, as the normal quantile is computed with the platform's exp and log, whose last bit may differ between JVMs) and ES sigma phi(z_ES)/(1 - c_ES) - mu from the node's scenario P&L (equal or EWMA weights), with the historical VaR beside it, the scenarios beyond the parametric VaR, and the fit's shape (skewness, excess kurtosis) and the ES quantile and factor a host's tooltip shows. Through a horizon or the stress set (stressed, horizon, ten-day-method) the fit is of each node's vector through that lens (the 1-day P&L times the square root of 10, or overlapping sums of 10 days, on the normal or the stress set), HVAR and K the lens's historical figures.
-    params: [ scenario-set, window, currency, stressed, horizon, ten-day-method ]
+    params: [ scenario-set, window, currency, stressed, horizon, ten-day-method, lens-confidence, lens-es-confidence ]
     needs: [ scenario-set, fx-scenario ]
     key: [ NODE_ID ]
     columns:
@@ -336,7 +338,7 @@ outputs:
   node-var-horizon:
     title: VaR and ES by node at a horizon, normal or stressed
     about: Every node's VaR and ES on the normal or the stress scenario set, 1-day or 10-day (the 1-day figures times the square root of 10, or overlapping sums of 10 scenario days).
-    params: [ scenario-set, window, currency, stressed, horizon, ten-day-method ]
+    params: [ scenario-set, window, currency, stressed, horizon, ten-day-method, lens-confidence, lens-es-confidence ]
     needs: [ scenario-set, fx-scenario ]
     key: [ NODE_ID ]
     columns:
@@ -696,6 +698,22 @@ outputs:
       - { name: COMPONENT_ES, type: number, nullable: false, label: Component ES, measure: true }
       - { name: PCT, type: number, nullable: false, label: Share of the VaR }
       - { name: INCREMENTAL_VAR, type: number, nullable: false, label: Incremental VaR, measure: true }
+  scope-pcomponents:
+    title: Each part's parametric component in a row set
+    about: The parts of a row set (any the host resolved: child nodes, positions, terms), each summed as scope-var sums a row set, with its parametric component VaR z cov/sigma - mu_i against the set's own normal fit (the parts of a partition add up to the set's PVAR), component ES, standalone and incremental parametric VaR, its correlation with the set and the moments the component is made of; as node-pvar-components measures a node's children, within relative 1e-12.
+    params: [ scenario-set, window, currency, rows, node, parts, part-nodes ]
+    needs: [ scenario-set, fx-scenario ]
+    key: [ PART ]
+    columns:
+      - { name: PART, type: integer, nullable: false, label: Part }
+      - { name: RHO, type: number, nullable: false, label: Correlation, exact: "relative:1e-12" }
+      - { name: COMPONENT_PVAR, type: number, nullable: false, label: Component PVaR, measure: true, exact: "relative:1e-12" }
+      - { name: COMPONENT_PES, type: number, nullable: false, label: Component PES, measure: true, exact: "relative:1e-12" }
+      - { name: STANDALONE_PVAR, type: number, nullable: false, label: Standalone PVaR, measure: true, exact: "relative:1e-12" }
+      - { name: INCREMENTAL_PVAR, type: number, nullable: false, label: Incremental PVaR, measure: true, exact: "relative:1e-12" }
+      - { name: SIGMA, type: number, nullable: false, label: Standard deviation of the part, exact: "relative:1e-12" }
+      - { name: MU, type: number, nullable: false, label: Mean of the part, exact: "relative:1e-12" }
+      - { name: COV, type: number, nullable: false, label: Covariance with the set, exact: "relative:1e-12" }
   scope-pmatrix:
     title: The parametric covariance and correlation of a row set's parts
     about: "Each pair of the parts (row sets in the host's order, each summed as scope-var sums a row set), its covariance and correlation from ParametricVar.matrix: one dgemm through the bound linear algebra (OpenBLAS where bound, Java otherwise; within relative 1e-12 of another), named in ENGINE."

@@ -70,7 +70,8 @@ final class MarketParametric {
         for (VarBook.Node x : b.nodes().values()) {
             double[] one = b.aggregate(x.id());
             double[] v = lens == null ? one : lens.apply(one);
-            ParametricVar.Figures f = figures(v);
+            ParametricVar.Figures f = lens == null ? figures(v)                // through a lens: at the lens's confidences
+                    : ParametricVar.of(v, lens.confidence(), lens.esConfidence(), options.parametric());
             VarCalc.Measures h = lens == null ? options.calc().measures(v) : lens.measures(options.calc(), one, v);
             t.row(x.id(), x.hierarchy(), (long) v.length, f.fit().mu(), f.fit().sigma(), f.z(), f.var(), f.es(), h.var(),
                     (long) f.beyond(), f.expectedBeyond(), f.fit().skew(), f.fit().excessKurtosis(), f.zEs(), f.esFactor(), (long) h.k(),

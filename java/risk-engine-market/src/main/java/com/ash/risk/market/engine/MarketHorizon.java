@@ -53,11 +53,26 @@ final class MarketHorizon {
     }
 
     /** The lens a request asks for. */
-    VarLens lens(Request request) {
+    VarLens lens(Request request) throws EngineException {
         int days = "10d".equals(String.valueOf(request.param("horizon"))) ? VarLens.TEN : 1;
         VarLens.Method m = days == 1 ? VarLens.Method.NONE : VarLens.Method.parse(String.valueOf(request.param("ten-day-method")));
         VarCalc c = options.calc();
-        return new VarLens(days, m, c.confidence(), c.esConfidence(), Boolean.TRUE.equals(request.param("stressed")));
+        return new VarLens(days, m, confidence(request, "lens-confidence", c.confidence()),
+                confidence(request, "lens-es-confidence", c.esConfidence()),
+                Boolean.TRUE.equals(request.param("stressed")));
+    }
+
+    /** A confidence the request names (the host's offered lens: 0.975, 0.99, ...), else (absent or 0) the engine's configured one. */
+    static double confidence(Request request, String name, double configured) throws EngineException {
+        Object q = request.param(name);
+        double v = q == null ? 0 : q instanceof Number n ? n.doubleValue() : Double.parseDouble(String.valueOf(q));
+        if (v == 0) {
+            return configured;
+        }
+        if (!(v > 0 && v < 1)) {
+            throw new EngineException("ENG-3001", EngineException.Kind.REFUSED, name + " is a probability between 0 and 1, not " + q);
+        }
+        return v;
     }
 
     Table nodes(MarketBooks.Built built, String set, VarLens lens) {
