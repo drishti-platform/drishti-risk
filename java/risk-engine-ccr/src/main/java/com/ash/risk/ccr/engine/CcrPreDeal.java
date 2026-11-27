@@ -99,7 +99,14 @@ final class CcrPreDeal {
             life = Math.max(life, si.lifeYears());
             if (pc.whole) {
                 sets.add(si.id());
-                joinable.put(si.id(), new ExposureWhatIfMath.NettingSet(si.id(), b.value(pc.set), pc.e, pc.n, pc.csa, pc.v0, pc.ce));
+                double[] e = pc.e;                                     // a whole set summed from the book's matrices keeps none of its own:
+                double[] n = pc.n;                                     // the set alone, as Drishti's what-if reads it (its NSET scope)
+                if (e == null || n == null) {
+                    e = b.exposure(pc.set);
+                    n = new double[e.length];
+                    b.addNegative(pc.set, n);
+                }
+                joinable.put(si.id(), new ExposureWhatIfMath.NettingSet(si.id(), b.value(pc.set), e, n, pc.csa, pc.v0, pc.ce));
             }
         }
         ExposureBook.TradeInfo ti = b.trade(t);

@@ -88,8 +88,8 @@ final class CcrSession implements Session, Explaining {
     }
 
     /** The outputs answered from the exposure book (they need the run and the paths). */
-    static final Set<String> PATHS = Set.of("exposure-summary", "exposure-profile", "netting-set-summary", "netting-set-collateral", "pre-deal",
-            "pre-deal-buckets");
+    static final Set<String> PATHS = Set.of("exposure-summary", "exposure-profile", "netting-set-summary", "counterparty-summary",
+            "netting-set-collateral", "pre-deal", "pre-deal-buckets");
     /** The inputs each output cannot be answered without, beyond the run and the paths. */
     static final Map<String, List<String>> NEEDS = Map.of(
             "pre-deal", List.of(CcrExtras.LIMIT, CcrExtras.BUCKET),
@@ -188,6 +188,7 @@ final class CcrSession implements Session, Explaining {
                 case "exposure-summary" -> summary(c.book(), request);
                 case "exposure-profile" -> profile(c.book(), request);
                 case "netting-set-summary" -> sets(c.book(), control);
+                case "counterparty-summary" -> counterparties(c.book(), request, control);
                 case "netting-set-collateral" -> new CcrCollateral(engine.descriptor(), engine.options()).table(c.collateral());
                 case "pre-deal" -> new CcrPreDeal(engine.descriptor(), engine.options(), day).table(c.check());
                 case "pre-deal-buckets" -> new CcrPreDeal(engine.descriptor(), engine.options(), day).buckets(c.check());
@@ -247,19 +248,46 @@ final class CcrSession implements Session, Explaining {
 
     /** The scope's evaluation, by Drishti's scope words and calculator. */
     ExposureCalc.Result evaluate(ExposureBook b, String scope, boolean standalone) throws EngineException {
+        return evaluate(b, scope, standalone, engine.params());
+    }
+
+    private ExposureCalc.Result evaluate(ExposureBook b, String scope, boolean standalone, ExposureCalc.Params prm) throws EngineException {
         ExposureScopes.Resolution r = new ExposureScopes(b, g -> Optional.empty()).resolve(scope == null || scope.isBlank() ? "BANK" : scope);
         if (!r.unknown().isEmpty() && r.trades().size() == 0) {
             throw new EngineException("RSK-3101", Kind.REFUSED, "the scope names what the date does not hold: " + String.join(", ", r.unknown()));
         }
-        return ExposureCalc.evaluate(b, r.trades(), standalone || r.standalone(), engine.params(), this::paths);
+        return ExposureCalc.evaluate(b, r.trades(), standalone || r.standalone(), prm, this::paths);
     }
 
     private Evaluated evaluate(ExposureBook b, Request request) throws EngineException {
         String scope = String.valueOf(request.param("scope"));
-        return new Evaluated(scope, evaluate(b, scope, Boolean.TRUE.equals(request.param("standalone"))));
+        ExposureCalc.Params prm = params(request);
+        return new Evaluated(scope, evaluate(b, scope, Boolean.TRUE.equals(request.param("standalone")), prm), prm.q());
     }
 
-    private record Evaluated(String scope, ExposureCalc.Result result) {}
+    /**
+     * The request's measure parameters over the engine's: {@code confidence} (0: the engine's pfe-confidence) and {@code collateral}
+     * (empty: the engine's model; none: the uncollateralised view). The book is the same; only the measures read it differently.
+     */
+    ExposureCalc.Params params(Request request) throws EngineException {
+        ExposureCalc.Params base = engine.params();
+        Object c = request.param("confidence");
+        double q = c instanceof Number n && n.doubleValue() > 0 ? n.doubleValue() : base.q();
+        if (!(q > 0.5 && q <= 0.9999)) {
+            throw new EngineException("RSK-3102", Kind.REFUSED, "confidence is above 0.5 and at most 0.9999, not " + q);
+        }
+        Object m = request.param("collateral");
+        ExposureMath.Model model;
+        try {
+            model = m == null || String.valueOf(m).isBlank() ? base.model() : ExposureMath.Model.of(String.valueOf(m));
+        } catch (IllegalArgumentException e) {
+            throw new EngineException("RSK-3102", Kind.REFUSED, e.getMessage());
+        }
+        return q == base.q() && model == base.model() ? base : new ExposureCalc.Params(q, model, base.rule(), base.confidences(), base.window(),
+                base.maxSets());
+    }
+
+    private record Evaluated(String scope, ExposureCalc.Result result, double q) {}
 
     /** The trades' full paths (grid points × paths), for pieces that are part of a netting set. */
     Map<String, double[]> paths(java.util.Collection<String> ids) {
@@ -284,7 +312,7 @@ final class CcrSession implements Session, Explaining {
     private Table summary(ExposureBook b, Request request) throws EngineException {
         Evaluated e = evaluate(b, request);
         ExposureMath.Stats s = e.result().stats;
-        int q = s.at(engine.params().q());
+        int q = s.at(e.q());
         ExposureGrid g = b.grid();
         String peakDate = g.date(g.primaryAt(s.peakAt[q])).toString();
         return Tables.of(engine.descriptor().schema("exposure-summary"))
@@ -294,7 +322,7 @@ final class CcrSession implements Session, Explaining {
     private Table profile(ExposureBook b, Request request) throws EngineException {
         Evaluated e = evaluate(b, request);
         ExposureMath.Stats s = e.result().stats;
-        int q = s.at(engine.params().q());
+        int q = s.at(e.q());
         ExposureGrid g = b.grid();
         Tables.Builder t = Tables.of(engine.descriptor().schema("exposure-profile"));
         for (int i = 0; i < g.primaryCount(); i++) {
@@ -312,6 +340,32 @@ final class CcrSession implements Session, Explaining {
             ExposureMath.Stats s = r.stats;
             int q = s.at(engine.params().q());
             t.row(si.id(), si.counterparty(), (long) r.trades.size(), s.ce, s.epe, s.eepe, s.peakPfe[q]);
+        }
+        return t.build();
+    }
+
+    /**
+     * Every counterparty the book holds (its netting sets with paths the request sees), in counterparty order: each one the scope
+     * {@code CPTY:<id>} evaluated as exposure-summary evaluates it (its sets netted each, then added in the book's order), under the
+     * request's confidence and collateral model.
+     */
+    private Table counterparties(ExposureBook b, Request request, Control control) throws EngineException {
+        ExposureCalc.Params prm = params(request);
+        java.util.TreeSet<String> ids = new java.util.TreeSet<>();
+        for (ExposureBook.SetInfo si : b.sets()) {
+            if (si.counterparty() != null) {
+                ids.add(si.counterparty());
+            }
+        }
+        ExposureGrid g = b.grid();
+        Tables.Builder t = Tables.of(engine.descriptor().schema("counterparty-summary"));
+        for (String cp : ids) {
+            control.check();
+            ExposureCalc.Result r = evaluate(b, "CPTY:" + cp, false, prm);
+            ExposureMath.Stats s = r.stats;
+            int q = s.at(prm.q());
+            String peakDate = s.peakAt[q] < 0 ? null : g.date(g.primaryAt(s.peakAt[q])).toString();
+            t.row(cp, (long) r.pieces.size(), (long) r.trades.size(), s.ce, s.epe, s.eepe, s.peakEe, s.peakPfe[q], peakDate);
         }
         return t.build();
     }
