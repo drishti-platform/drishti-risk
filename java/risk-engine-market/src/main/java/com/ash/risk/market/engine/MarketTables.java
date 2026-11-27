@@ -83,7 +83,8 @@ final class MarketTables {
         return t.build();
     }
 
-    Table basketVar(VarBook b, MarketDay day) {
+    Table basketVar(MarketBooks.Built built, MarketDay day, String currency) {
+        VarBook b = built.book();
         Map<String, MarketDay.Basket> defs = new TreeMap<>();
         day.baskets.forEach(x -> defs.put(x.id(), x));
         ScopeResolver resolver = new ScopeResolver(b, new ScopeResolver.Definitions() {
@@ -103,7 +104,7 @@ final class MarketTables {
             ScopeResolver.Resolution r = resolver.resolve("PORT:" + pf.id());
             double[] v = b.vector(r.set(), sums);
             VarCalc.Measures ms = calc.measures(v);
-            Double limit = day.basketLimits.get(pf.id());
+            Double limit = MarketBooks.limitIn(built, currency, day.basketLimits.get(pf.id()));   // in the reporting currency, as the nodes' limits
             Double use = limit == null || limit == 0 ? null : ms.var() / limit;
             t.row(pf.id(), pf.name(), pf.type(), pf.owner(), (long) r.set().size(), r.unknown().isEmpty() ? null : String.join(",", r.unknown()),
                     ms.var(), ms.es(), Math.round(ms.var()), Math.round(ms.es()), limit, use);

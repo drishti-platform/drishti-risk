@@ -101,6 +101,18 @@ final class MarketBooks {
         return new Built(converted, cut, wfx);
     }
 
+    /**
+     * A USD limit (var-limit) in the reporting currency, as a converted book holds its nodes' limits: the limit over the currency's base
+     * rate (USD per unit); NaN stays NaN, and USD or no currency is the limit itself. Null when the currency has no rate on the set.
+     */
+    static Double limitIn(Built b, String currency, Double usd) {
+        if (usd == null || currency == null || currency.isBlank() || "USD".equalsIgnoreCase(currency)) {
+            return usd;
+        }
+        ScenarioFx.Rates rep = b.fx().rates(currency.toUpperCase(java.util.Locale.ROOT)).orElse(null);
+        return rep == null ? null : Double.isNaN(usd) ? usd : usd / rep.base();
+    }
+
     /** The id a row is kept under in the book: its trade, else (a position sent whole) its position. */
     static String tradeKey(MarketDay.Row n) {
         String trade = n.text("TRADE_ID");

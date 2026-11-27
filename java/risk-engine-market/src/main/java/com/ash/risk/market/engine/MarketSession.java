@@ -194,7 +194,7 @@ final class MarketSession implements Session, Explaining {
             return switch (out) {
                 case "node-var" -> t.nodeVar(b.book());
                 case "node-components" -> t.nodeComponents(b.book(), c.control);
-                case "basket-var" -> t.basketVar(b.book(), day);
+                case "basket-var" -> t.basketVar(b, day, String.valueOf(request.param("currency")));
                 case "headline" -> t.headline(b.book());
                 case "node-pvar" -> new MarketParametric(engine.descriptor(), o).nodes(b.book());
                 case "node-pvar-components" -> new MarketParametric(engine.descriptor(), o).components(b.book(), c.control);

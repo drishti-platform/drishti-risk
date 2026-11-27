@@ -75,9 +75,14 @@ final class MarketScopes {
             options.words().forEach((w, h) -> t.row(w, h));
             return t.build();
         }
-        if (out.equals("scope-limits")) {
+        if (out.equals("scope-limits")) {                               // in the reporting currency, as the nodes' limits (USD: as given)
+            Object c = request.param("currency");
+            String currency = c == null ? "USD" : String.valueOf(c);
+            MarketBooks.Built usd = "USD".equalsIgnoreCase(currency) || currency.isBlank() ? null : session.allBook(request, control, "USD");
             Tables.Builder t = Tables.of(descriptor.schema(out));
-            session.day().basketLimits.forEach((id, l) -> t.row(id, l));
+            for (Map.Entry<String, Double> e : session.day().basketLimits.entrySet()) {
+                t.row(e.getKey(), usd == null ? e.getValue() : MarketBooks.limitIn(usd, currency, e.getValue()));
+            }
             return t.build();
         }
         MarketBooks.Built usd = session.allBook(request, control, "USD");
@@ -88,13 +93,27 @@ final class MarketScopes {
         return switch (out) {
             case "scope-index" -> index(b);
             case "scope-positions" -> positions(b);
-            case "scope-position-values" -> positionValues(b);
+            case "scope-position-values" -> positionValues(inCurrency(request, control, usd).book());   // a rule's numbers in the reporting currency
             case "scope-nodes" -> nodes(b);
             case "scope-correlation" -> scopeCorrelation(request, control, usd);
             case "scope-path" -> scopePath(request, control, usd);
             case "scope-scenarios" -> scenarios(usd);
             default -> scopeVar(request, control, usd);
         };
+    }
+
+    /** The book of every row in the request's reporting currency (the same trades, positions and order as the USD book's). */
+    private MarketBooks.Built inCurrency(Request request, Control control, MarketBooks.Built usd) throws EngineException {
+        Object c = request.param("currency");
+        String currency = c == null ? "" : String.valueOf(c);
+        if (currency.isBlank() || "USD".equalsIgnoreCase(currency)) {
+            return usd;
+        }
+        MarketBooks.Built b = session.allBook(request, control, currency.toUpperCase(java.util.Locale.ROOT));
+        if (b == null) {
+            throw new EngineException("ENG-3005", Kind.REFUSED, "the date's scenario set has no FX for " + currency);
+        }
+        return b;
     }
 
     private Table index(VarBook b) {

@@ -7,6 +7,10 @@
   measures' own order, the VaR rank, the ES count and a histogram of `bins` equal bins; VaR and ES are `scope-var`'s to the bit) and
   `scope-scenarios` (the window's scenario dates, what a PNL index means). The descriptor parses again: a flow-mapping label of
   `scope-correlation` held an apostrophe, so `market-risk` was "not installed" in a host (the JAR of `264b8ff` never started).
+- `market-risk`: a system basket's limit is in the reporting currency (`basket-var`, `scope-limits` take `currency`: the USD limit over
+  the currency's base rate, as a converted book holds its nodes' limits; it was the USD figure beside a EUR VaR), and
+  `scope-position-values` gives the positions' amounts in the reporting currency (a rule over an amount selects as Drishti's in-tree
+  route does in that currency).
 - The engines' remaining outputs (R1, branch `r1/outputs`), each with its descriptor entries, explanation and workbook part:
   `market-risk` adds `node-pvar` and `node-pvar-components` (parametric VaR, equal or EWMA), `node-var-horizon` (stressed set, 10-day by
   the square root of 10 or overlapping sums), `stress-window` (from `pnl-history`), `backtest` and `backtest-days` (official records of

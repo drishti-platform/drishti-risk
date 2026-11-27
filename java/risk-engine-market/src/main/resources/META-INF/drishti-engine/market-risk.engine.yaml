@@ -507,8 +507,8 @@ outputs:
       - { name: RUNS, type: list, nullable: false, label: Rows (from, to pairs) }
   scope-position-values:
     title: The positions' columns
-    about: Each position's columns, one row per value (texts in TEXT, numbers in NUMBER), for the rules a scope may name (WHERE).
-    params: [ scenario-set, window ]
+    about: Each position's columns, one row per value (texts in TEXT, numbers in NUMBER, amounts in the reporting currency), for the rules a scope may name (WHERE).
+    params: [ scenario-set, window, currency ]
     needs: [ scenario-set, fx-scenario ]
     key: [ POSITION, COLUMN ]
     columns:
@@ -540,12 +540,12 @@ outputs:
       - { name: HIERARCHY, type: string, nullable: false, label: Hierarchy }
   scope-limits:
     title: The system baskets' VaR limits
-    about: The var-limit rows of hierarchy PORTFOLIO, by basket id (USD).
-    params: [ ]
+    about: The var-limit rows of hierarchy PORTFOLIO, by basket id, in the reporting currency (USD as given; another currency over its base rate, as the nodes' limits).
+    params: [ scenario-set, window, currency ]
     key: [ BASKET_ID ]
     columns:
       - { name: BASKET_ID, type: string, nullable: false, label: Basket }
-      - { name: LIMIT, type: number, nullable: false, label: Limit (USD) }
+      - { name: LIMIT, type: number, nullable: true, label: Limit (reporting currency) }
   scope-var:
     title: VaR and ES of a row set
     about: The VaR and ES of the rows named (any scope the host resolved), seen through the caller's visibility; a node whole takes its stored aggregate, anything else the planner's sum. PNL is the summed scenario P&L (the scope's path).
