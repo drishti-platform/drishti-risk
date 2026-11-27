@@ -50,7 +50,7 @@ final class MarketExtras {
 
     static final Map<String, Spec> SPECS = Map.of(
             HISTORY, new Spec(HISTORY, "risk/var-official@1", List.of("BUSINESS_DATE", "NODE_ID", "RESULT_VERSION"),
-                    List.of("BUSINESS_DATE", "NODE_ID", "VAR"), Set.of("RESULT_VERSION", "VAR", "ES", "CONFIDENCE", "SVAR", "SES", "HYPO_PNL")),
+                    List.of("BUSINESS_DATE", "NODE_ID", "VAR"), Set.of("RESULT_VERSION", "VAR", "ES", "CONFIDENCE", "SVAR", "SES", "HYPO_PNL", "BACKTEST_CONFIDENCE", "BACKTEST_VAR")),
             DESK_PNL, new Spec(DESK_PNL, "risk/desk-pnl@1", List.of("DESK_PNL_ID"), List.of("BUSINESS_DATE", "DESK_ID"),
                     Set.of("ACTUAL_PNL", "HYPOTHETICAL_PNL")),
             PNL_HISTORY, new Spec(PNL_HISTORY, "risk/pnl-history@1", List.of("HISTORY_ID"), List.of("HISTORY_ID", "NODE_ID", "HISTORY_DATES", "PNL"),
@@ -66,9 +66,22 @@ final class MarketExtras {
             REPORT_ROW, new Spec(REPORT_ROW, "risk/report-definition@1", List.of("REPORT_ID", "ROW_ORDER"), List.of("REPORT_ID", "ROW_ORDER"),
                     Set.of("ROW_ORDER")));
 
-    /** One official record of a node on a date (its latest result version), as the backtest and the statistics read it. */
+    /**
+     * One official record of a node on a date (its latest result version), as the backtest and the statistics read it; {@code backtestVar}
+     * is the record's VaR at the backtest's other confidence {@code backtestConfidence} (contract 1.6; NaN on a record published before).
+     */
     record Official(LocalDate date, String hierarchy, String node, String name, String parent, String level, double var, double es,
-            double confidence, double svar, double ses, double hypo, double version, String capture) {}
+            double confidence, double svar, double ses, double hypo, double version, String capture, double backtestConfidence,
+            double backtestVar) {
+
+        /** The record's VaR at a confidence: VAR at its own, BACKTEST_VAR at the backtest's other one, else NaN. */
+        double varAt(double q) {
+            if (Double.isNaN(confidence) || Math.abs(confidence - q) < 1e-9) {
+                return var;
+            }
+            return Double.isFinite(backtestConfidence) && Math.abs(backtestConfidence - q) < 1e-9 ? backtestVar : Double.NaN;
+        }
+    }
 
     /** One desk's P&amp;L of a date. */
     record DeskPnl(LocalDate date, String desk, String legalEntity, double actual, double hypothetical, Map<String, Object> row) {}
@@ -121,7 +134,8 @@ final class MarketExtras {
             latest.put(d.substring(0, 10) + "|" + node + "|" + conf, new Official(LocalDate.parse(d.substring(0, 10)), InputRows.text(r, "HIERARCHY"),
                     node, InputRows.text(r, "NODE_NAME"), InputRows.text(r, "PARENT_ID"), InputRows.text(r, "LEVEL"), InputRows.number(r, "VAR"),
                     InputRows.number(r, "ES"), conf, InputRows.number(r, "SVAR"), InputRows.number(r, "SES"), InputRows.number(r, "HYPO_PNL"),
-                    InputRows.number(r, "RESULT_VERSION"), InputRows.text(r, "CAPTURE_ID")));
+                    InputRows.number(r, "RESULT_VERSION"), InputRows.text(r, "CAPTURE_ID"), InputRows.number(r, "BACKTEST_CONFIDENCE"),
+                    InputRows.number(r, "BACKTEST_VAR")));
         }
         List<DeskPnl> desk = new ArrayList<>();
         for (Map<String, Object> r : rows.get(DESK_PNL)) {

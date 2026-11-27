@@ -98,6 +98,22 @@ final class MarketHistory {
         return null;
     }
 
+    /** A node's VaR on a date at a confidence: a row at it, else a record's BACKTEST_VAR at it; NaN when none carries one. */
+    private static double varAt(Map<String, Map<Double, MarketExtras.Official>> date, String node, double confidence) {
+        if (date == null || date.get(node) == null) {
+            return Double.NaN;
+        }
+        double other = Double.NaN;
+        for (MarketExtras.Official o : date.get(node).values()) {
+            double v = o.varAt(confidence);
+            if (Double.isFinite(v) && (Double.isNaN(o.confidence()) || Math.abs(o.confidence() - confidence) < 1e-9)) {
+                return v;                                                 // a row at the confidence wins over a column beside another
+            }
+            other = Double.isFinite(v) ? v : other;
+        }
+        return other;
+    }
+
     /** {@code MGMT~DESK-RATES} to {@code DESK-RATES}. */
     static String tail(String id) {
         int i = id.lastIndexOf('~');
@@ -175,12 +191,19 @@ final class MarketHistory {
             if (r == null || !r.all() && r.desks().isEmpty()) {
                 continue;
             }
-            for (double q : new TreeSet<>(last.get(node).keySet())) {
+            // the confidences the node's newest records carry: each row's own, and the backtest's other one a record keeps beside it
+            Set<Double> qs = new TreeSet<>(last.get(node).keySet());
+            for (MarketExtras.Official o : last.get(node).values()) {
+                if (Double.isFinite(o.backtestConfidence()) && qs.stream().noneMatch(x -> Math.abs(x - o.backtestConfidence()) < 1e-9)) {
+                    qs.add(o.backtestConfidence());
+                }
+            }
+            for (double q : qs) {
                 List<TestedDay> days = new ArrayList<>();
                 for (int i = Math.max(1, dates.size() - (window + 30)); i < dates.size(); i++) {
                     LocalDate d = dates.get(i);
-                    MarketExtras.Official prior = at(recs.get(dates.get(i - 1)), node, q);
-                    if (prior == null || !Double.isFinite(prior.var())) {
+                    double priorVar = varAt(recs.get(dates.get(i - 1)), node, q);
+                    if (!Double.isFinite(priorVar)) {
                         continue;
                     }
                     double[] sum = sum(pnl.get(d), r);
@@ -188,7 +211,10 @@ final class MarketHistory {
                         continue;
                     }
                     MarketExtras.Official today = at(recs.get(d), node, q);
-                    days.add(new TestedDay(d, dates.get(i - 1), prior.var(), sum[0], sum[1], today == null ? Double.NaN : today.hypo()));
+                    if (today == null && recs.get(d) != null && recs.get(d).get(node) != null) {
+                        today = recs.get(d).get(node).values().iterator().next();     // the record's own hypothetical P&L at any confidence
+                    }
+                    days.add(new TestedDay(d, dates.get(i - 1), priorVar, sum[0], sum[1], today == null ? Double.NaN : today.hypo()));
                 }
                 while (days.size() > window) {
                     days.remove(0);

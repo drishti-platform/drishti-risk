@@ -61,11 +61,12 @@ inputs:
     columns: [ PORTFOLIO_ID, NAME, TYPE, OWNER, SCOPE ]
   var-history:
     contract: risk/var-official@1
-    about: The official VaR records of earlier business dates (stored outputs the host keeps), one row per node, date and result version; the latest version of a date is read. Backtesting, period statistics and the regulatory reports read them; they are never recomputed.
+    about: The official VaR records of earlier business dates (stored outputs the host keeps), one row per node, date and result version; the latest version of a date is read. BACKTEST_VAR is the record's VaR at the backtest's other confidence BACKTEST_CONFIDENCE (var-official contract 1.6; absent on older records), tested beside VAR. Backtesting, period statistics and the regulatory reports read them; they are never recomputed.
     required: false
     per: []
     key: [ BUSINESS_DATE, NODE_ID, RESULT_VERSION ]
-    columns: [ BUSINESS_DATE, HIERARCHY, NODE_ID, NODE_NAME, PARENT_ID, LEVEL, RESULT_VERSION, CAPTURE_ID, VAR, ES, CONFIDENCE, SVAR, SES, HYPO_PNL ]
+    columns: [ BUSINESS_DATE, HIERARCHY, NODE_ID, NODE_NAME, PARENT_ID, LEVEL, RESULT_VERSION, CAPTURE_ID, VAR, ES, CONFIDENCE, SVAR, SES, HYPO_PNL,
+               BACKTEST_CONFIDENCE, BACKTEST_VAR ]
     scope-columns: [ HIERARCHY, NODE_ID ]
   desk-pnl:
     contract: risk/desk-pnl@1
