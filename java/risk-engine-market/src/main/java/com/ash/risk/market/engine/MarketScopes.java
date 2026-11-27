@@ -54,7 +54,8 @@ import java.util.Set;
 final class MarketScopes {
 
     static final Set<String> OUTPUTS = Set.of("scope-index", "scope-positions", "scope-position-values", "scope-nodes", "scope-words",
-            "scope-limits", "scope-var", "scope-correlation", "scope-path", "scope-scenarios");
+            "scope-limits", "scope-var", "scope-correlation", "scope-path", "scope-scenarios",
+            "scope-contributions");
 
     private final Descriptor descriptor;
     private final MarketOptions options;
@@ -98,6 +99,7 @@ final class MarketScopes {
             case "scope-correlation" -> scopeCorrelation(request, control, usd);
             case "scope-path" -> scopePath(request, control, usd);
             case "scope-scenarios" -> scenarios(usd);
+            case "scope-contributions" -> scopeContributions(request, control, usd);
             default -> scopeVar(request, control, usd);
         };
     }
@@ -220,6 +222,59 @@ final class MarketScopes {
         t.row((long) a.members(), (long) a.hidden(), ms.var(), ms.es(), ms.varScenario() < 0 ? null : (long) ms.varScenario(), (long) ms.k(),
                 (long) ms.esCount(), a.v().clone(), order, h.edges().clone(), counts);
         return t.build();
+    }
+
+    /**
+     * Each part's figures in the rows' set ({@code parts}: row sets ended by -1; {@code part-nodes}: a part's node, for its stored aggregate
+     * when whole): every part summed as {@link #scopeVar} sums a row set, measured by the calculator's {@code contributions} against the
+     * set's own measures (the same sum and measures as scope-var: its VaR and ES to the bit).
+     */
+    private Table scopeContributions(Request request, Control control, MarketBooks.Built usd) throws EngineException {
+        Summed a = summed(request, control, usd, request.param("rows"), request.param("node"));
+        if (a == null) {
+            return null;
+        }
+        if (!(request.param("parts") instanceof Collection<?> all)) {
+            throw new EngineException("ENG-3001", Kind.REFUSED, "scope-contributions needs parts: row sets of scope-index, each ended by -1");
+        }
+        Object pn = request.param("part-nodes");
+        String[] nodes = pn == null || String.valueOf(pn).isEmpty() ? new String[0] : String.valueOf(pn).split(",", -1);
+        List<VarCalc.Part> parts = new ArrayList<>();
+        List<Integer> members = new ArrayList<>();
+        List<Object> one = new ArrayList<>();
+        for (Object x : all) {
+            if (((Number) x).intValue() >= 0) {
+                one.add(x);
+                continue;
+            }
+            int i = parts.size();
+            Summed s = summed(request, control, usd, one, i < nodes.length ? nodes[i] : null);
+            if (s == null) {
+                return null;
+            }
+            parts.add(new VarCalc.Part(Integer.toString(i), null, null, s.v(), Double.NaN));
+            members.add(s.members());
+            one = new ArrayList<>();
+        }
+        VarCalc.Measures ms = options.calc().measures(a.v());
+        List<VarCalc.Contribution> cs = options.calc().contributions(a.v(), ms, parts);
+        Tables.Builder t = Tables.of(descriptor.schema("scope-contributions"));
+        for (int i = 0; i < cs.size(); i++) {
+            VarCalc.Contribution c = cs.get(i);
+            t.row((long) i, (long) members.get(i), c.standaloneVar(), c.standaloneEs(), c.componentVar(), c.componentEs(), c.pct(),
+                    c.incrementalVar());
+        }
+        return t.build();
+    }
+
+    /** A row set's summed USD scenario P&amp;L as scope-var sums it (the what-if's before on any scope the host resolved). */
+    double[] usdRows(Request request, Control control) throws EngineException {
+        MarketBooks.Built usd = session.allBook(request, control, "USD");
+        if (usd == null) {
+            throw new EngineException("ENG-3005", Kind.REFUSED, "the date's scenario set has no book in USD");
+        }
+        Summed a = summed(request, control, usd, request.param("rows"), request.param("node"));
+        return a == null ? null : a.v();
     }
 
     /** The window's scenario dates, oldest first: what a scope's PNL index means. */

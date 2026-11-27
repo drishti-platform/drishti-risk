@@ -215,6 +215,8 @@ params:
   attribute: { type: text, default: DESK, label: Contribution attribute }
   against: { type: list, items: int, label: Against, help: "A second row set (ordinals of scope-index) the rows are measured against: the firm for a desk, an index's rows for a position." }
   bins: { type: int, default: 40, label: Histogram bins, help: "The P&L path histogram's equal bins." }
+  parts: { type: list, items: int, label: Parts, help: "The parts' row sets (ordinals of scope-index), one after another, each ended by -1: a node's child nodes, a scope's terms or positions." }
+  part-nodes: { type: text, default: "", label: Part nodes, help: "Each part's node id when the part is a node (its stored aggregate is taken when the part is its members whole), comma-separated in the parts' order; empty for a part that is not a node." }
   rows: { type: list, items: int, label: Rows, help: "The ordinals of scope-index a scope resolved to (the host resolves every scope kind; the caller's visibility selects from them)." }
   trades:
     type: table
@@ -577,6 +579,21 @@ outputs:
       - { name: ORDER, type: list, nullable: false, label: Scenarios worst first }
       - { name: EDGES, type: list, nullable: false, label: Histogram edges }
       - { name: COUNTS, type: list, nullable: false, label: Histogram counts }
+  scope-contributions:
+    title: Each part's VaR in a row set
+    about: The parts of a row set (any the host resolved: child nodes, terms, positions), each summed as scope-var sums a row set, with its standalone VaR and ES, its component VaR (Euler, averaged over ranks k ± h, scaled to the set's VaR) and component ES, its share of the VaR and its incremental VaR (the set's VaR less the VaR without the part); exactly how Drishti's in-tree route measures a scope's parts.
+    params: [ scenario-set, window, currency, rows, node, parts, part-nodes ]
+    needs: [ scenario-set, fx-scenario ]
+    key: [ PART ]
+    columns:
+      - { name: PART, type: integer, nullable: false, label: Part }
+      - { name: MEMBERS, type: integer, nullable: false, label: Members }
+      - { name: STANDALONE_VAR, type: number, nullable: false, label: Standalone VaR, measure: true }
+      - { name: STANDALONE_ES, type: number, nullable: false, label: Standalone ES, measure: true }
+      - { name: COMPONENT_VAR, type: number, nullable: false, label: Component VaR, measure: true }
+      - { name: COMPONENT_ES, type: number, nullable: false, label: Component ES, measure: true }
+      - { name: PCT, type: number, nullable: false, label: Share of the VaR }
+      - { name: INCREMENTAL_VAR, type: number, nullable: false, label: Incremental VaR, measure: true }
   scope-scenarios:
     title: The scenario dates of a window
     about: One row per scenario of the set's window, oldest first (INDEX is the position in a scope's PNL).
@@ -604,8 +621,8 @@ outputs:
       - { name: AGAINST_VOLATILITY, type: number, nullable: true, label: Volatility of the other set P&L }
   what-if:
     title: What-if on supplied vectors
-    about: A node's VaR and ES before and after hypothetical trades whose scenario P&L the caller supplies (the engine prices nothing), each trade's standalone, incremental and component VaR, and the stressed VaR of the worst window before and after.
-    params: [ scenario-set, window, currency, node, trades ]
+    about: A node's VaR and ES (or a row set's, rows, summed as scope-var sums it) before and after hypothetical trades whose scenario P&L the caller supplies (the engine prices nothing), each trade's standalone, incremental and component VaR, and the stressed VaR of the worst window before and after.
+    params: [ scenario-set, window, currency, node, rows, trades ]
     needs: [ scenario-set, fx-scenario ]
     key: [ ROW ]
     columns:

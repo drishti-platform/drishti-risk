@@ -58,9 +58,19 @@ final class MarketWhatIf {
     }
 
     Asked ask(MarketBooks.Built built, Request request) throws EngineException {
+        return ask(built, request, null);
+    }
+
+    /**
+     * The same on a row set ({@code rows}: any scope the host resolved, {@code before} its summed USD P&amp;L as scope-var sums it), or on
+     * the node when {@code before} is null.
+     */
+    Asked ask(MarketBooks.Built built, Request request, double[] rowsBefore) throws EngineException {
         VarBook b = built.book();
         String node = String.valueOf(request.param("node"));
-        if (node.isBlank()) {
+        if (rowsBefore != null) {
+            node = node.isBlank() ? "ROWS" : node;
+        } else if (node.isBlank()) {
             node = null;
             for (String h : b.hierarchies()) {
                 if (b.root(h) != null) {
@@ -69,13 +79,13 @@ final class MarketWhatIf {
                 }
             }
         }
-        if (node == null || b.node(node) == null) {
+        if (rowsBefore == null && (node == null || b.node(node) == null)) {
             throw new EngineException("RSK-3120", Kind.REFUSED, "the node " + node + " is not one this request sees");
         }
         if (!"USD".equalsIgnoreCase(String.valueOf(request.param("currency")))) {
             throw new EngineException("RSK-3121", Kind.REFUSED, "the what-if's vectors are in USD: ask it in USD");
         }
-        double[] before = b.aggregate(node);
+        double[] before = rowsBefore != null ? rowsBefore : b.aggregate(node);
         int n = before.length;
         Object p = request.param("trades");
         List<VarWhatIfMath.Item> items = new ArrayList<>();

@@ -205,7 +205,9 @@ final class MarketSession implements Session, Explaining {
                 }
                 default -> {
                     MarketWhatIf w = new MarketWhatIf(engine.descriptor(), o);
-                    yield w.table(c.get("what-if", () -> w.ask(b, request)));
+                    double[] rows = request.param("rows") instanceof java.util.Collection<?> rc && !rc.isEmpty()   // a row set: any scope
+                            ? new MarketScopes(engine.descriptor(), o, engine.sums(), this).usdRows(request, c.control) : null;
+                    yield w.table(c.get("what-if", () -> w.ask(b, request, rows)));
                 }
             };
         }

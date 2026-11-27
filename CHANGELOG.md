@@ -3,6 +3,9 @@
 
 ## 0.1.0 (unreleased)
 
+- `market-risk` (R2 lane G, part 2): `scope-contributions` (the parts of a row set, each a row set summed as `scope-var` sums it, with
+  standalone VaR and ES, component VaR and ES, share and incremental VaR: Drishti's tree contributions and headline parts to the bit in
+  USD), and `what-if` takes `rows` (any scope the host resolved: the before is the row set's summed P&L, not only a node's aggregate).
 - `market-risk` (R2 lane G): `scope-path` (a row set's P&L path: the summed scenario P&L, the scenarios worst first in the
   measures' own order, the VaR rank, the ES count and a histogram of `bins` equal bins; VaR and ES are `scope-var`'s to the bit) and
   `scope-scenarios` (the window's scenario dates, what a PNL index means). The descriptor parses again: a flow-mapping label of
