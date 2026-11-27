@@ -3,6 +3,10 @@
 
 ## 0.1.0 (unreleased)
 
+- `market-risk` (R2 lane G, part 3): `scope-backtest`, the replayed history of a row set (the newest `days` scenario P&Ls, summed as
+  `scope-var` sums the rows, against the set's VaR of the date, each day tested against the VaR before it by `Backtest`: days,
+  exceptions, the zone with Basel's limits scaled under 250 days, Kupiec's and Christoffersen's tests; in-sample): Drishti's history of
+  a scope without official records, to the in-tree route's figures (likelihood ratios within relative 1e-12).
 - `market-risk` (R2 lane G, part 3): `node-pvar` carries what a host's parametric block shows: the fit's shape and the ES quantile (`SKEW`,
   `EXCESS_KURTOSIS`, `Z_ES`, `ES_FACTOR`), the historical rank `K`, the `SCENARIO_SET` and its `LAST_DAY` (the hand case extended by hand). Convert first (Drishti owner decision 2026-11-27): `scope-var`
   and every row-set output sum the book converted to the reporting currency (no per-currency totals), so a node whole is `node-var`'s

@@ -25,6 +25,7 @@ import com.ash.engine.Table;
 import com.ash.engine.Tables;
 import com.ash.risk.kernel.vector.OrdinalSet;
 import com.ash.risk.kernel.vector.ParallelSums;
+import com.ash.risk.market.calc.Backtest;
 import com.ash.risk.market.calc.Columns;
 import com.ash.risk.market.calc.VarBook;
 import com.ash.risk.market.calc.VarCalc;
@@ -54,7 +55,7 @@ final class MarketScopes {
 
     static final Set<String> OUTPUTS = Set.of("scope-index", "scope-positions", "scope-position-values", "scope-nodes", "scope-words",
             "scope-limits", "scope-var", "scope-correlation", "scope-path", "scope-scenarios",
-            "scope-contributions");
+            "scope-contributions", "scope-backtest");
 
     private final Descriptor descriptor;
     private final MarketOptions options;
@@ -99,6 +100,7 @@ final class MarketScopes {
             case "scope-path" -> scopePath(request, control, usd);
             case "scope-scenarios" -> scenarios(usd);
             case "scope-contributions" -> scopeContributions(request, control, usd);
+            case "scope-backtest" -> scopeBacktest(request, control, usd);
             default -> scopeVar(request, control, usd);
         };
     }
@@ -220,6 +222,38 @@ final class MarketScopes {
         Tables.Builder t = Tables.of(descriptor.schema("scope-path"));
         t.row((long) a.members(), (long) a.hidden(), ms.var(), ms.es(), ms.varScenario() < 0 ? null : (long) ms.varScenario(), (long) ms.k(),
                 (long) ms.esCount(), a.v().clone(), order, h.edges().clone(), counts);
+        return t.build();
+    }
+
+    /**
+     * The replayed history of a row set (Drishti's history of a scope without official records): the newest {@code days} scenario P&amp;Ls
+     * of the set, summed as {@link #scopeVar} sums it, against the set's own VaR of the date, tested by {@link Backtest} (each day against
+     * the VaR before it); in-sample, never a regulatory backtest.
+     */
+    private Table scopeBacktest(Request request, Control control, MarketBooks.Built usd) throws EngineException {
+        Summed a = summed(request, control, usd, request.param("rows"), request.param("node"));
+        if (a == null) {
+            return null;
+        }
+        Object dp = request.param("days");
+        int days = dp instanceof Number d ? d.intValue() : 250;
+        if (days < 2) {
+            throw new EngineException("ENG-3001", Kind.REFUSED, "days is 2 or more, not " + days);
+        }
+        double[] v = a.v();
+        VarCalc.Measures ms = options.calc().measures(v);
+        int n = Math.min(days, v.length);
+        double[] pnl = java.util.Arrays.copyOfRange(v, v.length - n, v.length);
+        double[] var = new double[n];
+        java.util.Arrays.fill(var, ms.var());
+        Backtest bt = Backtest.of(pnl, var, options.calc().confidence());
+        double[] flags = new double[n];
+        for (int i = 0; i < n; i++) {
+            flags[i] = bt.exceptionFlags()[i] ? 1 : 0;
+        }
+        Tables.Builder t = Tables.of(descriptor.schema("scope-backtest"));
+        t.row((long) a.members(), (long) (v.length - n), ms.var(), ms.es(), (long) bt.days(), (long) bt.exceptions(), bt.light(), bt.kupiecLr(),
+                bt.kupiecPValue(), bt.christoffersenLr(), bt.christoffersenPValue(), pnl, flags);
         return t.build();
     }
 

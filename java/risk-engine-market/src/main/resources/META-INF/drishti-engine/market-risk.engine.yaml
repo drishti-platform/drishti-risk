@@ -217,6 +217,7 @@ params:
   bins: { type: int, default: 40, label: Histogram bins, help: "The P&L path histogram's equal bins." }
   parts: { type: list, items: int, label: Parts, help: "The parts' row sets (ordinals of scope-index), one after another, each ended by -1: a node's child nodes, a scope's terms or positions." }
   part-nodes: { type: text, default: "", label: Part nodes, help: "Each part's node id when the part is a node (its stored aggregate is taken when the part is its members whole), comma-separated in the parts' order; empty for a part that is not a node." }
+  days: { type: int, default: 250, min: 2, label: Days, help: "The replayed history's days: the newest N scenario days of a row set against its VaR (in-sample)." }
   rows: { type: list, items: int, label: Rows, help: "The ordinals of scope-index a scope resolved to (the host resolves every scope kind; the caller's visibility selects from them)." }
   trades:
     type: table
@@ -586,6 +587,26 @@ outputs:
       - { name: ORDER, type: list, nullable: false, label: Scenarios worst first }
       - { name: EDGES, type: list, nullable: false, label: Histogram edges }
       - { name: COUNTS, type: list, nullable: false, label: Histogram counts }
+  scope-backtest:
+    title: The replayed history of a row set and its backtest
+    about: "The newest DAYS scenario days of the rows' summed P&L (as scope-var sums it) against the set's own VaR of the date: in-sample, not a regulatory backtest (Drishti's replay of a scope without official records). Each day's P&L is compared with the VaR before it, from the second day; the exceptions, the zone (Basel's 4/9 limits scaled for fewer than 250 days), Kupiec's and Christoffersen's tests (the likelihood ratios and p-values within relative 1e-12: the platform's log and exp). FIRST is the scenario index of the first replayed day; FLAGS one 0/1 per replayed day."
+    params: [ scenario-set, window, currency, rows, node, days ]
+    needs: [ scenario-set, fx-scenario ]
+    key: [ MEMBERS ]
+    columns:
+      - { name: MEMBERS, type: integer, nullable: false, label: Members }
+      - { name: FIRST, type: integer, nullable: false, label: First replayed scenario }
+      - { name: VAR, type: number, nullable: false, label: VaR, measure: true }
+      - { name: ES, type: number, nullable: false, label: Expected shortfall, measure: true }
+      - { name: DAYS, type: integer, nullable: false, label: Days tested }
+      - { name: EXCEPTIONS, type: integer, nullable: false, label: Exceptions }
+      - { name: ZONE, type: string, nullable: false, label: Zone }
+      - { name: KUPIEC_LR, type: number, nullable: false, label: Kupiec LR, exact: "relative:1e-12" }
+      - { name: KUPIEC_P, type: number, nullable: false, label: Kupiec p-value, exact: "relative:1e-12" }
+      - { name: CHRISTOFFERSEN_LR, type: number, nullable: false, label: Christoffersen LR, exact: "relative:1e-12" }
+      - { name: CHRISTOFFERSEN_P, type: number, nullable: false, label: Christoffersen p-value, exact: "relative:1e-12" }
+      - { name: PNL, type: list, nullable: false, label: Replayed P&L }
+      - { name: FLAGS, type: list, nullable: false, label: Exceptions by day }
   scope-contributions:
     title: Each part's VaR in a row set
     about: The parts of a row set (any the host resolved: child nodes, terms, positions), each summed as scope-var sums a row set, with its standalone VaR and ES, its component VaR (Euler, averaged over ranks k ± h, scaled to the set's VaR) and component ES, its share of the VaR and its incremental VaR (the set's VaR less the VaR without the part); exactly how Drishti's in-tree route measures a scope's parts.
