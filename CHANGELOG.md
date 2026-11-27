@@ -3,6 +3,10 @@
 
 ## 0.1.0 (unreleased)
 
+- `market-risk` (R2 lane G, part 3): `node-pvar` carries what a host's parametric block shows: the fit's shape and the ES quantile (`SKEW`,
+  `EXCESS_KURTOSIS`, `Z_ES`, `ES_FACTOR`), the historical rank `K`, the `SCENARIO_SET` and its `LAST_DAY` (the hand case extended by hand). Convert first (Drishti owner decision 2026-11-27): `scope-var`
+  and every row-set output sum the book converted to the reporting currency (no per-currency totals), so a node whole is `node-var`'s
+  figure to the bit in every currency.
 - `market-risk` (R2 lane G, part 2): `scope-contributions` (the parts of a row set, each a row set summed as `scope-var` sums it, with
   standalone VaR and ES, component VaR and ES, share and incremental VaR: Drishti's tree contributions and headline parts to the bit in
   USD), and `what-if` takes `rows` (any scope the host resolved: the before is the row set's summed P&L, not only a node's aggregate).
@@ -10,8 +14,9 @@
   measures' own order, the VaR rank, the ES count and a histogram of `bins` equal bins; VaR and ES are `scope-var`'s to the bit) and
   `scope-scenarios` (the window's scenario dates, what a PNL index means). The descriptor parses again: a flow-mapping label of
   `scope-correlation` held an apostrophe, so `market-risk` was "not installed" in a host (the JAR of `264b8ff` never started).
-- `market-risk`: `scope-limits` takes `currency` (the USD limit over the currency's base rate, as a converted book holds its nodes'
-  limits and as Drishti's headline route converts it; `basket-var` keeps the USD limit, as Drishti's recorded golden holds it), and
+- `market-risk`: `scope-limits` and `basket-var` take `currency` (the USD limit over the currency's base rate, as a converted book holds
+  its nodes' limits and as Drishti's headline route converts it: Drishti owner decision 2026-11-27, convert first; the six EUR cases of
+  `tck/recorded/market-risk` re-recorded in `basket-var`'s LIMIT and LIMIT_USE only, 336 cells; every other recorded bit unchanged), and
   `scope-position-values` gives the positions' amounts in the reporting currency (a rule over an amount selects as Drishti's in-tree
   route does in that currency).
 - The engines' remaining outputs (R1, branch `r1/outputs`), each with its descriptor entries, explanation and workbook part:

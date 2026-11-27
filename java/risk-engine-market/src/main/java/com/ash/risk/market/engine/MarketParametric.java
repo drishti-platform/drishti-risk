@@ -28,6 +28,7 @@ import com.ash.engine.Tables;
 import com.ash.risk.kernel.workbook.AnswerBook;
 import com.ash.risk.market.calc.ParametricVar;
 import com.ash.risk.market.calc.VarBook;
+import com.ash.risk.market.calc.VarCalc;
 import com.ash.tools.xlsx.Sheet;
 import com.ash.tools.xlsx.Workbook;
 import java.util.ArrayList;
@@ -59,11 +60,15 @@ final class MarketParametric {
 
     Table nodes(VarBook b) {
         Tables.Builder t = Tables.of(descriptor.schema("node-pvar"));
+        String set = b.scenarioSet().replaceFirst("/\\d+$", "");          // the set's id: a book cut to a window is labelled id/window
+        String last = b.scenarioDates().isEmpty() ? null : b.scenarioDates().get(b.scenarioDates().size() - 1).toString();
         for (VarBook.Node x : b.nodes().values()) {
             double[] v = b.aggregate(x.id());
             ParametricVar.Figures f = figures(v);
-            t.row(x.id(), x.hierarchy(), (long) v.length, f.fit().mu(), f.fit().sigma(), f.z(), f.var(), f.es(), options.calc().measures(v).var(),
-                    (long) f.beyond(), f.expectedBeyond());
+            VarCalc.Measures h = options.calc().measures(v);
+            t.row(x.id(), x.hierarchy(), (long) v.length, f.fit().mu(), f.fit().sigma(), f.z(), f.var(), f.es(), h.var(),
+                    (long) f.beyond(), f.expectedBeyond(), f.fit().skew(), f.fit().excessKurtosis(), f.zEs(), f.esFactor(), (long) h.k(),
+                    set, last);
         }
         return t.build();
     }

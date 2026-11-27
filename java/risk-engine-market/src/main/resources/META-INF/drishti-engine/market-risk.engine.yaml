@@ -291,7 +291,7 @@ outputs:
       - { name: ES_UNITS, type: integer, nullable: false, label: ES (whole units) }
   node-pvar:
     title: Parametric VaR and ES by hierarchy node
-    about: For every node, the normal (variance-covariance) VaR z sigma - mu (z, PVAR and PES within relative 1e-12, as the normal quantile is computed with the platform's exp and log, whose last bit may differ between JVMs) and ES sigma phi(z_ES)/(1 - c_ES) - mu from the node's scenario P&L (equal or EWMA weights), with the historical VaR beside it and the scenarios beyond the parametric VaR.
+    about: For every node, the normal (variance-covariance) VaR z sigma - mu (z, PVAR and PES within relative 1e-12, as the normal quantile is computed with the platform's exp and log, whose last bit may differ between JVMs) and ES sigma phi(z_ES)/(1 - c_ES) - mu from the node's scenario P&L (equal or EWMA weights), with the historical VaR beside it, the scenarios beyond the parametric VaR, and the fit's shape (skewness, excess kurtosis) and the ES quantile and factor a host's tooltip shows.
     params: [ scenario-set, window, currency ]
     needs: [ scenario-set, fx-scenario ]
     key: [ NODE_ID ]
@@ -307,6 +307,13 @@ outputs:
       - { name: HVAR, type: number, nullable: false, label: Historical VaR, measure: true }
       - { name: BEYOND, type: integer, nullable: false, label: Scenarios beyond }
       - { name: EXPECTED_BEYOND, type: number, nullable: false, label: Expected beyond }
+      - { name: SKEW, type: number, nullable: false, label: Skewness, exact: "relative:1e-12" }
+      - { name: EXCESS_KURTOSIS, type: number, nullable: false, label: Excess kurtosis }
+      - { name: Z_ES, type: number, nullable: false, label: z at the ES confidence, exact: "relative:1e-12" }
+      - { name: ES_FACTOR, type: number, nullable: false, label: "ES factor phi(z_ES)/(1 - c_ES)", exact: "relative:1e-12" }
+      - { name: K, type: integer, nullable: false, label: Historical VaR rank }
+      - { name: SCENARIO_SET, type: string, nullable: false, label: Scenario set }
+      - { name: LAST_DAY, type: date, nullable: true, label: Newest scenario day }
   node-pvar-components:
     title: Parametric component VaR of a node's children
     about: For every node with children (the figures within relative 1e-12, as node-pvar), each child's parametric component VaR z cov/sigma - mu_i (the parts add up to the node's PVAR exactly), component ES, standalone and incremental parametric VaR and its correlation with the node.

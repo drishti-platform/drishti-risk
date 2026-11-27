@@ -71,18 +71,18 @@ given:
     fx-spot: absent
 cases:
   - id: parametric-var
-    source: "by hand: mean and sample variance of each node's four P&Ls, z = inverse normal at 0.99, PVaR = z sigma - mean, PES = sigma phi(z_ES)/(1 - 0.975) - mean; HVAR the worst loss; ParametricVarTest's formulas"
+    source: "by hand: mean and sample variance of each node's four P&Ls, z = inverse normal at 0.99, PVaR = z sigma - mean, PES = sigma phi(z_ES)/(1 - 0.975) - mean; HVAR the worst loss; SKEW and EXCESS_KURTOSIS the equal-weight moments m3/m2^1.5 and m4/m2^2 - 3; Z_ES the inverse normal at 0.975, ES_FACTOR phi(Z_ES)/0.025; K = ceil(4 x 0.01) = 1, the set HS-4 ending 2026-01-12; ParametricVarTest's formulas"
     reference: true
     request: { outputs: [ node-pvar ], params: { scenario-set: "", window: 0, currency: USD }, visibility: { scenario-pv: all, pnl-vector: all }, seed: 0 }
     expect:
       status: complete
       tables:
         node-pvar:
-          columns: [ NODE_ID, HIERARCHY, SCENARIOS, MU, SIGMA, Z, PVAR, PES, HVAR, BEYOND, EXPECTED_BEYOND ]
+          columns: [ NODE_ID, HIERARCHY, SCENARIOS, MU, SIGMA, Z, PVAR, PES, HVAR, BEYOND, EXPECTED_BEYOND, SKEW, EXCESS_KURTOSIS, Z_ES, ES_FACTOR, K, SCENARIO_SET, LAST_DAY ]
           rows:
-            - [ "MGMT~BANK", MGMT, 4, "0xbfd0000000000000", "0x40143b638eabdc88", 2.3263478740408408, 12.016660494569965, 12.074599435900543, "0x4018000000000000", 0, "0x3fa47ae147ae1480" ]
-            - [ "MGMT~A", MGMT, 4, "0xbff0000000000000", "0x401abbb6491dca58", 2.3263478740408408, 16.54770994671221, 16.62426674503601, "0x4024000000000000", 0, "0x3fa47ae147ae1480" ]
-            - [ "MGMT~B", MGMT, 4, "0x3fe8000000000000", "0x4018bd171a07e38a", 2.3263478740408408, 13.637667009902213, 13.708511766165495, "0x4020000000000000", 0, "0x3fa47ae147ae1480" ]
+            - [ "MGMT~A", MGMT, 4, "0xbff0000000000000", "0x401abbb6491dca58", 2.3263478740408408, 16.54770994671221, 16.62426674503601, "0x4024000000000000", 0, "0x3fa47ae147ae1480", -0.5802101365844956, "0xbff3145bedfaa3ac", 1.9599639845400536, 2.3378027922014155, 1, HS-4, "2026-01-12" ]
+            - [ "MGMT~B", MGMT, 4, "0x3fe8000000000000", "0x4018bd171a07e38a", 2.3263478740408408, 13.637667009902213, 13.708511766165495, "0x4020000000000000", 0, "0x3fa47ae147ae1480", -0.7986782701493093, "0xbfee8c7804c0e554", 1.9599639845400536, 2.3378027922014155, 1, HS-4, "2026-01-12" ]
+            - [ "MGMT~BANK", MGMT, 4, "0xbfd0000000000000", "0x40143b638eabdc88", 2.3263478740408408, 12.016660494569965, 12.074599435900543, "0x4018000000000000", 0, "0x3fa47ae147ae1480", -0.17066132690601007, "0xbffc699df8d5aafa", 1.9599639845400536, 2.3378027922014155, 1, HS-4, "2026-01-12" ]
 
   - id: stressed-ten-day-by-sqrt10
     source: "by hand: on the stress set the bank and desk A lose 20 in the worst scenario (k = 1 of 4), desk B nothing (-0.0); times sqrt(10) (VarLens)"
