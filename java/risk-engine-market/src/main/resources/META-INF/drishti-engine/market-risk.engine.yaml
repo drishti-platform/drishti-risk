@@ -65,7 +65,7 @@ inputs:
     required: false
     per: []
     key: [ BUSINESS_DATE, NODE_ID, RESULT_VERSION ]
-    columns: [ BUSINESS_DATE, HIERARCHY, NODE_ID, NODE_NAME, PARENT_ID, LEVEL, RESULT_VERSION, VAR, ES, CONFIDENCE, SVAR, SES, HYPO_PNL ]
+    columns: [ BUSINESS_DATE, HIERARCHY, NODE_ID, NODE_NAME, PARENT_ID, LEVEL, RESULT_VERSION, CAPTURE_ID, VAR, ES, CONFIDENCE, SVAR, SES, HYPO_PNL ]
     scope-columns: [ HIERARCHY, NODE_ID ]
   desk-pnl:
     contract: risk/desk-pnl@1
@@ -452,6 +452,45 @@ outputs:
       - { name: AVERAGE_N, type: number, nullable: true, label: VaR average (capital), measure: true }
       - { name: STRESSED_AVERAGE, type: number, nullable: true, label: Stressed VaR average (capital), measure: true }
       - { name: MISSING_DAYS, type: integer, nullable: false, label: Weekdays without a record }
+  official-statistics:
+    title: A node's period statistics as a host shows them
+    about: "One row per node asked: period-stats' figures with what a page shows beside them, read from the official records (never recomputed): the period end, high and low with each record's date, result version and capture id; the average; the official dates overall (the oldest and the newest to the date: a period still open is a preview); the weekdays from the first record or the period's start to its end or the newest record without a record of the measure (a weekday whose desk P&L input is delivered and holds no row is a holiday), as dates; the capital formula's averages (VaR measure only) with the records they take: the last AVERAGE_N_DAYS records' VaR (the mean as a compensated sum, newest first) and the stressed VaR of the STRESS_WEEKS weeks to the period end, with the dates used and the records without one."
+    params: [ node, period, measure ]
+    needs: [ var-history ]
+    key: [ NODE_ID ]
+    columns:
+      - { name: NODE_ID, type: string, nullable: false, label: Node }
+      - { name: MEASURE, type: string, nullable: false, label: Measure }
+      - { name: PERIOD, type: string, nullable: false, label: Period }
+      - { name: FIRST_DAY, type: date, nullable: false, label: From }
+      - { name: LAST_DAY, type: date, nullable: false, label: To }
+      - { name: OLDEST, type: date, nullable: true, label: Oldest official date }
+      - { name: NEWEST, type: date, nullable: true, label: Newest official date }
+      - { name: RECORDS, type: integer, nullable: false, label: Records }
+      - { name: END_DATE, type: date, nullable: true, label: Period end on }
+      - { name: PERIOD_END, type: number, nullable: true, label: Period end, measure: true }
+      - { name: END_VERSION, type: number, nullable: true, label: Period end result version }
+      - { name: END_CAPTURE, type: string, nullable: true, label: Period end capture }
+      - { name: AVERAGE, type: number, nullable: true, label: Average, measure: true }
+      - { name: HIGH_DATE, type: date, nullable: true, label: High on }
+      - { name: HIGH, type: number, nullable: true, label: High, measure: true }
+      - { name: HIGH_VERSION, type: number, nullable: true, label: High result version }
+      - { name: HIGH_CAPTURE, type: string, nullable: true, label: High capture }
+      - { name: LOW_DATE, type: date, nullable: true, label: Low on }
+      - { name: LOW, type: number, nullable: true, label: Low, measure: true }
+      - { name: LOW_VERSION, type: number, nullable: true, label: Low result version }
+      - { name: LOW_CAPTURE, type: string, nullable: true, label: Low capture }
+      - { name: MISSING, type: string, nullable: true, label: Weekdays without a record (dates, comma separated) }
+      - { name: AVERAGE_N_DAYS, type: integer, nullable: false, label: Days the VaR average takes }
+      - { name: AVERAGE_N_RECORDS, type: integer, nullable: true, label: Records the VaR average took }
+      - { name: AVERAGE_N_FROM, type: date, nullable: true, label: VaR average from }
+      - { name: AVERAGE_N, type: number, nullable: true, label: VaR average (capital), measure: true }
+      - { name: STRESS_WEEKS, type: integer, nullable: false, label: Weeks the stressed VaR average takes }
+      - { name: STRESS_FROM, type: date, nullable: true, label: Stressed VaR average from }
+      - { name: STRESSED_RECORDS, type: integer, nullable: true, label: Records the stressed VaR average took }
+      - { name: STRESSED_AVERAGE, type: number, nullable: true, label: Stressed VaR average (capital), measure: true }
+      - { name: STRESSED_DATES, type: string, nullable: true, label: Dates of the stressed VaR average (comma separated) }
+      - { name: WITHOUT_STRESSED, type: string, nullable: true, label: Official dates without a stressed VaR (comma separated) }
   regulatory-report:
     title: Regulatory and management VaR tables
     about: Each report's rows (official nodes, the computed diversification and the total) with the period's end, average, high and low of the measure, the prior year's period end and the movement.

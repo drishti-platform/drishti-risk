@@ -298,6 +298,120 @@ final class MarketHistory {
         return t.build();
     }
 
+    // ------------------------------------------------------------------------------------------------------------- statistics as shown
+
+    /**
+     * A node's period statistics with what a host shows beside them ({@code official-statistics}): read from the official records to the
+     * session's date, never recomputed; the averages summed in the order a host sums them (the VaR average as a compensated mean of the
+     * newest records first, the stressed average oldest first), so the figures are its bits.
+     */
+    Table officialStatistics(Request request, Filter seeRecords, Filter seeDesks) throws EngineException {
+        Map<LocalDate, Map<String, Map<Double, MarketExtras.Official>>> recs = officials(seeRecords);
+        Periods.Period p = period(request);
+        String measure = String.valueOf(request.param("measure"));
+        String node = String.valueOf(request.param("node"));
+        if (node.isBlank() || node.equals("null")) {
+            throw new EngineException("ENG-3001", Kind.REFUSED, "official-statistics needs node: a node id of the official records");
+        }
+        double q = options.calc().confidence();
+        LocalDate oldest = recs.isEmpty() ? null : ((TreeMap<LocalDate, ?>) recs).firstKey();
+        LocalDate newest = recs.isEmpty() ? null : ((TreeMap<LocalDate, ?>) recs).lastKey();
+        List<MarketExtras.Official> pts = new ArrayList<>();
+        for (Map.Entry<LocalDate, Map<String, Map<Double, MarketExtras.Official>>> e : recs.entrySet()) {
+            if (e.getKey().isBefore(p.from()) || e.getKey().isAfter(p.to())) {
+                continue;
+            }
+            MarketExtras.Official o = at(e.getValue(), node, q);
+            if (o != null && Double.isFinite(measure(o, measure))) {
+                pts.add(o);
+            }
+        }
+        int n = options.regulatory().averageDays();
+        int weeks = options.regulatory().stressWeeks();
+        Tables.Builder t = Tables.of(descriptor.schema("official-statistics"));
+        if (pts.isEmpty()) {
+            t.row(node, measure, p.name(), p.from().toString(), p.to().toString(), day(oldest), day(newest), 0L, null, null, null, null, null,
+                    null, null, null, null, null, null, null, null, null, (long) n, null, null, null, (long) weeks, null, null, null, null, null);
+            return t.build();
+        }
+        MarketExtras.Official hi = pts.get(0);
+        MarketExtras.Official lo = pts.get(0);
+        double sum = 0;
+        for (MarketExtras.Official x : pts) {
+            double v = measure(x, measure);
+            sum += v;
+            hi = v > measure(hi, measure) ? x : hi;
+            lo = v < measure(lo, measure) ? x : lo;
+        }
+        MarketExtras.Official end = pts.get(pts.size() - 1);
+        // the weekdays without a record: from the first record (or the period's start) to the newest record (or the period's end)
+        Set<LocalDate> have = new java.util.HashSet<>();
+        pts.forEach(x -> have.add(x.date()));
+        Set<LocalDate> deskDays = new java.util.HashSet<>();
+        boolean desks = day.extras.present.contains(MarketExtras.DESK_PNL);
+        for (MarketExtras.DeskPnl d : day.extras.deskPnl) {
+            if (InputRows.visible(seeDesks, d.row())) {
+                deskDays.add(d.date());
+            }
+        }
+        LocalDate last = newest == null || newest.isAfter(p.to()) ? p.to() : newest;
+        LocalDate first = oldest == null ? p.from() : oldest.isAfter(p.from()) ? oldest : p.from();
+        List<String> missing = new ArrayList<>();
+        for (LocalDate d = first; !d.isAfter(last); d = d.plusDays(1)) {
+            if (d.getDayOfWeek() != DayOfWeek.SATURDAY && d.getDayOfWeek() != DayOfWeek.SUNDAY && !have.contains(d) && (!desks || deskDays.contains(d))) {
+                missing.add(d.toString());
+            }
+        }
+        Object[] lastN = {null, null, null};
+        Object[] stressed = {null, null, null, null, null};
+        if ("var".equals(measure)) {
+            List<Double> vals = new ArrayList<>();
+            LocalDate from = null;
+            for (LocalDate d : ((TreeMap<LocalDate, Map<String, Map<Double, MarketExtras.Official>>>) recs).headMap(end.date(), true).descendingKeySet()) {
+                if (vals.size() >= n) {
+                    break;
+                }
+                MarketExtras.Official o = at(recs.get(d), node, q);
+                if (o != null && Double.isFinite(o.var())) {
+                    vals.add(o.var());
+                    from = d;
+                }
+            }
+            lastN = new Object[] {(long) vals.size(), day(from), vals.isEmpty() ? null : vals.stream().mapToDouble(Double::doubleValue).average()
+                    .orElse(Double.NaN)};
+            LocalDate sFrom = end.date().minusWeeks(weeks).plusDays(1);
+            List<String> used = new ArrayList<>();
+            List<String> without = new ArrayList<>();
+            double ssum = 0;
+            for (Map.Entry<LocalDate, Map<String, Map<Double, MarketExtras.Official>>> e : recs.entrySet()) {
+                if (e.getKey().isBefore(sFrom) || e.getKey().isAfter(end.date())) {
+                    continue;
+                }
+                MarketExtras.Official o = at(e.getValue(), node, q);
+                if (o != null) {
+                    if (Double.isFinite(o.svar())) {
+                        used.add(e.getKey().toString());
+                        ssum += o.svar();
+                    } else {
+                        without.add(e.getKey().toString());
+                    }
+                }
+            }
+            stressed = new Object[] {sFrom.toString(), (long) used.size(), used.isEmpty() ? null : ssum / used.size(), String.join(",", used),
+                    String.join(",", without)};
+        }
+        t.row(node, measure, p.name(), p.from().toString(), p.to().toString(), day(oldest), day(newest), (long) pts.size(), end.date().toString(),
+                measure(end, measure), nn(end.version()), end.capture(), sum / pts.size(), hi.date().toString(), measure(hi, measure),
+                nn(hi.version()), hi.capture(), lo.date().toString(), measure(lo, measure), nn(lo.version()), lo.capture(),
+                String.join(",", missing), (long) n, lastN[0], lastN[1], lastN[2], (long) weeks, stressed[0], stressed[1], stressed[2],
+                stressed[3], stressed[4]);
+        return t.build();
+    }
+
+    private static String day(LocalDate d) {
+        return d == null ? null : d.toString();
+    }
+
     Table backtest(List<Test> tests) {
         Tables.Builder t = Tables.of(descriptor.schema("backtest"));
         for (Test x : tests) {

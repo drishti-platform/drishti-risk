@@ -68,7 +68,7 @@ final class MarketExtras {
 
     /** One official record of a node on a date (its latest result version), as the backtest and the statistics read it. */
     record Official(LocalDate date, String hierarchy, String node, String name, String parent, String level, double var, double es,
-            double confidence, double svar, double ses, double hypo) {}
+            double confidence, double svar, double ses, double hypo, double version, String capture) {}
 
     /** One desk's P&amp;L of a date. */
     record DeskPnl(LocalDate date, String desk, String legalEntity, double actual, double hypothetical, Map<String, Object> row) {}
@@ -120,7 +120,8 @@ final class MarketExtras {
             double conf = InputRows.number(r, "CONFIDENCE");
             latest.put(d.substring(0, 10) + "|" + node + "|" + conf, new Official(LocalDate.parse(d.substring(0, 10)), InputRows.text(r, "HIERARCHY"),
                     node, InputRows.text(r, "NODE_NAME"), InputRows.text(r, "PARENT_ID"), InputRows.text(r, "LEVEL"), InputRows.number(r, "VAR"),
-                    InputRows.number(r, "ES"), conf, InputRows.number(r, "SVAR"), InputRows.number(r, "SES"), InputRows.number(r, "HYPO_PNL")));
+                    InputRows.number(r, "ES"), conf, InputRows.number(r, "SVAR"), InputRows.number(r, "SES"), InputRows.number(r, "HYPO_PNL"),
+                    InputRows.number(r, "RESULT_VERSION"), InputRows.text(r, "CAPTURE_ID")));
         }
         List<DeskPnl> desk = new ArrayList<>();
         for (Map<String, Object> r : rows.get(DESK_PNL)) {

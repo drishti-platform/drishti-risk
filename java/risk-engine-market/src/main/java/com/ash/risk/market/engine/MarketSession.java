@@ -63,6 +63,7 @@ final class MarketSession implements Session, Explaining {
             Map.entry("official-history", List.of(MarketExtras.HISTORY)),
             Map.entry("official-backtest", List.of(MarketExtras.HISTORY)),
             Map.entry("period-stats", List.of(MarketExtras.HISTORY)),
+            Map.entry("official-statistics", List.of(MarketExtras.HISTORY)),
             Map.entry("regulatory-report", List.of(MarketExtras.HISTORY, MarketExtras.REPORT_ROW)),
             Map.entry("stress-window", List.of(MarketExtras.PNL_HISTORY)),
             Map.entry("sensitivity-sum", List.of(MarketExtras.SENSITIVITY, MarketExtras.FACTOR)),
@@ -220,6 +221,7 @@ final class MarketSession implements Session, Explaining {
             case "backtest-days" -> h.backtestDays(backtests(c, h));
             case "official-history" -> h.officialDays(c.get("official-history", () -> h.officialHistory(request, see(request, MarketExtras.HISTORY))));
             case "official-backtest" -> h.officialBacktest(c.get("official-history", () -> h.officialHistory(request, see(request, MarketExtras.HISTORY))));
+            case "official-statistics" -> h.officialStatistics(request, see(request, MarketExtras.HISTORY), see(request, MarketExtras.DESK_PNL));
             case "period-stats" -> h.periodTable(c.get("period-stats", () -> h.periodStats(request, see(request, MarketExtras.HISTORY))));
             case "regulatory-report" -> h.reportTable(c.get("regulatory-report", () -> h.reports(request, see(request, MarketExtras.HISTORY))));
             case "stress-window" -> h.windowTable(c.get("stress-window", () -> h.windows(request, see(request, MarketExtras.PNL_HISTORY))));

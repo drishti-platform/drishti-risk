@@ -7,7 +7,10 @@
   session's date (the latest result version of each date at the engine's confidence, the newest `days`), each record's VaR, ES and
   hypothetical P&L as stored, and their backtest (each day's hypothetical P&L against the record before: days, exceptions, the scaled
   Basel light, Kupiec's and Christoffersen's tests within relative 1e-12): Drishti's history of a node with official records. The
-  inputs' needs are a `Map.ofEntries` (more than ten outputs need extras).
+  inputs' needs are a `Map.ofEntries` (more than ten outputs need extras). `official-statistics`: a node's period statistics with what a
+  host shows beside them (each point's date, result version and capture id: `var-history` now reads `CAPTURE_ID`; the weekdays without a
+  record as dates, a weekday without desk P&L a holiday; the VaR and stressed VaR averages with the records they take, summed in the
+  host's order): Drishti's `GET /statistics` on the engine path, every number to the bit.
 
 - `market-risk` (R2 lane G, part 3): `scope-backtest`, the replayed history of a row set (the newest `days` scenario P&Ls, summed as
   `scope-var` sums the rows, against the set's VaR of the date, each day tested against the VaR before it by `Backtest`: days,
