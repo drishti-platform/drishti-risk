@@ -26,7 +26,6 @@ import com.ash.engine.Tables;
 import com.ash.risk.kernel.vector.OrdinalSet;
 import com.ash.risk.kernel.vector.ParallelSums;
 import com.ash.risk.market.calc.Columns;
-import com.ash.risk.market.calc.CurrencyTotals;
 import com.ash.risk.market.calc.VarBook;
 import com.ash.risk.market.calc.VarCalc;
 import java.util.ArrayList;
@@ -48,7 +47,7 @@ import java.util.Set;
  *       every row: a caller's visibility is applied to the row set, never by another book (EN-63).</li>
  *   <li><b>The measure</b> ({@code scope-var}): the VaR and ES of the rows the host names ({@code rows}, ordinals of the index), seen through
  *       the caller's visibility; a set that is a node whole ({@code node}) takes the node's stored aggregate, anything else the planner's
- *       sum, in USD or through the per-currency totals: exactly how Drishti's in-tree route sums a scope, so the bits are its bits.</li>
+ *       sum, on the book converted to the reporting currency first: exactly how Drishti's in-tree route sums a scope, so the bits are its bits.</li>
  * </ul>
  */
 final class MarketScopes {
@@ -337,17 +336,10 @@ final class MarketScopes {
         boolean whole = n != null && set.equals(n.members());
         String currency = String.valueOf(request.param("currency")).toUpperCase(java.util.Locale.ROOT);
         control.check();
-        double[] v;
-        if ("USD".equals(currency) || currency.isBlank()) {
-            v = whole ? b.aggregate(n.id()) : b.vector(set, sums);
-        } else {
-            CurrencyTotals t = b.currencyTotals();
-            CurrencyTotals.Sums s = whole && t != null && t.get(n.id()) != null ? t.get(n.id()) : CurrencyTotals.of(b, set, usd.fx(), sums);
-            v = s.in(usd.fx(), currency);
-            if (v == null) {
-                return null;
-            }
-        }
+        // the book converted to the reporting currency first, then summed (Drishti owner decision 2026-11-27: one rule in every currency;
+        // node-var reads the same converted book, so a node whole is its figure to the bit)
+        VarBook cb = "USD".equals(currency) || currency.isBlank() ? b : inCurrency(request, control, usd).book();
+        double[] v = whole ? cb.aggregate(n.id()) : cb.vector(set, sums);
         return new Summed(v, set.size(), asked.size() - set.size());
     }
 
