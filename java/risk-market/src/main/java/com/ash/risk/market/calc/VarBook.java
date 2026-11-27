@@ -365,6 +365,55 @@ public final class VarBook {
         return store;
     }
 
+    /**
+     * This book with its rows as the mapped tier keeps them (R2_CUT_PLAN MC-12): every position one float32 row, the float64 sum of its
+     * trades' rows in ordinal order converted once ({@link VarHotFile}'s PMAT), the trades of positions of several trades their own float32
+     * rows (TMAT), served through {@link com.ash.risk.kernel.vector.GroupedVectors} exactly as a hot file's book serves them; the
+     * aggregates, columns, links and currency totals unchanged (float64, from the rows as delivered). Every sum then reads float32 rows
+     * into float64 accumulators in the order the mapped tier's book reads them: a host on the mapped tier and the engine agree to the bit.
+     * A book already mapped, put together from shards or with an intraday layer is returned as it is.
+     */
+    public VarBook withFloat32Rows() {
+        if (hot != null || layer != null || sharded() || store instanceof com.ash.risk.kernel.vector.GroupedVectors) {
+            return this;
+        }
+        int n = store.width();
+        int p = positionIds.length;
+        int t = tradeIds.length;
+        int[] memberRow = new int[t];
+        int q = 0;
+        for (int k = 0; k < p; k++) {
+            boolean several = posTo[k] - posFrom[k] > 1;
+            for (int o = posFrom[k]; o < posTo[k]; o++) {
+                memberRow[o] = several ? q++ : -1;
+            }
+        }
+        int[] tradeOfRow = new int[q];
+        for (int o = 0; o < t; o++) {
+            if (memberRow[o] >= 0) {
+                tradeOfRow[memberRow[o]] = o;
+            }
+        }
+        Path name = Path.of(businessDate + "-" + scenarioSet.replace('/', '-') + ".rows");
+        double[] scratch = new double[n];
+        MappedMatrix pm = MappedMatrix.held(name, p, n, MappedMatrix.Type.FLOAT32, (b, k) -> {
+            java.util.Arrays.fill(scratch, 0.0);
+            store.addRangeInto(scratch, posFrom[k], posTo[k]);
+            for (int j = 0; j < n; j++) {
+                b.putFloat((float) scratch[j]);
+            }
+        });
+        MappedMatrix tm = q == 0 ? null : MappedMatrix.held(name, q, n, MappedMatrix.Type.FLOAT32, (b, r) -> {
+            store.copy(tradeOfRow[r], scratch);
+            for (int j = 0; j < n; j++) {
+                b.putFloat((float) scratch[j]);
+            }
+        });
+        Vectors rows = new com.ash.risk.kernel.vector.GroupedVectors(pm, tm, positionOf, posFrom, posTo, memberRow);
+        return new VarBook(businessDate, scenarioSet, scenarioDates, rows, tradeIds, trades, positionOf, positionIds, posFrom, posTo,
+                positions, nodes, bookRange, aggregates, failed, loadMillis, null, totals, cellColumns, splitPositions);
+    }
+
     /** {@code mapped} (the hot file), {@code heap}, or {@code sharded} (a date put together from its shards, DATA_ARCHITECTURE.md#13-var-sharding-how-it-is-built). */
     public String tier() {
         return hot != null ? "mapped" : sharded() ? "sharded" : "heap";

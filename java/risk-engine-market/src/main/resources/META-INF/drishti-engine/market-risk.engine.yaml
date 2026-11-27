@@ -157,6 +157,7 @@ options:
   component-window: { type: int, default: 5, min: 0, max: 50, label: Component VaR half-window, help: Ranks k - h to k + h are averaged. }
   scale-to-var: { type: bool, default: true, label: Scale components to VaR }
   threads: { type: int, default: 4, min: 1, max: 256, label: Summation threads, help: The sums are the same bits at any count. }
+  vector-tier: { type: enum, options: [ heap, mapped ], default: heap, label: Vector rows, help: "The rows as the host's VaR tier keeps them. heap: float64 rows as delivered; mapped: every position one float32 row (the float64 sum of its trades, converted once) and the trades of positions of several trades float32, as a mapped tier's hot file: the host and the engine agree to the bit (R2_CUT_PLAN MC-12). The aggregates of nodes and books stay float64 either way." }
   linear-algebra: { type: enum, options: [ native, java ], default: java, label: Linear algebra }
   exact-path:
     type: bool

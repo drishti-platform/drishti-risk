@@ -3,6 +3,14 @@
 
 ## 0.1.0 (unreleased)
 
+- `market-risk` (R2 MC-12): option `vector-tier` (`heap`, the default: float64 rows as delivered; `mapped`: the rows as a host's mapped
+  VaR tier keeps them). On `mapped` each book (USD, and each book converted from it) keeps every position as one float32 row, the
+  float64 sum of its trades converted once, and the trades of positions of several trades as float32 rows, in the hot file's layout
+  (`MappedMatrix.held`, `VarBook.withFloat32Rows`), read through the same `GroupedVectors` in the same reduction order; the node and book
+  aggregates stay float64. Drishti sets it from its tier (`drishti.var.tier.mode`), so row-set figures, position parts and every other
+  currency are the in-tree route's raw bits on the mapped tier too. `VarHotFileTest`: a heap book with float32 rows equals a hot file's
+  book to the bit (every position, trade, scope, random set and node, 1 and 4 threads).
+
 - `market-risk` (R2 lane G, part 4): `official-history` and `official-backtest` over `var-history`: a node's official records to the
   session's date (the latest result version of each date at the engine's confidence, the newest `days`), each record's VaR, ES and
   hypothetical P&L as stored, and their backtest (each day's hypothetical P&L against the record before: days, exceptions, the scaled

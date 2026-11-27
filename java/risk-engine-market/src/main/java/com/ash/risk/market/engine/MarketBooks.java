@@ -87,6 +87,9 @@ final class MarketBooks {
             add(b, rules, n, tail(n.vector(), w, n), n.pv(), null);
         }
         VarBook usd = b.build(sums);
+        if (o.float32Rows()) {
+            usd = usd.withFloat32Rows();                                // the host's mapped tier: float32 position rows (MC-12)
+        }
         if (currency == null || currency.isBlank() || "USD".equalsIgnoreCase(currency)) {
             return new Built(usd, cut, wfx);
         }
@@ -98,6 +101,9 @@ final class MarketBooks {
         VarBook converted = CurrencyBook.convert(usd, rep,
                 new VarBook.Builder(day.date, label, cut, MarketOptions.ROWS_PER_CHUNK, Long.MAX_VALUE), sums).book();
         usd.close();
+        if (o.float32Rows()) {
+            converted = converted.withFloat32Rows();                    // converted from the float32 rows, kept as float32 rows, as the host's
+        }
         return new Built(converted, cut, wfx);
     }
 

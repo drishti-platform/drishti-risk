@@ -124,6 +124,34 @@ public final class MappedMatrix implements Vectors, AutoCloseable {
         return new MappedMatrix(file, type, width, rows, per, maps);
     }
 
+    /**
+     * A matrix in the layout {@link #open} maps (row-major, little-endian, cut into the same pieces), held in memory: row {@code i} is
+     * written by {@code fill} into a buffer positioned at the row's first byte. What the engine reads where its host keeps the rows as a
+     * hot file's float32 matrix (R2_CUT_PLAN MC-12): the same element type, pieces and reduction order, so the same bits.
+     *
+     * @param name what a read after {@link #close} names (no file is behind it)
+     */
+    public static MappedMatrix held(Path name, int rows, int width, Type type, java.util.function.ObjIntConsumer<java.nio.ByteBuffer> fill) {
+        if (width <= 0 || rows < 0) {
+            throw new IllegalArgumentException("a matrix has a positive width and no negative rows");
+        }
+        long rowBytes = (long) width * type.bytes;
+        int per = (int) Math.max(1, (Integer.MAX_VALUE - 4096L) / rowBytes);
+        int pieces = rows == 0 ? 0 : (rows + per - 1) / per;
+        FileMaps.Mapping[] maps = new FileMaps.Mapping[pieces];
+        for (int p = 0; p < pieces; p++) {
+            int n = Math.min(per, rows - p * per);
+            java.nio.ByteBuffer b = java.nio.ByteBuffer.allocate((int) (n * rowBytes)).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+            for (int i = 0; i < n; i++) {
+                b.position((int) (i * rowBytes));
+                fill.accept(b, p * per + i);
+            }
+            b.clear();
+            maps[p] = new FileMaps.Mapping(b, () -> { });
+        }
+        return new MappedMatrix(name, type, width, rows, per, maps);
+    }
+
     /** How this JVM maps and releases files (Admin, the status answer). */
     public static String mappingMethod() {
         return FileMaps.method();

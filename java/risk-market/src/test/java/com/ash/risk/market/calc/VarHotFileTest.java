@@ -145,6 +145,45 @@ class VarHotFileTest {
         System.out.printf("float32 hot copy: bound %.3f, largest VaR difference %.3f on the synthetic bank%n", bound, worstVar);
     }
 
+    /**
+     * R2_CUT_PLAN MC-12: the engine's book with float32 rows ({@link VarBook#withFloat32Rows}) reads what a host's hot file holds, in the
+     * same order: every position, trade, scope and node to the raw bit, at 1 and 4 threads.
+     */
+    @Test
+    void aHeapBookWithFloat32RowsIsTheMappedBookToTheBit() {
+        VarBook f32 = heap.withFloat32Rows();
+        assertThat(f32.withFloat32Rows()).isSameAs(f32);
+        assertThat(mapped.withFloat32Rows()).isSameAs(mapped);
+        for (int p = 0; p < heap.positionCount(); p++) {
+            assertThat(f32.positionVector(p)).as("position " + p).containsExactly(mapped.positionVector(p));
+        }
+        for (int o = 0; o < heap.tradeCount(); o++) {
+            assertThat(f32.tradeVector(o)).as("trade " + o).containsExactly(mapped.tradeVector(o));
+        }
+        ScopeResolver fr = new ScopeResolver(f32, VarBookTest.defs());
+        ScopeResolver mr = new ScopeResolver(mapped, VarBookTest.defs());
+        Random r = new Random(5);
+        try (ParallelSums one = new ParallelSums(1, 64)) {
+            for (String s : List.of("BANK", "DESK:DESK-0-1", "LE:LE-1", "DESK:DESK-0-1 - TRD:T-3,T-4", "BOOK:BOOK-1-2-3 + POS:POS-5,POS-6",
+                    "WHERE:CURRENCY == 'EUR' and DIRECTION == 'SHORT'", "TRD:T-7,T-8,T-100", "POS:POS-1", "BANK - DESK:DESK-1-2")) {
+                OrdinalSet set = fr.resolve(s).set();
+                assertThat(f32.vector(set, sums)).as(s).containsExactly(mapped.vector(mr.resolve(s).set(), sums));
+                assertThat(f32.vector(set, one)).as(s + " (1 thread)").containsExactly(mapped.vector(set, sums));
+            }
+            for (int k = 0; k < 30; k++) {
+                OrdinalSet.Builder b = new OrdinalSet.Builder();
+                for (int i = r.nextInt(1800); i > 0; i--) {
+                    b.add(r.nextInt(1800));
+                }
+                OrdinalSet set = b.build();
+                assertThat(f32.vector(set, sums)).containsExactly(mapped.vector(set, sums));
+            }
+        }
+        for (VarBook.Node n : heap.nodes().values()) {
+            assertThat(f32.vector(n.members(), sums)).as(n.id()).containsExactly(mapped.vector(n.members(), sums));
+        }
+    }
+
     @Test
     void aTradeAndAPositionReadTheirOwnRows() {
         for (int p = 0; p < heap.positionCount(); p += 11) {
