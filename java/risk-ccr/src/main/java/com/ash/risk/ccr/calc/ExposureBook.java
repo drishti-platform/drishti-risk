@@ -355,6 +355,17 @@ public final class ExposureBook implements AutoCloseable {
             return paths;
         }
 
+        private boolean float32;
+
+        /**
+         * Keeps the heap matrices as float32 rows, each value rounded once as a mapped tier's hot file stores it and read into float64 as
+         * the hot file's rows are read (R2 MC-12: a host whose exposure tier is mapped and the engine then agree to the bit).
+         */
+        public Builder float32(boolean on) {
+            this.float32 = on;
+            return this;
+        }
+
         /**
          * The level columns of the configured column hierarchies (2.9.5): a row's {@code cols} carry their values after the seven fixed
          * columns, in this order, kept as each trade's {@link TradeInfo#attributes()}.
@@ -496,6 +507,17 @@ public final class ExposureBook implements AutoCloseable {
             if (hotFile == null) {
                 int g = grid.size();
                 int gp = grid.primaryCount();
+                if (float32) {
+                    Floats fv = new Floats(setIds.size() * g, p);
+                    Floats fe = new Floats(setIds.size() * gp, p);
+                    Floats fn = new Floats(setIds.size() * gp, p);
+                    for (int s = 0; s < rows.size(); s++) {
+                        fv.put(s * g, rows.get(s)[0]);
+                        fe.put(s * gp, rows.get(s)[1]);
+                        fn.put(s * gp, rows.get(s)[2]);
+                    }
+                    return new ExposureBook(grid, p, runId, batchId, run, setInfos, tradeInfos, fv, fe, fn, model, "heap-float32", null, intake);
+                }
                 Dense dv = new Dense(setIds.size() * g, p);
                 Dense de = new Dense(setIds.size() * gp, p);
                 Dense dn = new Dense(setIds.size() * gp, p);
@@ -642,6 +664,75 @@ public final class ExposureBook implements AutoCloseable {
         @Override
         public void copy(int row, double[] out) {
             System.arraycopy(data, row * width, out, 0, width);
+        }
+
+        @Override
+        public void addInto(double[] acc, int row) {
+            addRangeInto(acc, row, row + 1);
+        }
+
+        @Override
+        public void addRangeInto(double[] acc, int from, int to) {
+            for (int r = from; r < to; r++) {
+                int off = r * width;
+                for (int j = 0; j < width; j++) {
+                    acc[j] += data[off + j];
+                }
+            }
+        }
+    }
+
+    /**
+     * Rows of one width in float32 on the heap, read as {@link MappedMatrix}'s float32 rows are read: each value widened, a row copied as
+     * zero plus the row, sums in float64 in row order.
+     */
+    static final class Floats implements Vectors {
+        private final float[] data;
+        private final int rows;
+        private final int width;
+
+        Floats(int rows, int width) {
+            this.rows = rows;
+            this.width = width;
+            this.data = new float[rows * width];
+        }
+
+        void put(int firstRow, double[] values) {
+            int off = firstRow * width;
+            for (int i = 0; i < values.length; i++) {
+                data[off + i] = (float) values[i];
+            }
+        }
+
+        @Override
+        public int width() {
+            return width;
+        }
+
+        @Override
+        public int rows() {
+            return rows;
+        }
+
+        @Override
+        public int chunkCount() {
+            return 1;
+        }
+
+        @Override
+        public long bytes() {
+            return (long) data.length * Float.BYTES;
+        }
+
+        @Override
+        public double value(int row, int j) {
+            return data[row * width + j];
+        }
+
+        @Override
+        public void copy(int row, double[] out) {
+            java.util.Arrays.fill(out, 0, width, 0.0);
+            addInto(out, row);
         }
 
         @Override

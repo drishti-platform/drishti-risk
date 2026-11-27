@@ -190,7 +190,7 @@ final class CcrDay {
     ExposureBook book(Filter see, CcrOptions o, Control control) throws EngineException {
         ExposureGrid g = grid();
         int p = (int) num(run, "PATHS");
-        ExposureBook.Builder b = new ExposureBook.Builder(g, p, text(run, "RUN_ID"), text(run, "BATCH_ID"), Map.of(), o.model(), 0);
+        ExposureBook.Builder b = new ExposureBook.Builder(g, p, text(run, "RUN_ID"), text(run, "BATCH_ID"), Map.of(), o.model(), 0).float32(o.float32());
         for (PathRow r : paths) {
             Map<String, Object> m = r.row();
             if (r.mtm() == null || see != Filter.ALL && !see.test(c -> text(m, c))) {

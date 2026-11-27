@@ -79,6 +79,10 @@ class ExposureParityTest {
     }
 
     static ExposureBook build(Path hot) throws IOException {
+        return build(hot, false);
+    }
+
+    static ExposureBook build(Path hot, boolean float32) throws IOException {
         Path data = root().resolve("data/testdata/counterparty-risk");
         JsonNode[] run = new JsonNode[1];
         lines(data.resolve("simulation-run"), n -> run[0] = n);
@@ -93,7 +97,7 @@ class ExposureParityTest {
         ExposureGrid g = ExposureGrid.of(LocalDate.parse(run[0].get("BUSINESS_DATE").asText()), dates, roles, lb, tenors);
         int p = run[0].get("PATHS").asInt();
         ExposureBook.Builder b = new ExposureBook.Builder(g, p, run[0].get("RUN_ID").asText(), run[0].get("BATCH_ID").asText(), Map.of(),
-                ExposureMath.Model.LAGGED, 0);
+                ExposureMath.Model.LAGGED, 0).float32(float32);
         double[] values = new double[p];
         lines(data.resolve("exposure-path"), n -> {
             JsonNode m = n.get("MTM");
@@ -185,6 +189,50 @@ class ExposureParityTest {
         compare(mapped, "CPTY:ALDERSHOT", ref.at("/scopes/CPTY:CP-ALDERSHOT"), Math.pow(2, -23));
         assertThat(mapped.mapped()).isTrue();
         assertThat(mapped.hot().header().sets()).isEqualTo(8);
+    }
+
+    /**
+     * R2 MC-12: a heap book of float32 rows (the engine's {@code vector-tier: mapped}) answers every scope as the hot file's book does, to
+     * the bit: every netting set, the counterparty, the bank, a desk cut and a standalone trade, collateralised and not.
+     */
+    @Test
+    void aHeapBookOfFloat32RowsEqualsTheHotFileToTheBit() throws IOException {
+        try (ExposureBook f32 = build(null, true)) {
+            assertThat(f32.mapped()).isFalse();
+            assertThat(f32.matrixBytes()).isEqualTo(heap.matrixBytes() / 2);
+            List<String> scopes = new ArrayList<>(List.of("BANK", "CPTY:CP-ALDERSHOT", "TRD:" + heap.trade(0).id(),
+                    "DESK:" + heap.trade(heap.set(heap.setOrdinal("NS-ALDERSHOT-NY")).from()).desk() + " & CPTY:CP-ALDERSHOT"));
+            ref.get("sets").fieldNames().forEachRemaining(n -> scopes.add("NSET:" + n));
+            for (String sc : scopes) {
+                for (ExposureMath.Model m : ExposureMath.Model.values()) {
+                    ExposureCalc.Params p = new ExposureCalc.Params(0.95, m, ExposureMath.Rule.KTH, new double[] {0.95, 0.99}, 21, 0);
+                    ExposureMath.Stats a = evaluate(mapped, sc, p).stats;
+                    ExposureMath.Stats b = evaluate(f32, sc, p).stats;
+                    String w = sc + " " + m;
+                    assertThat(b.ce).as(w + " CE").isEqualTo(a.ce);
+                    assertThat(b.epe).as(w + " EPE").isEqualTo(a.epe);
+                    assertThat(b.eepe).as(w + " EEPE").isEqualTo(a.eepe);
+                    assertThat(b.peakEe).as(w + " peak EE").isEqualTo(a.peakEe);
+                    assertThat(b.ee).as(w + " EE").containsExactly(a.ee);
+                    assertThat(b.ene).as(w + " ENE").containsExactly(a.ene);
+                    assertThat(b.eee).as(w + " EEE").containsExactly(a.eee);
+                    assertThat(b.eeUncoll).as(w + " EE uncoll").containsExactly(a.eeUncoll);
+                    assertThat(b.peakPfe).as(w + " peak PFE").containsExactly(a.peakPfe);
+                    for (int q = 0; q < a.pfe.length; q++) {
+                        assertThat(b.pfe[q]).as(w + " PFE " + q).containsExactly(a.pfe[q]);
+                    }
+                }
+            }
+        }
+    }
+
+    static ExposureCalc.Result evaluate(ExposureBook b, String scope, ExposureCalc.Params p) {
+        ExposureScopes.Resolution r = new ExposureScopes(b, g -> java.util.Optional.empty()).resolve(scope);
+        return ExposureCalc.evaluate(b, r.trades(), r.standalone(), p, ids -> {
+            Map<String, double[]> out = new HashMap<>();
+            ids.forEach(i -> out.put(i, tradePaths.get(i)));
+            return out;
+        });
     }
 
     @Test

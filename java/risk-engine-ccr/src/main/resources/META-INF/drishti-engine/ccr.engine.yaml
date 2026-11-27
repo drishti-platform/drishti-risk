@@ -103,6 +103,7 @@ options:
   im-model: { type: enum, options: [ held, none ], default: held, label: Initial margin }
   alpha: { type: number, default: 1.4, min: 1, max: 10, label: IMM alpha, help: "EAD = alpha x EEPE in the pre-deal answer." }
   limit-near: { type: number, default: 0.8, min: 0.01, max: 1, label: Near share of a limit }
+  vector-tier: { type: enum, options: [ heap, mapped ], default: heap, label: Matrix rows, help: "The netting-set matrices as the host's exposure tier keeps them. heap: float64; mapped: every value, exposure and negative-exposure row float32 (rounded once, read into float64 sums), as a mapped tier's hot file: the host and the engine agree to the bit (R2_CUT_PLAN MC-12). Scope sums stay float64 either way." }
   simm-product-classes:
     type: records
     label: SIMM product classes

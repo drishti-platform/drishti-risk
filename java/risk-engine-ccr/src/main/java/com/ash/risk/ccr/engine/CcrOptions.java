@@ -26,10 +26,11 @@ import java.util.Map;
 
 /**
  * The engine's options, read once at init into the moved code's own method parameters: the exposure method, the pre-deal check's alpha
- * and limit rule, and SIMM's product classes by product group.
+ * and limit rule, SIMM's product classes by product group, and the element type of the netting-set matrices ({@code vector-tier}: float64
+ * on {@code heap}, float32 rows as a host's mapped exposure tier keeps them on {@code mapped}).
  */
 record CcrOptions(ExposureMath.Model model, ExposureMath.Rule rule, double[] confidences, double pfeConfidence, int window, boolean im, double alpha,
-        RiskLimits limits, Map<String, String> productClasses, String defaultProductClass) {
+        RiskLimits limits, Map<String, String> productClasses, String defaultProductClass, boolean float32) {
 
     @SuppressWarnings("unchecked")
     static CcrOptions read(Options o) {
@@ -46,7 +47,7 @@ record CcrOptions(ExposureMath.Model model, ExposureMath.Rule rule, double[] con
         return new CcrOptions(ExposureMath.Model.of(o.text("model")),
                 "interpolated".equals(o.text("rule")) ? ExposureMath.Rule.INTERPOLATED : ExposureMath.Rule.KTH, c, o.number("pfe-confidence"),
                 (int) o.integer("pfe-window"), !"none".equals(o.text("im-model")), o.number("alpha"), new RiskLimits(o.number("limit-near")),
-                Map.copyOf(pc), o.text("simm-default-product-class"));
+                Map.copyOf(pc), o.text("simm-default-product-class"), "mapped".equals(o.text("vector-tier")));
     }
 
     /** The SIMM product class of a record's product group (the bank's mapping, SIMM paragraph 6). */

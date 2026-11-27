@@ -3,6 +3,10 @@
 
 ## 0.1.0 (unreleased)
 
+- `ccr` (R2 MC-12, exposure): option `vector-tier` (`heap`, the default: float64 netting-set matrices; `mapped`: every value, exposure and
+  negative-exposure row float32, rounded once and read into float64 sums in row order, as a host's mapped exposure tier's hot file keeps
+  them; half the bytes). `ExposureParityTest.aHeapBookOfFloat32RowsEqualsTheHotFileToTheBit`: every netting set, the counterparty, the
+  bank, a desk cut and a standalone trade under each collateral model, every figure and profile point to the bit.
 - `market-risk` (R2 MC-12): option `vector-tier` (`heap`, the default: float64 rows as delivered; `mapped`: the rows as a host's mapped
   VaR tier keeps them). On `mapped` each book (USD, and each book converted from it) keeps every position as one float32 row, the
   float64 sum of its trades converted once, and the trades of positions of several trades as float32 rows, in the hot file's layout
