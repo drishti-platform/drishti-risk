@@ -122,7 +122,8 @@ params:
   collateral: { type: text, default: "", label: Collateral model, help: "lagged, current or none (the uncollateralised view); empty: the engine's model." }
   by: { type: text, default: netting-set, label: Parts, help: "netting-set, counterparty, legal-entity, trade or asset: the parts of exposure-contributions." }
   figure: { type: text, default: PFE, label: Figure, help: "EE, EPE or PFE: the figure exposure-contributions splits." }
-  at: { type: int, default: -1, min: -1, label: Primary point, help: "The primary grid point of an EE or PFE contribution; -1: the figure's own point (the peak)." }
+  at: { type: int, default: -1, min: -1, label: Primary point, help: "The primary grid point of an EE or PFE contribution or of a distribution; -1: the figure's own point (the peak; a distribution's: the peak PFE's)." }
+  bins: { type: int, default: 42, min: 1, max: 500, label: Histogram bins, help: "The bins of exposure-histogram." }
   counterparty: { type: text, default: "", label: Counterparty, help: The counterparty the new trade is with. }
   template: { type: text, default: "", label: Template trade, help: "A booked trade whose paths on the date's run are copied, scaled to the notional." }
   notional: { type: number, default: 0, min: 0, label: Notional, help: "0: the template's own notional." }
@@ -266,6 +267,43 @@ outputs:
       - { name: SCOPE, type: string, nullable: false, label: Scope }
       - { name: NETTING_SETS, type: integer, nullable: false, label: Netting sets }
       - { name: FLAGS, type: string, nullable: false, label: Flags }
+  exposure-distribution:
+    title: A scope's exposure distribution at a point
+    about: "The scope's exposure across the paths at one primary point (at; -1: the peak PFE's point at the request's confidence): its mean (EE), the share of paths without exposure, the number of paths, the lowest and highest path."
+    shape: row
+    params: [ scope, standalone, confidence, collateral, at ]
+    key: [ SCOPE ]
+    columns:
+      - { name: SCOPE, type: string, nullable: false, label: Scope }
+      - { name: POINT, type: integer, nullable: false, label: Point }
+      - { name: DATE, type: date, nullable: false, label: Date }
+      - { name: TENOR, type: string, nullable: true, label: Tenor }
+      - { name: MEAN, type: number, nullable: false, label: Mean (EE), measure: true }
+      - { name: ZERO_SHARE, type: number, nullable: false, label: Paths without exposure }
+      - { name: PATHS, type: integer, nullable: false, label: Paths }
+      - { name: LOW, type: number, nullable: false, label: Lowest path, measure: true }
+      - { name: HIGH, type: number, nullable: false, label: Highest path, measure: true }
+  exposure-histogram:
+    title: A scope's exposure histogram at a point
+    about: "The distribution's bins (bins of equal width from the lowest path to the highest; width 1 when every path is equal): each edge, and the paths from it to the next (the last edge has none)."
+    params: [ scope, standalone, confidence, collateral, at, bins ]
+    key: [ EDGE_INDEX ]
+    columns:
+      - { name: EDGE_INDEX, type: integer, nullable: false, label: Edge }
+      - { name: EDGE, type: number, nullable: false, label: From }
+      - { name: COUNT, type: integer, nullable: true, label: Paths }
+  exposure-fan:
+    title: A scope's exposure quantiles at every point
+    about: "The scope's exposure quantiles (5, 25, 50, 75, 90, 95, 97.5 and 99%) across the paths at every primary point, under the engine's quantile rule: the path fan around EE and a distribution's quantiles."
+    params: [ scope, standalone, confidence, collateral ]
+    key: [ POINT, QUANTILE ]
+    columns:
+      - { name: POINT, type: integer, nullable: false, label: Point }
+      - { name: QUANTILE, type: number, nullable: false, label: Quantile }
+      - { name: DATE, type: date, nullable: false, label: Date }
+      - { name: TENOR, type: string, nullable: true, label: Tenor }
+      - { name: T, type: number, nullable: false, label: Years }
+      - { name: VALUE, type: number, nullable: false, label: Exposure, measure: true }
   netting-set-collateral:
     title: Netting and collateral by netting set
     about: Each netting set's CSA terms, collateral and initial margin held, its MtM today, current exposure uncollateralised and collateralised, and EPE and peak PFE without and with collateral (the collateral's benefit).

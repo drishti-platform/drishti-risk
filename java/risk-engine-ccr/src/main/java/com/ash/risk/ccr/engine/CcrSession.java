@@ -89,7 +89,7 @@ final class CcrSession implements Session, Explaining {
 
     /** The outputs answered from the exposure book (they need the run and the paths). */
     static final Set<String> PATHS = Set.of("exposure-summary", "exposure-profile", "exposure-contributions", "scope-resolution", "netting-set-summary", "counterparty-summary",
-            "exposure-tree", "exposure-tree-ee", "exposure-run", "exposure-flags",
+            "exposure-tree", "exposure-tree-ee", "exposure-run", "exposure-flags", "exposure-distribution", "exposure-histogram", "exposure-fan",
             "netting-set-collateral", "pre-deal", "pre-deal-buckets");
     /** The inputs each output cannot be answered without, beyond the run and the paths. */
     static final Map<String, List<String>> NEEDS = Map.of(
@@ -133,6 +133,7 @@ final class CcrSession implements Session, Explaining {
         List<CcrSimm.Run> simm;
         List<CcrCollateral.View> collateral;
         List<TreeNode> tree;
+        Evaluated evaluated;
 
         Computed(Request request, Control control) {
             this.request = request;
@@ -166,6 +167,13 @@ final class CcrSession implements Session, Explaining {
                 simm = new CcrSimm(engine.descriptor(), engine.options(), day).runs(request, see(request, CcrExtras.SENSITIVITY));
             }
             return simm;
+        }
+
+        Evaluated evaluated() throws EngineException {
+            if (evaluated == null) {
+                evaluated = evaluate(book(), request);
+            }
+            return evaluated;
         }
 
         List<TreeNode> tree() throws EngineException {
@@ -204,6 +212,9 @@ final class CcrSession implements Session, Explaining {
                 case "exposure-tree-ee" -> treeEe(c.tree());
                 case "exposure-run" -> run(c.book());
                 case "exposure-flags" -> flags(c.book(), request);
+                case "exposure-distribution" -> distribution(c.book(), request, c.evaluated());
+                case "exposure-histogram" -> histogram(c.book(), request, c.evaluated());
+                case "exposure-fan" -> fan(c.book(), c.evaluated(), control);
                 case "netting-set-collateral" -> new CcrCollateral(engine.descriptor(), engine.options()).table(c.collateral());
                 case "pre-deal" -> new CcrPreDeal(engine.descriptor(), engine.options(), day).table(c.check());
                 case "pre-deal-buckets" -> new CcrPreDeal(engine.descriptor(), engine.options(), day).buckets(c.check());
@@ -501,6 +512,73 @@ final class CcrSession implements Session, Explaining {
     private Table flags(ExposureBook b, Request request) throws EngineException {
         Evaluated e = evaluate(b, request);
         return Tables.of(engine.descriptor().schema("exposure-flags")).row(e.scope(), (long) e.result().pieces.size(), String.join(",", e.result().flags)).build();
+    }
+
+    /** The quantiles of exposure-fan: the path fan's (5 to 95%) and a distribution's (50 to 99%). */
+    static final double[] FAN = {0.05, 0.25, 0.5, 0.75, 0.9, 0.95, 0.975, 0.99};
+
+    /** The primary point of a distribution: the request's {@code at}, else the peak PFE's point at the request's confidence (the first when none). */
+    private static int point(ExposureBook b, Request request, Evaluated e) throws EngineException {
+        int at = request.param("at") instanceof Number n ? n.intValue() : -1;
+        if (at < -1 || at >= b.grid().primaryCount()) {
+            throw new EngineException("RSK-3103", Kind.REFUSED, "at is a primary point from 0 to " + (b.grid().primaryCount() - 1) + ", or -1, not " + at);
+        }
+        ExposureMath.Stats s = e.result().stats;
+        return at >= 0 ? at : Math.max(0, s.peakAt[s.at(e.q())]);
+    }
+
+    /** A scope's exposure across the paths at one primary point: the point, its mean (EE), the share of paths without exposure, the range. */
+    private Table distribution(ExposureBook b, Request request, Evaluated e) throws EngineException {
+        int i = point(b, request, e);
+        int pp = b.paths();
+        double[] sorted = ExposureMath.sortedRow(e.result().e, i, pp);
+        int zero = 0;
+        for (double x : sorted) {
+            zero += x <= 0 ? 1 : 0;
+        }
+        ExposureGrid g = b.grid();
+        int k = g.primaryAt(i);
+        return Tables.of(engine.descriptor().schema("exposure-distribution")).row(e.scope(), (long) i, g.date(k).toString(), g.tenor(k),
+                e.result().stats.ee[i], (double) zero / pp, (long) pp, sorted[0], sorted[pp - 1]).build();
+    }
+
+    /** The histogram of that distribution: {@code bins} bins of equal width from the lowest to the highest path (one of width 1 when all are equal). */
+    private Table histogram(ExposureBook b, Request request, Evaluated e) throws EngineException {
+        int i = point(b, request, e);
+        int n = request.param("bins") instanceof Number x ? x.intValue() : 42;
+        if (n < 1 || n > 500) {
+            throw new EngineException("RSK-3103", Kind.REFUSED, "bins is from 1 to 500, not " + n);
+        }
+        int pp = b.paths();
+        double[] sorted = ExposureMath.sortedRow(e.result().e, i, pp);
+        double lo = sorted[0];
+        double hi = sorted[pp - 1];
+        double w = hi > lo ? (hi - lo) / n : 1;
+        long[] counts = new long[n];
+        for (double x : sorted) {
+            counts[Math.min(n - 1, (int) ((x - lo) / w))]++;
+        }
+        Tables.Builder t = Tables.of(engine.descriptor().schema("exposure-histogram"));
+        for (int k = 0; k <= n; k++) {
+            t.row((long) k, lo + k * w, k < n ? counts[k] : null);
+        }
+        return t.build();
+    }
+
+    /** The scope's exposure quantiles at every primary point ({@link #FAN}), under the engine's quantile rule. */
+    private Table fan(ExposureBook b, Evaluated e, Control control) throws EngineException {
+        ExposureGrid g = b.grid();
+        ExposureMath.Rule rule = engine.params().rule();
+        Tables.Builder t = Tables.of(engine.descriptor().schema("exposure-fan"));
+        for (int i = 0; i < g.primaryCount(); i++) {
+            control.check();
+            double[] sorted = ExposureMath.sortedRow(e.result().e, i, b.paths());
+            int k = g.primaryAt(i);
+            for (double q : FAN) {
+                t.row((long) i, q, g.date(k).toString(), g.tenor(k), g.time(k), ExposureMath.quantileSorted(sorted, q, rule));
+            }
+        }
+        return t.build();
     }
 
     @Override
