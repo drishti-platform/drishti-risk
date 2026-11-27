@@ -54,7 +54,7 @@ import java.util.Set;
 final class MarketScopes {
 
     static final Set<String> OUTPUTS = Set.of("scope-index", "scope-positions", "scope-position-values", "scope-nodes", "scope-words",
-            "scope-limits", "scope-var", "scope-correlation");
+            "scope-limits", "scope-var", "scope-correlation", "scope-path", "scope-scenarios");
 
     private final Descriptor descriptor;
     private final MarketOptions options;
@@ -91,6 +91,8 @@ final class MarketScopes {
             case "scope-position-values" -> positionValues(b);
             case "scope-nodes" -> nodes(b);
             case "scope-correlation" -> scopeCorrelation(request, control, usd);
+            case "scope-path" -> scopePath(request, control, usd);
+            case "scope-scenarios" -> scenarios(usd);
             default -> scopeVar(request, control, usd);
         };
     }
@@ -167,6 +169,46 @@ final class MarketScopes {
         VarCalc.Measures ms = options.calc().measures(a.v());
         Tables.Builder t = Tables.of(descriptor.schema("scope-var"));
         t.row((long) a.members(), (long) a.hidden(), ms.var(), ms.es(), ms.varScenario() < 0 ? null : (long) ms.varScenario(), a.v().clone());
+        return t.build();
+    }
+
+    /**
+     * The rows' P&amp;L path (EN-70: a path is the aggregate's vector, ranked): the summed scenario P&amp;L, the scenarios worst first in the
+     * measures' own order (the order the VaR and ES are read from, so a ranked table and the VaR agree), the VaR rank and ES count, and a
+     * histogram of {@code bins} equal bins. The VaR and ES are {@link #scopeVar}'s to the bit (the same sum and measures).
+     */
+    private Table scopePath(Request request, Control control, MarketBooks.Built usd) throws EngineException {
+        Summed a = summed(request, control, usd, request.param("rows"), request.param("node"));
+        if (a == null) {
+            return null;
+        }
+        VarCalc.Measures ms = options.calc().measures(a.v());
+        Object bp = request.param("bins");
+        int bins = bp instanceof Number n ? n.intValue() : 40;
+        if (bins < 1 || bins > 10_000) {
+            throw new EngineException("ENG-3001", Kind.REFUSED, "bins is 1 to 10000, not " + bins);
+        }
+        VarCalc.Histogram h = VarCalc.histogram(a.v(), bins);
+        double[] order = new double[ms.order().length];
+        for (int i = 0; i < order.length; i++) {
+            order[i] = ms.order()[i];
+        }
+        double[] counts = new double[h.counts().length];
+        for (int i = 0; i < counts.length; i++) {
+            counts[i] = h.counts()[i];
+        }
+        Tables.Builder t = Tables.of(descriptor.schema("scope-path"));
+        t.row((long) a.members(), (long) a.hidden(), ms.var(), ms.es(), ms.varScenario() < 0 ? null : (long) ms.varScenario(), (long) ms.k(),
+                (long) ms.esCount(), a.v().clone(), order, h.edges().clone(), counts);
+        return t.build();
+    }
+
+    /** The window's scenario dates, oldest first: what a scope's PNL index means. */
+    private Table scenarios(MarketBooks.Built usd) {
+        Tables.Builder t = Tables.of(descriptor.schema("scope-scenarios"));
+        for (int j = 0; j < usd.scenarios().size(); j++) {
+            t.row((long) j, usd.scenarios().get(j).toString());
+        }
         return t.build();
     }
 

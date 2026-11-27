@@ -214,6 +214,7 @@ params:
   curvature-source: { type: enum, options: [ revaluation, gamma ], default: revaluation, label: Curvature source }
   attribute: { type: text, default: DESK, label: Contribution attribute }
   against: { type: list, items: int, label: Against, help: "A second row set (ordinals of scope-index) the rows are measured against: the firm for a desk, an index's rows for a position." }
+  bins: { type: int, default: 40, label: Histogram bins, help: "The P&L path histogram's equal bins." }
   rows: { type: list, items: int, label: Rows, help: "The ordinals of scope-index a scope resolved to (the host resolves every scope kind; the caller's visibility selects from them)." }
   trades:
     type: table
@@ -558,6 +559,35 @@ outputs:
       - { name: ES, type: number, nullable: false, label: Expected shortfall, measure: true }
       - { name: VAR_SCENARIO, type: integer, nullable: true, label: VaR scenario }
       - { name: PNL, type: list, nullable: false, label: Scenario P&L }
+  scope-path:
+    title: The P&L path of a row set
+    about: The rows' summed scenario P&L (PNL, oldest first) as the caller sees it, ranked worst first (ORDER, scenario indices; near ties by scenario date, the older first), the VaR rank K and the ES count, and a histogram of BINS equal bins (EDGES, COUNTS); a node whole takes its stored aggregate. The VaR and ES are scope-var's to the bit.
+    params: [ scenario-set, window, currency, rows, node, bins ]
+    needs: [ scenario-set, fx-scenario ]
+    key: [ MEMBERS ]
+    columns:
+      - { name: MEMBERS, type: integer, nullable: false, label: Members }
+      - { name: HIDDEN, type: integer, nullable: false, label: Rows the caller may not see }
+      - { name: VAR, type: number, nullable: false, label: VaR, measure: true }
+      - { name: ES, type: number, nullable: false, label: Expected shortfall, measure: true }
+      - { name: VAR_SCENARIO, type: integer, nullable: true, label: VaR scenario }
+      - { name: K, type: integer, nullable: false, label: VaR rank }
+      - { name: ES_COUNT, type: integer, nullable: false, label: Scenarios in the ES }
+      - { name: PNL, type: list, nullable: false, label: Scenario P&L }
+      - { name: ORDER, type: list, nullable: false, label: Scenarios worst first }
+      - { name: EDGES, type: list, nullable: false, label: Histogram edges }
+      - { name: COUNTS, type: list, nullable: false, label: Histogram counts }
+  scope-scenarios:
+    title: The scenario dates of a window
+    about: One row per scenario of the set's window, oldest first (INDEX is the position in a scope's PNL).
+    shape: series
+    axis: DATE
+    params: [ scenario-set, window ]
+    needs: [ scenario-set, fx-scenario ]
+    key: [ INDEX ]
+    columns:
+      - { name: INDEX, type: integer, nullable: false, label: Scenario }
+      - { name: DATE, type: date, nullable: false, label: Scenario date }
   scope-correlation:
     title: Correlation and beta of a row set against another
     about: The Pearson correlation of the rows' summed scenario P&L with the other row set's, and the beta (covariance over the other's variance), over the same scenarios and currency, each seen through the caller's visibility.
@@ -571,7 +601,7 @@ outputs:
       - { name: CORRELATION, type: number, nullable: true, label: Correlation, measure: true }
       - { name: BETA, type: number, nullable: true, label: Beta, measure: true }
       - { name: VOLATILITY, type: number, nullable: true, label: Volatility of the P&L }
-      - { name: AGAINST_VOLATILITY, type: number, nullable: true, label: Volatility of the other's P&L }
+      - { name: AGAINST_VOLATILITY, type: number, nullable: true, label: Volatility of the other set P&L }
   what-if:
     title: What-if on supplied vectors
     about: A node's VaR and ES before and after hypothetical trades whose scenario P&L the caller supplies (the engine prices nothing), each trade's standalone, incremental and component VaR, and the stressed VaR of the worst window before and after.

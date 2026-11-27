@@ -3,6 +3,10 @@
 
 ## 0.1.0 (unreleased)
 
+- `market-risk` (R2 lane G): `scope-path` (a row set's P&L path: the summed scenario P&L, the scenarios worst first in the
+  measures' own order, the VaR rank, the ES count and a histogram of `bins` equal bins; VaR and ES are `scope-var`'s to the bit) and
+  `scope-scenarios` (the window's scenario dates, what a PNL index means). The descriptor parses again: a flow-mapping label of
+  `scope-correlation` held an apostrophe, so `market-risk` was "not installed" in a host (the JAR of `264b8ff` never started).
 - The engines' remaining outputs (R1, branch `r1/outputs`), each with its descriptor entries, explanation and workbook part:
   `market-risk` adds `node-pvar` and `node-pvar-components` (parametric VaR, equal or EWMA), `node-var-horizon` (stressed set, 10-day by
   the square root of 10 or overlapping sums), `stress-window` (from `pnl-history`), `backtest` and `backtest-days` (official records of
