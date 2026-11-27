@@ -88,7 +88,7 @@ final class CcrSession implements Session, Explaining {
     }
 
     /** The outputs answered from the exposure book (they need the run and the paths). */
-    static final Set<String> PATHS = Set.of("exposure-summary", "exposure-profile", "netting-set-summary", "counterparty-summary",
+    static final Set<String> PATHS = Set.of("exposure-summary", "exposure-profile", "exposure-contributions", "scope-resolution", "netting-set-summary", "counterparty-summary",
             "netting-set-collateral", "pre-deal", "pre-deal-buckets");
     /** The inputs each output cannot be answered without, beyond the run and the paths. */
     static final Map<String, List<String>> NEEDS = Map.of(
@@ -187,6 +187,8 @@ final class CcrSession implements Session, Explaining {
             tables.add(switch (out) {
                 case "exposure-summary" -> summary(c.book(), request);
                 case "exposure-profile" -> profile(c.book(), request);
+                case "exposure-contributions" -> contributions(c.book(), request, control);
+                case "scope-resolution" -> resolution(c.book(), request);
                 case "netting-set-summary" -> sets(c.book(), control);
                 case "counterparty-summary" -> counterparties(c.book(), request, control);
                 case "netting-set-collateral" -> new CcrCollateral(engine.descriptor(), engine.options()).table(c.collateral());
@@ -330,6 +332,42 @@ final class CcrSession implements Session, Explaining {
             t.row((long) i, g.date(k).toString(), g.tenor(k), s.ee[i], s.ene[i], s.eee[i], s.pfe[q][i], s.eeUncoll[i]);
         }
         return t.build();
+    }
+
+    /**
+     * A scope's contributions to one figure by its parts ({@code by}: netting-set, counterparty, legal-entity, trade or asset; {@code figure}:
+     * EE, EPE or PFE; {@code at}: a primary point, -1 the figure's own point), computed as Drishti's exposure route computes them
+     * ({@link ExposureCalc#parts}, {@link ExposureCalc#contributions}), every part in the calculation's order ({@code RANK}).
+     */
+    private Table contributions(ExposureBook b, Request request, Control control) throws EngineException {
+        String by = String.valueOf(request.param("by")).strip().toLowerCase(java.util.Locale.ROOT);
+        String figure = String.valueOf(request.param("figure")).strip().toUpperCase(java.util.Locale.ROOT);
+        if (!List.of("netting-set", "counterparty", "legal-entity", "trade", "asset").contains(by)) {
+            throw new EngineException("RSK-3103", Kind.REFUSED, "by is netting-set, counterparty, legal-entity, trade or asset, not " + by);
+        }
+        if (!List.of("EE", "EPE", "PFE").contains(figure)) {
+            throw new EngineException("RSK-3103", Kind.REFUSED, "figure is EE, EPE or PFE, not " + figure);
+        }
+        int at = request.param("at") instanceof Number n ? n.intValue() : -1;
+        if (at < -1 || at >= b.grid().primaryCount()) {
+            throw new EngineException("RSK-3103", Kind.REFUSED, "at is a primary point from 0 to " + (b.grid().primaryCount() - 1) + ", or -1, not " + at);
+        }
+        Evaluated e = evaluate(b, request);
+        control.check();
+        List<ExposureCalc.Contribution> cs = ExposureCalc.contributions(e.result(), ExposureCalc.parts(e.result(), by, this::paths), figure, at);
+        Tables.Builder t = Tables.of(engine.descriptor().schema("exposure-contributions"));
+        long rank = 0;
+        for (ExposureCalc.Contribution c : cs) {
+            t.row(rank++, c.key(), c.scope(), c.label(), c.kind(), c.value(), c.pct(), c.incremental());
+        }
+        return t.build();
+    }
+
+    /** How the request's scope reads on this book: its canonical text, its kind (bank, netting-set, counterparty, ...) and its id. */
+    private Table resolution(ExposureBook b, Request request) {
+        String scope = String.valueOf(request.param("scope"));
+        ExposureScopes.Resolution r = new ExposureScopes(b, g -> Optional.empty()).resolve(scope == null || scope.isBlank() ? "BANK" : scope);
+        return Tables.of(engine.descriptor().schema("scope-resolution")).row(scope, r.canonical(), r.kind(), r.id(), (long) r.trades().size()).build();
     }
 
     private Table sets(ExposureBook b, Control control) throws EngineException {

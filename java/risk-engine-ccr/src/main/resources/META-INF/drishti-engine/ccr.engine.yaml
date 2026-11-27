@@ -120,6 +120,9 @@ params:
   standalone: { type: bool, default: false, label: Standalone, help: "True: the scope's trades as if they were netted only among themselves." }
   confidence: { type: number, default: 0, min: 0, max: 0.9999, label: PFE confidence, help: "The PFE confidence of the answer (above 0.5); 0: the engine's pfe-confidence." }
   collateral: { type: text, default: "", label: Collateral model, help: "lagged, current or none (the uncollateralised view); empty: the engine's model." }
+  by: { type: text, default: netting-set, label: Parts, help: "netting-set, counterparty, legal-entity, trade or asset: the parts of exposure-contributions." }
+  figure: { type: text, default: PFE, label: Figure, help: "EE, EPE or PFE: the figure exposure-contributions splits." }
+  at: { type: int, default: -1, min: -1, label: Primary point, help: "The primary grid point of an EE or PFE contribution; -1: the figure's own point (the peak)." }
   counterparty: { type: text, default: "", label: Counterparty, help: The counterparty the new trade is with. }
   template: { type: text, default: "", label: Template trade, help: "A booked trade whose paths on the date's run are copied, scaled to the notional." }
   notional: { type: number, default: 0, min: 0, label: Notional, help: "0: the template's own notional." }
@@ -163,6 +166,31 @@ outputs:
       - { name: EEE, type: number, nullable: false, label: Effective EE, measure: true }
       - { name: PFE, type: number, nullable: false, label: PFE, measure: true }
       - { name: EE_UNCOLL, type: number, nullable: false, label: EE uncollateralised, measure: true }
+  exposure-contributions:
+    title: Contributions to a scope's exposure
+    about: "Each part of the scope (by netting set, counterparty, legal entity, trade or asset) and its contribution to one figure (EE, EPE or PFE; at a primary point, or the figure's own: the peak EE, EPE, the peak PFE), its share and, for PFE, its incremental exposure; in the calculation's order (RANK). Trades and assets read each trade's paths."
+    params: [ scope, standalone, confidence, collateral, by, figure, at ]
+    key: [ RANK ]
+    columns:
+      - { name: RANK, type: integer, nullable: false, label: Order }
+      - { name: KEY, type: string, nullable: false, label: Part }
+      - { name: SCOPE, type: string, nullable: true, label: Part scope }
+      - { name: LABEL, type: string, nullable: true, label: Label }
+      - { name: KIND, type: string, nullable: false, label: Kind }
+      - { name: VALUE, type: number, nullable: false, label: Contribution, measure: true }
+      - { name: PCT, type: number, nullable: true, label: Share }
+      - { name: INCREMENTAL, type: number, nullable: true, label: Incremental }
+  scope-resolution:
+    title: How a scope reads
+    about: The scope's canonical text, its kind (bank, netting-set, counterparty, group, legal-entity, desk, book, trade, trades or adhoc), its id when it names one, and the trades it holds that the request sees.
+    params: [ scope ]
+    key: [ SCOPE ]
+    columns:
+      - { name: SCOPE, type: string, nullable: false, label: Scope }
+      - { name: CANONICAL, type: string, nullable: false, label: Canonical }
+      - { name: KIND, type: string, nullable: false, label: Kind }
+      - { name: ID, type: string, nullable: true, label: Id }
+      - { name: TRADES, type: integer, nullable: false, label: Trades }
   netting-set-summary:
     title: Exposure figures of every netting set
     about: One row per netting set, standalone.

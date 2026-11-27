@@ -3,6 +3,9 @@
 
 ## 0.1.0 (unreleased)
 
+- `ccr`: new outputs `exposure-contributions` (a scope's parts by netting set, counterparty, legal entity, trade or asset and each part's
+  contribution to EE, EPE or PFE, its share and incremental PFE, in the calculation's order `RANK`; params `by`, `figure`, `at`) and
+  `scope-resolution` (a scope's canonical text, kind, id and trades), for Drishti's `/scope/contributions` on the engine path (R2).
 - `ccr`: `counterparty-summary` adds `LIMIT_ID` and `LIMIT`, the counterparty's stored credit limit as the pre-deal check reads it
   (`credit-limit`, the first by id; empty without one), so a host's exposure Home joins nothing itself (R2, Drishti's role Homes).
 - `ccr` (R2 MC-12, exposure): option `vector-tier` (`heap`, the default: float64 netting-set matrices; `mapped`: every value, exposure and
