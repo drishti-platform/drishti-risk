@@ -292,8 +292,8 @@ outputs:
       - { name: ES_UNITS, type: integer, nullable: false, label: ES (whole units) }
   node-pvar:
     title: Parametric VaR and ES by hierarchy node
-    about: For every node, the normal (variance-covariance) VaR z sigma - mu (z, PVAR and PES within relative 1e-12, as the normal quantile is computed with the platform's exp and log, whose last bit may differ between JVMs) and ES sigma phi(z_ES)/(1 - c_ES) - mu from the node's scenario P&L (equal or EWMA weights), with the historical VaR beside it, the scenarios beyond the parametric VaR, and the fit's shape (skewness, excess kurtosis) and the ES quantile and factor a host's tooltip shows.
-    params: [ scenario-set, window, currency ]
+    about: For every node, the normal (variance-covariance) VaR z sigma - mu (z, PVAR and PES within relative 1e-12, as the normal quantile is computed with the platform's exp and log, whose last bit may differ between JVMs) and ES sigma phi(z_ES)/(1 - c_ES) - mu from the node's scenario P&L (equal or EWMA weights), with the historical VaR beside it, the scenarios beyond the parametric VaR, and the fit's shape (skewness, excess kurtosis) and the ES quantile and factor a host's tooltip shows. Through a horizon or the stress set (stressed, horizon, ten-day-method) the fit is of each node's vector through that lens (the 1-day P&L times the square root of 10, or overlapping sums of 10 days, on the normal or the stress set), HVAR and K the lens's historical figures.
+    params: [ scenario-set, window, currency, stressed, horizon, ten-day-method ]
     needs: [ scenario-set, fx-scenario ]
     key: [ NODE_ID ]
     columns:

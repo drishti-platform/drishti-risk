@@ -59,13 +59,19 @@ final class MarketParametric {
     }
 
     Table nodes(VarBook b) {
+        return nodes(b, null);
+    }
+
+    /** Every node's figures; through {@code lens} (a horizon or the stress set: null for the book's own 1-day vectors) the lens's vectors. */
+    Table nodes(VarBook b, com.ash.risk.market.calc.VarLens lens) {
         Tables.Builder t = Tables.of(descriptor.schema("node-pvar"));
         String set = b.scenarioSet().replaceFirst("/\\d+$", "");          // the set's id: a book cut to a window is labelled id/window
         String last = b.scenarioDates().isEmpty() ? null : b.scenarioDates().get(b.scenarioDates().size() - 1).toString();
         for (VarBook.Node x : b.nodes().values()) {
-            double[] v = b.aggregate(x.id());
+            double[] one = b.aggregate(x.id());
+            double[] v = lens == null ? one : lens.apply(one);
             ParametricVar.Figures f = figures(v);
-            VarCalc.Measures h = options.calc().measures(v);
+            VarCalc.Measures h = lens == null ? options.calc().measures(v) : lens.measures(options.calc(), one, v);
             t.row(x.id(), x.hierarchy(), (long) v.length, f.fit().mu(), f.fit().sigma(), f.z(), f.var(), f.es(), h.var(),
                     (long) f.beyond(), f.expectedBeyond(), f.fit().skew(), f.fit().excessKurtosis(), f.zEs(), f.esFactor(), (long) h.k(),
                     set, last);

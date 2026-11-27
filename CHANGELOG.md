@@ -11,7 +11,10 @@
   host shows beside them (each point's date, result version and capture id: `var-history` now reads `CAPTURE_ID`; the weekdays without a
   record as dates, a weekday without desk P&L a holiday; the VaR and stressed VaR averages with the records they take, summed in the
   host's order): Drishti's `GET /statistics` on the engine path, every number to the bit. `node-pvar-components` also gives the moments
-  each component is made of (`SIGMA`, `MU`, `COV`): Drishti's contributions' parametric columns on the engine path.
+  each component is made of (`SIGMA`, `MU`, `COV`): Drishti's contributions' parametric columns on the engine path. `node-pvar` takes
+  `stressed`, `horizon` and `ten-day-method`: each node's fit through that lens (the lens's own vectors on the normal or the stress set;
+  `HVAR` and `K` the lens's), Drishti's parametric block through a horizon or the stress set; its cells through a lens are not explained
+  and have no workbook part yet (refused in words).
 
 - `market-risk` (R2 lane G, part 3): `scope-backtest`, the replayed history of a row set (the newest `days` scenario P&Ls, summed as
   `scope-var` sums the rows, against the set's VaR of the date, each day tested against the VaR before it by `Backtest`: days,

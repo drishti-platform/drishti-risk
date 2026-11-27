@@ -190,7 +190,8 @@ final class MarketSession implements Session, Explaining {
             return new MarketScopes(engine.descriptor(), o, engine.sums(), this).table(c.request, c.control, out);
         }
         if (BOOK.contains(out)) {
-            MarketBooks.Built b = out.equals("node-var-horizon") ? c.horizon() : c.book();
+            boolean lensed = out.equals("node-var-horizon") || out.equals("node-pvar") && lensed(request);   // node-pvar through a lens
+            MarketBooks.Built b = lensed ? c.horizon() : c.book();
             if (b == null) {
                 return null;
             }
@@ -199,7 +200,8 @@ final class MarketSession implements Session, Explaining {
                 case "node-components" -> t.nodeComponents(b.book(), c.control);
                 case "basket-var" -> t.basketVar(b, day, String.valueOf(request.param("currency")));
                 case "headline" -> t.headline(b.book());
-                case "node-pvar" -> new MarketParametric(engine.descriptor(), o).nodes(b.book());
+                case "node-pvar" -> new MarketParametric(engine.descriptor(), o).nodes(b.book(), lensed ? new MarketHorizon(engine.descriptor(), o)
+                        .lens(request) : null);
                 case "node-pvar-components" -> new MarketParametric(engine.descriptor(), o).components(b.book(), c.control);
                 case "node-var-horizon" -> {
                     MarketHorizon h = new MarketHorizon(engine.descriptor(), o);
@@ -231,6 +233,11 @@ final class MarketSession implements Session, Explaining {
             case "frtb-contributions" -> s.contributionTable(frtb(c, s), String.valueOf(request.param("attribute")));
             default -> throw new EngineException("ENG-3003", Kind.REFUSED, "market-risk has no output " + out);
         };
+    }
+
+    /** True when a request asks a horizon or the stress set (node-pvar then fits each node's vector through that lens). */
+    private static boolean lensed(Request request) {
+        return Boolean.TRUE.equals(request.param("stressed")) || "10d".equals(String.valueOf(request.param("horizon")));
     }
 
     private String setOf(Request request) {
@@ -415,6 +422,10 @@ final class MarketSession implements Session, Explaining {
         MarketExplain historical = new MarketExplain(o, engine.sums());
         String out = cell.output();
         if (BOOK.contains(out)) {
+            if (out.equals("node-pvar") && lensed(request)) {
+                throw new EngineException("ENG-3005", Kind.REFUSED, "node-pvar is explained on the 1-day normal set; through a horizon or the "
+                        + "stress set its cells are not explained yet");
+            }
             MarketBooks.Built b = out.equals("node-var-horizon") ? c.horizon() : c.book();
             if (b == null) {
                 throw new EngineException("ENG-3005", Kind.REFUSED, "the cell is not in this request's answer: the reporting currency has no FX");
@@ -466,7 +477,11 @@ final class MarketSession implements Session, Explaining {
                         parts.add(new MarketWorkbook(c.book(), o, request.outputs().contains("headline")));
                     }
                 }
-                case "node-pvar" -> parts.add(new MarketParametric(engine.descriptor(), o).part(c.book(), request.outputs().contains("node-pvar-components")));
+                case "node-pvar" -> {
+                    if (!lensed(request)) {                                // through a horizon or the stress set: no workbook part yet
+                        parts.add(new MarketParametric(engine.descriptor(), o).part(c.book(), request.outputs().contains("node-pvar-components")));
+                    }
+                }
                 case "node-pvar-components" -> {
                     if (!request.outputs().contains("node-pvar")) {
                         parts.add(new MarketParametric(engine.descriptor(), o).part(c.book(), true));
