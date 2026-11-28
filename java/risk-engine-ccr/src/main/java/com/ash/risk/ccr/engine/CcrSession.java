@@ -183,7 +183,8 @@ final class CcrSession implements Session, Explaining {
                 ExposureBook b = book();
                 ExposureCalc.Params prm = params(request);
                 ExposureScopes.Groups gs = groups(request);
-                official = new CcrOfficial(engine.descriptor()).evaluate(request, scope -> CcrSession.this.evaluate(b, scope, false, prm, gs), control);
+                official = new CcrOfficial(engine.descriptor()).evaluate(request, scope -> CcrSession.this.evaluate(b, scope, false, prm, gs),
+                        ids -> CcrSession.this.members(b, ids, prm), control);
             }
             return official;
         }
@@ -385,6 +386,27 @@ final class CcrSession implements Session, Explaining {
     }
 
     private record Evaluated(String scope, ExposureCalc.Result result, double q) {}
+
+    /** A set of trades the host resolved, evaluated as a scope that is not standalone (a hierarchy node's trades: each netting set whole or partial). */
+    private ExposureCalc.Result members(ExposureBook b, List<String> ids, ExposureCalc.Params prm) throws EngineException {
+        int[] ord = new int[ids.size()];
+        int n = 0;
+        List<String> unknown = new ArrayList<>();
+        for (String id : ids) {
+            int t = b.tradeOrdinal(id);
+            if (t < 0) {
+                unknown.add(id);
+            } else {
+                ord[n++] = t;
+            }
+        }
+        if (!unknown.isEmpty()) {
+            throw new EngineException("RSK-3101", Kind.REFUSED, "the scope's members name trades the date does not hold: "
+                    + String.join(", ", unknown.subList(0, Math.min(5, unknown.size()))));
+        }
+        java.util.Arrays.sort(ord, 0, n);
+        return ExposureCalc.evaluate(b, com.ash.risk.kernel.vector.OrdinalSet.of(java.util.Arrays.copyOf(ord, n)), false, prm, this::paths);
+    }
 
     /** The trades' full paths (grid points × paths), for pieces that are part of a netting set. */
     Map<String, double[]> paths(java.util.Collection<String> ids) {

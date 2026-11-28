@@ -269,3 +269,14 @@ cases:
           rows:
             - [ NS-1, 0, CP-1, false, 25, 30, 60, "0x40452d2d2d2d2d2e" ]
             - [ NS-2, 1, CP-2, false, 10.623287671232877, 12.5, 25, "0x4031a5a5a5a5a5a6" ]
+
+  - id: official-figures-of-a-node-the-host-resolves
+    source: "by hand: a hierarchy node the host resolves to T1 and T3 (scope-members): NS-2 whole (T3) and NS-1 in part (T1 alone of it, its own values: exposure 40|0, 60|10, 30|0), never standalone: EE 30, 47.5, 25, PFE 45, 60, 40; CE 10 + 10, EPE 11627.5/365, EEPE 15745/365"
+    request: { outputs: [ exposure-official ], params: { scopes: [ "MGMT:NODE-1" ], confidence: 0.95, scope-members: [ { SCOPE: "MGMT:NODE-1", TRADE_ID: T1 }, { SCOPE: "MGMT:NODE-1", TRADE_ID: T3 } ] }, visibility: { exposure-path: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        exposure-official:
+          columns: [ SCOPE, NETTING_SETS, PARTIAL_SETS, TRADES, CE, EPE, EEPE, PEAK_EE, PEAK_PFE_95, PEAK_PFE_99, PEAK_PFE_DATE, FLAGS, NOTE ]
+          rows:
+            - [ "MGMT:NODE-1", 2, 1, 2, 20, 31.856164383561648, 43.136986301369866, 47.5, 60, 60, "2026-07-14", "partial", null ]

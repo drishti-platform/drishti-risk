@@ -45,6 +45,11 @@ final class CcrOfficial {
         ExposureCalc.Result evaluate(String scope) throws EngineException;
     }
 
+    /** How the session evaluates a set of trades the host resolved (each netting set whole or partial, never standalone). */
+    interface Members {
+        ExposureCalc.Result evaluate(List<String> trades) throws EngineException;
+    }
+
     private final Descriptor descriptor;
 
     CcrOfficial(Descriptor descriptor) {
@@ -52,17 +57,28 @@ final class CcrOfficial {
     }
 
     /** The scopes of {@code scopes} (a list), in order; each evaluated, or noted when the book cannot answer it. */
-    List<Scope> evaluate(Request request, Scopes s, Control control) throws EngineException {
+    List<Scope> evaluate(Request request, Scopes s, Members m, Control control) throws EngineException {
         List<Scope> out = new ArrayList<>();
         Object asked = request.param("scopes");
         if (!(asked instanceof List<?> l)) {
             return out;
         }
+        java.util.Map<String, List<String>> members = new java.util.LinkedHashMap<>();
+        if (request.param("scope-members") instanceof Table t) {
+            for (int i = 0; i < t.rows(); i++) {
+                Object sc = t.value("SCOPE", i);
+                Object tr = t.value("TRADE_ID", i);
+                if (sc != null && tr != null) {
+                    members.computeIfAbsent(sc.toString(), x -> new ArrayList<>()).add(tr.toString());
+                }
+            }
+        }
         for (Object o : l) {
             control.check();
             String scope = String.valueOf(o).strip();
             try {
-                out.add(new Scope(scope, s.evaluate(scope), null));
+                List<String> ms = members.get(scope);
+                out.add(new Scope(scope, ms != null ? m.evaluate(ms) : s.evaluate(scope), null));
             } catch (EngineException | IllegalArgumentException | IllegalStateException e) {
                 out.add(new Scope(scope, null, e.getMessage()));
             }

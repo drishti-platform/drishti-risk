@@ -143,6 +143,12 @@ params:
     label: Candidates
     help: "The hypothetical trades: ID, LABEL, NETTING_SET (empty: a set of its own), RUN_ID (the run its paths are of; empty: the date's), COPY_OF (a booked trade whose paths are copied) and FACTOR, or MTM (the G x P paths, grid-date-major), MTM0 (its MtM today; empty: the copy's or the paths' mean), LIFE_YEARS; addon: ASSET_CLASS, NOTIONAL, DELTA, MTM0, LIFE_YEARS."
   scopes: { type: list, items: text, label: Scopes, help: "The scopes of exposure-official, in order (BANK, NSET:<id>, CPTY:<id>, GROUP:<id>, LE:<id>, WHERE:...)." }
+  scope-members:
+    type: table
+    contract: risk/scope-member@1
+    max-rows: 2000000
+    label: Scope members
+    help: "Scopes of exposure-official the host resolves itself (a hierarchy's node over the trades' level columns, which the engine's rows do not carry): SCOPE, TRADE_ID; such a scope is its trades evaluated as a set, each netting set whole or partial, never standalone."
   simm-scope: { type: text, default: "", label: SIMM netting set, help: "NSET:<id> or CPTY:<id>; empty: every netting set of the sensitivities." }
   direction: { type: enum, options: [ collect, post ], default: collect, label: Direction }
   calculation-currency: { type: text, default: USD, label: Calculation currency }
@@ -355,7 +361,7 @@ outputs:
   exposure-official:
     title: Official exposure figures of scopes
     about: "The figures of Drishti's official exposure record (EXPOSURE_GUIDE.md section 20) for each scope asked, in order, evaluated with no interactive limit (the batch's): netting sets, partial sets, trades, CE, EPE, EEPE, peak EE, peak PFE at 95% and 99%, the peak PFE's date at the request's confidence, flags; a scope the book cannot answer is a row with its note. The record's versions, store and published tables are the host's."
-    params: [ scopes, confidence, collateral, groups ]
+    params: [ scopes, confidence, collateral, groups, scope-members ]
     key: [ SCOPE ]
     columns:
       - { name: SCOPE, type: string, nullable: false, label: Scope }
@@ -374,7 +380,7 @@ outputs:
   exposure-official-profile:
     title: Official exposure profiles of scopes
     about: Each answered scope of exposure-official at every primary point (EE, ENE, effective EE, PFE at 95% and 99%).
-    params: [ scopes, confidence, collateral, groups ]
+    params: [ scopes, confidence, collateral, groups, scope-members ]
     key: [ SCOPE, POINT ]
     columns:
       - { name: SCOPE, type: string, nullable: false, label: Scope }
