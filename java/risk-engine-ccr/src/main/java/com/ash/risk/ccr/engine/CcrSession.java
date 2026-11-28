@@ -90,7 +90,7 @@ final class CcrSession implements Session, Explaining {
     /** The outputs answered from the exposure book (they need the run and the paths). */
     static final Set<String> PATHS = Set.of("exposure-summary", "exposure-profile", "exposure-contributions", "scope-resolution", "netting-set-summary", "counterparty-summary",
             "exposure-tree", "exposure-tree-ee", "exposure-run", "exposure-flags", "exposure-distribution", "exposure-histogram", "exposure-fan",
-            "netting-set-collateral", "pre-deal", "pre-deal-buckets");
+            "netting-set-collateral", "pre-deal", "pre-deal-buckets", "exposure-what-if", "exposure-what-if-profile");
     /** The inputs each output cannot be answered without, beyond the run and the paths. */
     static final Map<String, List<String>> NEEDS = Map.of(
             "pre-deal", List.of(CcrExtras.LIMIT, CcrExtras.BUCKET),
@@ -134,6 +134,7 @@ final class CcrSession implements Session, Explaining {
         List<CcrCollateral.View> collateral;
         List<TreeNode> tree;
         Evaluated evaluated;
+        CcrWhatIf.Done whatIf;
 
         Computed(Request request, Control control) {
             this.request = request;
@@ -176,6 +177,31 @@ final class CcrSession implements Session, Explaining {
             return evaluated;
         }
 
+        CcrWhatIf.Done whatIf() throws EngineException {
+            if (whatIf == null) {
+                ExposureBook b = book();
+                ExposureCalc.Params prm = params(request);
+                ExposureScopes.Groups gs = groups(request);
+                whatIf = new CcrWhatIf(engine.descriptor(), engine.options()).compute(request, b, prm, new CcrWhatIf.Scopes() {
+                    @Override
+                    public ExposureCalc.Result evaluate(String scope) throws EngineException {
+                        return CcrSession.this.evaluate(b, scope, false, prm, gs);
+                    }
+
+                    @Override
+                    public String canonical(String scope) {
+                        return new ExposureScopes(b, gs).resolve(scope).canonical();
+                    }
+
+                    @Override
+                    public Map<String, double[]> paths(java.util.Collection<String> trades) {
+                        return CcrSession.this.paths(trades);
+                    }
+                });
+            }
+            return whatIf;
+        }
+
         List<TreeNode> tree() throws EngineException {
             if (tree == null) {
                 tree = CcrSession.this.tree(book(), request, control);
@@ -215,6 +241,8 @@ final class CcrSession implements Session, Explaining {
                 case "exposure-distribution" -> distribution(c.book(), request, c.evaluated());
                 case "exposure-histogram" -> histogram(c.book(), request, c.evaluated());
                 case "exposure-fan" -> fan(c.book(), c.evaluated(), control);
+                case "exposure-what-if" -> new CcrWhatIf(engine.descriptor(), engine.options()).table(c.whatIf());
+                case "exposure-what-if-profile" -> new CcrWhatIf(engine.descriptor(), engine.options()).profile(c.book(), c.whatIf());
                 case "netting-set-collateral" -> new CcrCollateral(engine.descriptor(), engine.options()).table(c.collateral());
                 case "pre-deal" -> new CcrPreDeal(engine.descriptor(), engine.options(), day).table(c.check());
                 case "pre-deal-buckets" -> new CcrPreDeal(engine.descriptor(), engine.options(), day).buckets(c.check());
@@ -278,7 +306,31 @@ final class CcrSession implements Session, Explaining {
     }
 
     private ExposureCalc.Result evaluate(ExposureBook b, String scope, boolean standalone, ExposureCalc.Params prm) throws EngineException {
-        ExposureScopes.Resolution r = new ExposureScopes(b, g -> Optional.empty()).resolve(scope == null || scope.isBlank() ? "BANK" : scope);
+        return evaluate(b, scope, standalone, prm, g -> Optional.empty());
+    }
+
+    /**
+     * The connected groups the request names ({@code groups}: GROUP, COUNTERPARTY rows, the host's reference): a {@code GROUP:<id>} scope reads
+     * its members here, in the rows' order; without them a group is not known.
+     */
+    static ExposureScopes.Groups groups(Request request) {
+        if (!(request.param("groups") instanceof com.ash.engine.Table t) || t.rows() == 0) {
+            return g -> Optional.empty();
+        }
+        Map<String, List<String>> m = new LinkedHashMap<>();
+        for (int i = 0; i < t.rows(); i++) {
+            Object g = t.value("GROUP", i);
+            Object c = t.value("COUNTERPARTY", i);
+            if (g != null && c != null) {
+                m.computeIfAbsent(g.toString(), x -> new ArrayList<>()).add(c.toString());
+            }
+        }
+        return g -> Optional.ofNullable(m.get(g)).map(List::copyOf);
+    }
+
+    private ExposureCalc.Result evaluate(ExposureBook b, String scope, boolean standalone, ExposureCalc.Params prm, ExposureScopes.Groups groups)
+            throws EngineException {
+        ExposureScopes.Resolution r = new ExposureScopes(b, groups).resolve(scope == null || scope.isBlank() ? "BANK" : scope);
         if (!r.unknown().isEmpty() && r.trades().size() == 0) {
             throw new EngineException("RSK-3101", Kind.REFUSED, "the scope names what the date does not hold: " + String.join(", ", r.unknown()));
         }
@@ -288,7 +340,7 @@ final class CcrSession implements Session, Explaining {
     private Evaluated evaluate(ExposureBook b, Request request) throws EngineException {
         String scope = String.valueOf(request.param("scope"));
         ExposureCalc.Params prm = params(request);
-        return new Evaluated(scope, evaluate(b, scope, Boolean.TRUE.equals(request.param("standalone")), prm), prm.q());
+        return new Evaluated(scope, evaluate(b, scope, Boolean.TRUE.equals(request.param("standalone")), prm, groups(request)), prm.q());
     }
 
     /**
@@ -390,7 +442,7 @@ final class CcrSession implements Session, Explaining {
     /** How the request's scope reads on this book: its canonical text, its kind (bank, netting-set, counterparty, ...) and its id. */
     private Table resolution(ExposureBook b, Request request) {
         String scope = String.valueOf(request.param("scope"));
-        ExposureScopes.Resolution r = new ExposureScopes(b, g -> Optional.empty()).resolve(scope == null || scope.isBlank() ? "BANK" : scope);
+        ExposureScopes.Resolution r = new ExposureScopes(b, groups(request)).resolve(scope == null || scope.isBlank() ? "BANK" : scope);
         return Tables.of(engine.descriptor().schema("scope-resolution")).row(scope, r.canonical(), r.kind(), r.id(), (long) r.trades().size()).build();
     }
 
@@ -606,9 +658,10 @@ final class CcrSession implements Session, Explaining {
         if (t == null) {
             throw new EngineException("ENG-3005", Kind.REFUSED, "the cell is not in this request's answer");
         }
-        String keyCol = t.schema().key().get(0);
+        List<String> keys = t.schema().key();
         for (int r = 0; r < t.rows(); r++) {
-            if (String.valueOf(t.value(keyCol, r)).equals(cell.key().get(keyCol))) {
+            final int row = r;
+            if (keys.stream().allMatch(k -> same(t.value(k, row), cell.key().get(k)))) {
                 Object v = t.value(cell.column(), r);
                 if (!(v instanceof Double)) {
                     throw new EngineException("ENG-3005", Kind.REFUSED, cell.column() + " is not a measure");
@@ -620,6 +673,63 @@ final class CcrSession implements Session, Explaining {
             }
         }
         throw new EngineException("ENG-3005", Kind.REFUSED, "the cell is not in this request's answer");
+    }
+
+    /** A key cell against the asked key's value (a number by value: 1 and 1.0, 0.75 and "0.75" are the same). */
+    private static boolean same(Object cell, Object asked) {
+        if (cell instanceof Number a && asked != null) {
+            try {
+                return a.doubleValue() == (asked instanceof Number b ? b.doubleValue() : Double.parseDouble(asked.toString()));
+            } catch (NumberFormatException e) {
+                return false;
+            }
+        }
+        return String.valueOf(cell).equals(String.valueOf(asked));
+    }
+
+    /** The names the dedicated workbook parts define (each output's measures the formulas recompute). */
+    private static final Map<String, Set<String>> DEFINED = Map.of(
+            "exposure-summary", Set.of("PEAK_EE", "PEAK_PFE"),
+            "netting-set-collateral", Set.of("PEAK_PFE_UNCOLLATERALISED", "PEAK_PFE", "COLLATERAL_BENEFIT"),
+            "simm", Set.of("IM"),
+            "simm-total", Set.of("SIMM", "TOTAL"),
+            "pre-deal", Set.of("BEFORE", "AFTER", "INCREMENT", "USE_AFTER"),
+            "pre-deal-buckets", Set.of("BEFORE", "AFTER", "USE_AFTER"));
+
+    /**
+     * The answer's first-row figures that no dedicated part recomputes (every other measure of every table asked), as the engine's values
+     * with their defined names ({@code OUT_<output>_<column>}), so each figure of the answer has its cell in the workbook.
+     */
+    private static AnswerBook.Part figuresPart(Answer a, List<String> outputs) {
+        return new AnswerBook.Part() {
+            @Override
+            public int data(Sheet data, int at) {
+                data.row(at).text(0, "OUTPUT", "header").text(1, "COLUMN", "header").text(2, "VALUE", "header");
+                return at;
+            }
+
+            @Override
+            public int main(Workbook wb, Sheet main, int at) {
+                main.row(at).text(0, "Figures (the engine's)", "bold");
+                int row = at;
+                for (String name : outputs) {
+                    Table t = a.table(name);
+                    if (t == null || t.rows() == 0) {
+                        continue;
+                    }
+                    for (com.ash.engine.ColumnSchema col : t.schema().columns()) {
+                        if (!col.measure() || t.isNull(col.name(), 0) || DEFINED.getOrDefault(name, Set.of()).contains(col.name())
+                                || !(t.value(col.name(), 0) instanceof Number v)) {
+                            continue;
+                        }
+                        row++;
+                        main.row(row).text(0, name + " " + col.name(), "normal").number(1, v.doubleValue(), "decimal");
+                        wb.name(AnswerBook.name(name, col.name()), main.name(), "$B$" + row);
+                    }
+                }
+                return row;
+            }
+        };
     }
 
     @Override
@@ -658,6 +768,9 @@ final class CcrSession implements Session, Explaining {
                 default -> {
                 }
             }
+        }
+        if (!parts.isEmpty() || request.outputs().stream().anyMatch(n -> a.table(n) != null)) {
+            parts.add(figuresPart(a, request.outputs()));
         }
         AnswerBook.write(out, parts, String.join("; ", a.missing().stream().map(Missing::words).toList()));
     }

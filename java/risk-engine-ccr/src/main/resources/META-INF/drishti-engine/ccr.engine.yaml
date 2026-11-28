@@ -129,6 +129,19 @@ params:
   notional: { type: number, default: 0, min: 0, label: Notional, help: "0: the template's own notional." }
   reverse: { type: bool, default: false, label: Reverse, help: "True: the opposite side of the template." }
   netting-set: { type: text, default: "", label: Netting set, help: "The netting set the trade goes into; empty: the template's, or the counterparty's only one." }
+  groups:
+    type: table
+    contract: risk/counterparty-group-member@1
+    max-rows: 100000
+    label: Connected groups
+    help: "Each connected group's member counterparties (GROUP, COUNTERPARTY), as the host's reference holds them: a GROUP:<id> scope reads its members here (also GRP-<id>); absent, a group is not known."
+  method: { type: enum, options: [ paths, addon ], default: paths, label: What-if method, help: "paths: each candidate's MtM on every path of the run added to its netting set (exact); addon: the conservative proxy (each candidate a netting set of its own, uncollateralised, SA-CCR's supervisory factor)." }
+  candidates:
+    type: table
+    contract: risk/exposure-candidate@1
+    max-rows: 200
+    label: Candidates
+    help: "The hypothetical trades: ID, LABEL, NETTING_SET (empty: a set of its own), RUN_ID (the run its paths are of; empty: the date's), COPY_OF (a booked trade whose paths are copied) and FACTOR, or MTM (the G x P paths, grid-date-major), MTM0 (its MtM today; empty: the copy's or the paths' mean), LIFE_YEARS; addon: ASSET_CLASS, NOTIONAL, DELTA, MTM0, LIFE_YEARS."
   simm-scope: { type: text, default: "", label: SIMM netting set, help: "NSET:<id> or CPTY:<id>; empty: every netting set of the sensitivities." }
   direction: { type: enum, options: [ collect, post ], default: collect, label: Direction }
   calculation-currency: { type: text, default: USD, label: Calculation currency }
@@ -140,7 +153,7 @@ outputs:
     title: Exposure figures of a scope
     about: One row for the scope asked.
     shape: row
-    params: [ scope, standalone, confidence, collateral ]
+    params: [ scope, standalone, confidence, collateral, groups ]
     key: [ SCOPE ]
     columns:
       - { name: SCOPE, type: string, nullable: false, label: Scope }
@@ -156,7 +169,7 @@ outputs:
     about: One row per primary grid point.
     shape: series
     axis: POINT
-    params: [ scope, standalone, confidence, collateral ]
+    params: [ scope, standalone, confidence, collateral, groups ]
     key: [ POINT ]
     columns:
       - { name: POINT, type: integer, nullable: false, label: Point }
@@ -170,7 +183,7 @@ outputs:
   exposure-contributions:
     title: Contributions to a scope's exposure
     about: "Each part of the scope (by netting set, counterparty, legal entity, trade or asset) and its contribution to one figure (EE, EPE or PFE; at a primary point, or the figure's own: the peak EE, EPE, the peak PFE), its share and, for PFE, its incremental exposure; in the calculation's order (RANK). Trades and assets read each trade's paths."
-    params: [ scope, standalone, confidence, collateral, by, figure, at ]
+    params: [ scope, standalone, confidence, collateral, groups, by, figure, at ]
     key: [ RANK ]
     columns:
       - { name: RANK, type: integer, nullable: false, label: Order }
@@ -184,7 +197,7 @@ outputs:
   scope-resolution:
     title: How a scope reads
     about: The scope's canonical text, its kind (bank, netting-set, counterparty, group, legal-entity, desk, book, trade, trades or adhoc), its id when it names one, and the trades it holds that the request sees.
-    params: [ scope ]
+    params: [ scope, groups ]
     key: [ SCOPE ]
     columns:
       - { name: SCOPE, type: string, nullable: false, label: Scope }
@@ -261,7 +274,7 @@ outputs:
     title: A scope's netting sets and flags
     about: One row for the scope asked, the netting sets it sums and its flags comma-separated (partial, standalone, its netting sets' data-quality flags such as PAST_MATURITY or MPOR_MISMATCH).
     shape: row
-    params: [ scope, standalone, confidence, collateral ]
+    params: [ scope, standalone, confidence, collateral, groups ]
     key: [ SCOPE ]
     columns:
       - { name: SCOPE, type: string, nullable: false, label: Scope }
@@ -271,7 +284,7 @@ outputs:
     title: A scope's exposure distribution at a point
     about: "The scope's exposure across the paths at one primary point (at; -1: the peak PFE's point at the request's confidence): its mean (EE), the share of paths without exposure, the number of paths, the lowest and highest path."
     shape: row
-    params: [ scope, standalone, confidence, collateral, at ]
+    params: [ scope, standalone, confidence, collateral, groups, at ]
     key: [ SCOPE ]
     columns:
       - { name: SCOPE, type: string, nullable: false, label: Scope }
@@ -286,7 +299,7 @@ outputs:
   exposure-histogram:
     title: A scope's exposure histogram at a point
     about: "The distribution's bins (bins of equal width from the lowest path to the highest; width 1 when every path is equal): each edge, and the paths from it to the next (the last edge has none)."
-    params: [ scope, standalone, confidence, collateral, at, bins ]
+    params: [ scope, standalone, confidence, collateral, groups, at, bins ]
     key: [ EDGE_INDEX ]
     columns:
       - { name: EDGE_INDEX, type: integer, nullable: false, label: Edge }
@@ -295,7 +308,7 @@ outputs:
   exposure-fan:
     title: A scope's exposure quantiles at every point
     about: "The scope's exposure quantiles (5, 25, 50, 75, 90, 95, 97.5 and 99%) across the paths at every primary point, under the engine's quantile rule: the path fan around EE and a distribution's quantiles."
-    params: [ scope, standalone, confidence, collateral ]
+    params: [ scope, standalone, confidence, collateral, groups ]
     key: [ POINT, QUANTILE ]
     columns:
       - { name: POINT, type: integer, nullable: false, label: Point }
@@ -304,6 +317,40 @@ outputs:
       - { name: TENOR, type: string, nullable: true, label: Tenor }
       - { name: T, type: number, nullable: false, label: Years }
       - { name: VALUE, type: number, nullable: false, label: Exposure, measure: true }
+  exposure-what-if:
+    title: Exposure what-if of a scope
+    about: "A scope's exposure before and after hypothetical trades (EXPOSURE_GUIDE.md section 18.7): method paths, each candidate's MtM on every path added to its netting set path by path, collateral and exposure computed again (rows BEFORE, AFTER and ITEM:<id> with the candidate's peak PFE alone and its incremental peak PFE); method addon, the conservative proxy on the scope's own profile (EPE, peak EE and peak PFE only). The engine prices nothing: the candidates' paths are a booked trade's or supplied."
+    params: [ scope, confidence, collateral, groups, method, candidates ]
+    key: [ ROW ]
+    columns:
+      - { name: ROW, type: string, nullable: false, label: Row }
+      - { name: LABEL, type: string, nullable: true, label: Label }
+      - { name: NETTING_SET, type: string, nullable: true, label: Netting set }
+      - { name: CANONICAL, type: string, nullable: true, label: Scope as read }
+      - { name: RUN_ID, type: string, nullable: true, label: Run }
+      - { name: CE, type: number, nullable: true, label: Current exposure, measure: true }
+      - { name: EPE, type: number, nullable: true, label: EPE, measure: true }
+      - { name: EEPE, type: number, nullable: true, label: Effective EPE, measure: true }
+      - { name: PEAK_EE, type: number, nullable: true, label: Peak EE, measure: true }
+      - { name: PEAK_PFE, type: number, nullable: true, label: Peak PFE, measure: true }
+      - { name: PEAK_PFE_TENOR, type: string, nullable: true, label: Peak PFE tenor }
+      - { name: PEAK_PFE_ALONE, type: number, nullable: true, label: Peak PFE alone, measure: true }
+      - { name: INCREMENTAL_PEAK_PFE, type: number, nullable: true, label: Incremental peak PFE, measure: true }
+  exposure-what-if-profile:
+    title: Exposure what-if profile
+    about: "The what-if's profile at every primary point: EE and PFE (the request's confidence) before and after; ADDED, the addon method's own increment at the point."
+    params: [ scope, confidence, collateral, groups, method, candidates ]
+    key: [ POINT ]
+    columns:
+      - { name: POINT, type: integer, nullable: false, label: Primary point }
+      - { name: DATE, type: string, nullable: false, label: Date }
+      - { name: TENOR, type: string, nullable: false, label: Tenor }
+      - { name: T, type: number, nullable: false, label: Time (years) }
+      - { name: EE_BEFORE, type: number, nullable: false, label: EE before, measure: true }
+      - { name: EE_AFTER, type: number, nullable: false, label: EE after, measure: true }
+      - { name: PFE_BEFORE, type: number, nullable: false, label: PFE before, measure: true }
+      - { name: PFE_AFTER, type: number, nullable: false, label: PFE after, measure: true }
+      - { name: ADDED, type: number, nullable: true, label: Addon increment, measure: true }
   netting-set-collateral:
     title: Netting and collateral by netting set
     about: Each netting set's CSA terms, collateral and initial margin held, its MtM today, current exposure uncollateralised and collateralised, and EPE and peak PFE without and with collateral (the collateral's benefit).

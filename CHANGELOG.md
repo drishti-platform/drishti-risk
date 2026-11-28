@@ -3,6 +3,14 @@
 
 ## 0.1.0 (unreleased)
 
+- `ccr`: new outputs `exposure-what-if` and `exposure-what-if-profile` (Drishti's `POST /what-if`: method `paths`, each candidate's
+  MtM on every path, a booked trade's copy scaled or supplied, added to its netting set path by path by the moved `ExposureWhatIfMath`;
+  method `addon`, the conservative proxy on the scope's own profile; rows BEFORE, AFTER and ITEM:<id>; params `method`, `candidates`); new
+  param `groups` (each connected group's member counterparties from the host's reference) so `GROUP:<id>` scopes resolve by Drishti's scope
+  words. Kit: `tck/cases/ccr/exposure-outputs-by-hand.yaml` (tree, tree EE, run, flags, a group's resolution, summary and profile,
+  distribution, histogram, fan, contributions, both what-if methods, netting-set and counterparty summaries); every answered measure has
+  its workbook name (the figures part), an explanation keyed by every key column, and the pre-deal buckets' peaks as `MAX` over their
+  consecutive rows (the kit's explain and workbook laws now pass for every ccr case). R2 exposure part 3.
 - `ccr`: new outputs `exposure-tree` (every netting set with paths, every counterparty, the bank and every legal entity the request
   sees, each evaluated as `exposure-summary` evaluates its scope: netting sets, trades, EPE, peak EE, peak PFE and its tenor, flags; a
   note instead when an interactive answer cannot sum it), `exposure-tree-ee` (each node's EE at every primary point), `exposure-run`

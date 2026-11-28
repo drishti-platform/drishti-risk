@@ -1,0 +1,221 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Risk. Proprietary: see LICENSE.
+# Hand cases of the ccr engine's exposure outputs the host's exposure routes read on the engine path (R2 exposure parts 2 and 3): two
+# paths, three primary dates 91, 182 and 730 days ahead (t = 91/365, 182/365, 2), no CSA (uncollateralised), two netting sets:
+# NS-1 (CP-1, LE-1) with T1 (MtM 40|-20, 60|10, 30|-10) and T2 (-10|30, 0|-20, 20|0), NS-2 (CP-2, LE-2) with T3 (5|15, -5|25, 10|10);
+# today's MtM T1 10, T2 10, T3 10 (each its paths' mean at the first date, so the stand-in without trade-valuation is the same). Set values NS-1 30|10, 60|-10, 50|-10 (exposure 30|10, 60|0, 50|0: EE 20, 30, 25), NS-2 exposure
+# 5|15, 0|25, 10|10 (EE 10, 12.5, 10); the bank 35|25, 60|25, 60|10 (EE 30, 42.5, 35). With two paths the kth rule takes the smaller
+# path up to the median and the larger above it (PFE 95 = the larger). EPE and EEPE integrate EE and its running maximum over the first
+# year (the trades live past it): 91/365 at each of the first two points and 183/365 at the third. The connected group G-1 holds CP-1
+# and CP-2 (the host's reference, given as the groups rows). Values with fractions were worked in IEEE doubles in ExposureMath's order.
+suite: ccr/exposure-outputs-by-hand
+engine: ccr
+since: "0.1"
+description: the tree, its EE lines and the run; a scope's flags, resolution (a connected group), summary and profile; the distribution, histogram and fan; contributions; the what-if, exact and proxy.
+given:
+  snapshot: { date: "2026-01-13" }
+  inputs:
+    simulation-run:
+      rows:
+        - { RUN_ID: XR-2, BATCH_ID: B1, BUSINESS_DATE: "2026-01-13", PATHS: 2, GRID_DATES: "2026-04-14,2026-07-14,2028-01-13", GRID_ROLE: "PRIMARY,PRIMARY,PRIMARY", LOOKBACK_OF: "-1,-1,-1" }
+    exposure-path:
+      rows:
+        - { TRADE_ID: T1, GRID_INDEX: 0, NETTING_SET: NS-1, COUNTERPARTY: CP-1, LEGAL_ENTITY: LE-1, DESK: D1, TT_BOOK: B1, ASSET_CLASS: IR, PRODUCT: SWAP, MATURITY_DATE: "2028-06-30", NOTIONAL: 100, MTM: [ 40, -20 ] }
+        - { TRADE_ID: T1, GRID_INDEX: 1, NETTING_SET: NS-1, COUNTERPARTY: CP-1, LEGAL_ENTITY: LE-1, DESK: D1, TT_BOOK: B1, ASSET_CLASS: IR, PRODUCT: SWAP, MATURITY_DATE: "2028-06-30", NOTIONAL: 100, MTM: [ 60, 10 ] }
+        - { TRADE_ID: T1, GRID_INDEX: 2, NETTING_SET: NS-1, COUNTERPARTY: CP-1, LEGAL_ENTITY: LE-1, DESK: D1, TT_BOOK: B1, ASSET_CLASS: IR, PRODUCT: SWAP, MATURITY_DATE: "2028-06-30", NOTIONAL: 100, MTM: [ 30, -10 ] }
+        - { TRADE_ID: T2, GRID_INDEX: 0, NETTING_SET: NS-1, COUNTERPARTY: CP-1, LEGAL_ENTITY: LE-1, DESK: D1, TT_BOOK: B1, ASSET_CLASS: FX, PRODUCT: FWD, MATURITY_DATE: "2028-06-30", NOTIONAL: 50, MTM: [ -10, 30 ] }
+        - { TRADE_ID: T2, GRID_INDEX: 1, NETTING_SET: NS-1, COUNTERPARTY: CP-1, LEGAL_ENTITY: LE-1, DESK: D1, TT_BOOK: B1, ASSET_CLASS: FX, PRODUCT: FWD, MATURITY_DATE: "2028-06-30", NOTIONAL: 50, MTM: [ 0, -20 ] }
+        - { TRADE_ID: T2, GRID_INDEX: 2, NETTING_SET: NS-1, COUNTERPARTY: CP-1, LEGAL_ENTITY: LE-1, DESK: D1, TT_BOOK: B1, ASSET_CLASS: FX, PRODUCT: FWD, MATURITY_DATE: "2028-06-30", NOTIONAL: 50, MTM: [ 20, 0 ] }
+        - { TRADE_ID: T3, GRID_INDEX: 0, NETTING_SET: NS-2, COUNTERPARTY: CP-2, LEGAL_ENTITY: LE-2, DESK: D2, TT_BOOK: B2, ASSET_CLASS: IR, PRODUCT: SWAP, MATURITY_DATE: "2028-06-30", NOTIONAL: 80, MTM: [ 5, 15 ] }
+        - { TRADE_ID: T3, GRID_INDEX: 1, NETTING_SET: NS-2, COUNTERPARTY: CP-2, LEGAL_ENTITY: LE-2, DESK: D2, TT_BOOK: B2, ASSET_CLASS: IR, PRODUCT: SWAP, MATURITY_DATE: "2028-06-30", NOTIONAL: 80, MTM: [ -5, 25 ] }
+        - { TRADE_ID: T3, GRID_INDEX: 2, NETTING_SET: NS-2, COUNTERPARTY: CP-2, LEGAL_ENTITY: LE-2, DESK: D2, TT_BOOK: B2, ASSET_CLASS: IR, PRODUCT: SWAP, MATURITY_DATE: "2028-06-30", NOTIONAL: 80, MTM: [ 10, 10 ] }
+    netting-set:
+      rows:
+        - { NETTING_SET_ID: NS-1, COUNTERPARTY: CP-1, LEGAL_ENTITY: LE-1 }
+        - { NETTING_SET_ID: NS-2, COUNTERPARTY: CP-2, LEGAL_ENTITY: LE-2 }
+    csa: absent
+    collateral-balance: absent
+    trade-valuation:
+      rows:
+        - { TRADE_ID: T1, MTM: 10 }
+        - { TRADE_ID: T2, MTM: 10 }
+        - { TRADE_ID: T3, MTM: 10 }
+    credit-limit: absent
+    credit-limit-bucket: absent
+    sensitivity-element: absent
+    risk-factor: absent
+    simm-parameters: absent
+    fx-spot: absent
+cases:
+  - id: the-tree-its-ee-lines-and-the-run
+    source: "by hand: every netting set, counterparty, the bank and every legal entity; NS-1 EPE (20 + 30) x 91/365 + 25 x 183/365 = 25, EEPE (20 + 30) x 91/365 + 30 x 183/365, peak EE 30, peak PFE 60 at the second point; NS-2 EPE 3877.5/365, peak EE 12.5, peak PFE 25; the bank EPE 13002.5/365, peak EE 42.5, peak PFE 60 (first at the second point)"
+    reference: true
+    request: { outputs: [ exposure-tree, exposure-tree-ee, exposure-run, netting-set-summary, counterparty-summary ], params: { confidence: 0.95, collateral: "" }, visibility: { exposure-path: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        exposure-run:
+          columns: [ RUN_ID, PATHS, GRID_DATES, PRIMARY_DATES ]
+          rows:
+            - [ XR-2, 2, 3, 3 ]
+        exposure-tree:
+          columns: [ SCOPE, KIND, ID, NETTING_SETS, TRADES, EPE, PEAK_EE, PEAK_PFE, PEAK_PFE_TENOR, FLAGS, NOTE ]
+          rows:
+            - [ BANK, bank, BANK, 2, 3, "0x4041cfc7e3f1f8fd", 42.5, 60, "6M", "", null ]
+            - [ "CPTY:CP-1", counterparty, CP-1, 1, 2, 25, 30, 60, "6M", "", null ]
+            - [ "CPTY:CP-2", counterparty, CP-2, 1, 1, 10.623287671232877, 12.5, 25, "6M", "", null ]
+            - [ "LE:LE-1", legal-entity, LE-1, 1, 2, 25, 30, 60, "6M", "", null ]
+            - [ "LE:LE-2", legal-entity, LE-2, 1, 1, 10.623287671232877, 12.5, 25, "6M", "", null ]
+            - [ "NSET:NS-1", netting-set, NS-1, 1, 2, 25, 30, 60, "6M", "", null ]
+            - [ "NSET:NS-2", netting-set, NS-2, 1, 1, 10.623287671232877, 12.5, 25, "6M", "", null ]
+        exposure-tree-ee:
+          columns: [ SCOPE, POINT, EE ]
+          rows:
+            - [ BANK, 0, 30 ]
+            - [ BANK, 1, 42.5 ]
+            - [ BANK, 2, 35 ]
+            - [ "CPTY:CP-1", 0, 20 ]
+            - [ "CPTY:CP-1", 1, 30 ]
+            - [ "CPTY:CP-1", 2, 25 ]
+            - [ "CPTY:CP-2", 0, 10 ]
+            - [ "CPTY:CP-2", 1, 12.5 ]
+            - [ "CPTY:CP-2", 2, 10 ]
+            - [ "LE:LE-1", 0, 20 ]
+            - [ "LE:LE-1", 1, 30 ]
+            - [ "LE:LE-1", 2, 25 ]
+            - [ "LE:LE-2", 0, 10 ]
+            - [ "LE:LE-2", 1, 12.5 ]
+            - [ "LE:LE-2", 2, 10 ]
+            - [ "NSET:NS-1", 0, 20 ]
+            - [ "NSET:NS-1", 1, 30 ]
+            - [ "NSET:NS-1", 2, 25 ]
+            - [ "NSET:NS-2", 0, 10 ]
+            - [ "NSET:NS-2", 1, 12.5 ]
+            - [ "NSET:NS-2", 2, 10 ]
+        netting-set-summary:
+          columns: [ NETTING_SET, COUNTERPARTY, TRADES, CE, EPE, EEPE, PEAK_PFE ]
+          rows:
+            - [ NS-1, CP-1, 2, 20, 25, 27.506849315068497, 60 ]
+            - [ NS-2, CP-2, 1, 10, 10.623287671232877, 11.876712328767123, 25 ]
+        counterparty-summary:
+          columns: [ COUNTERPARTY, NETTING_SETS, TRADES, CE, EPE, EEPE, PEAK_EE, PEAK_PFE, PEAK_PFE_DATE, LIMIT_ID, LIMIT ]
+          rows:
+            - [ CP-1, 1, 2, 20, 25, 27.506849315068497, 30, 60, "2026-07-14", null, null ]
+            - [ CP-2, 1, 1, 10, 10.623287671232877, 11.876712328767123, 12.5, 25, "2026-07-14", null, null ]
+
+  - id: a-connected-group-its-figures-and-profile
+    source: "by hand: GROUP:G-1 reads its members CP-1 and CP-2 from the groups rows: the whole book (3 trades, 2 netting sets); CE 20 + 10, EEPE (30 + 42.5) x 91/365 + 42.5 x 183/365; no flags"
+    request: { outputs: [ scope-resolution, exposure-summary, exposure-profile, exposure-flags ], params: { scope: "GROUP:G-1", groups: [ { GROUP: G-1, COUNTERPARTY: CP-1 }, { GROUP: G-1, COUNTERPARTY: CP-2 } ] }, visibility: { exposure-path: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        scope-resolution:
+          columns: [ SCOPE, CANONICAL, KIND, ID, TRADES ]
+          rows:
+            - [ "GROUP:G-1", "GROUP:G-1", group, G-1, 3 ]
+        exposure-summary:
+          columns: [ SCOPE, TRADES, CE, EPE, EEPE, PEAK_EE, PEAK_PFE, PEAK_PFE_DATE ]
+          rows:
+            - [ "GROUP:G-1", 3, 30, "0x4041cfc7e3f1f8fd", 39.38356164383562, 42.5, 60, "2026-07-14" ]
+        exposure-profile:
+          columns: [ POINT, DATE, TENOR, EE, ENE, EEE, PFE, EE_UNCOLL ]
+          rows:
+            - [ 0, "2026-04-14", "3M", 30, 0, 30, 35, 30 ]
+            - [ 1, "2026-07-14", "6M", 42.5, -7.5, 42.5, 60, 42.5 ]
+            - [ 2, "2028-01-13", "2Y", 35, -5, 42.5, 60, 35 ]
+        exposure-flags:
+          columns: [ SCOPE, NETTING_SETS, FLAGS ]
+          rows:
+            - [ "GROUP:G-1", 2, "" ]
+
+  - id: the-distribution-histogram-and-fan
+    source: "by hand: the bank at the second point (6M): paths 60 and 25, mean 42.5, none without exposure; two bins of 17.5 from 25; the fan takes the smaller path up to the median and the larger above it (kth rule)"
+    request: { outputs: [ exposure-distribution, exposure-histogram, exposure-fan ], params: { scope: BANK, at: 1, bins: 2 }, visibility: { exposure-path: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        exposure-distribution:
+          columns: [ SCOPE, POINT, DATE, TENOR, MEAN, ZERO_SHARE, PATHS, LOW, HIGH ]
+          rows:
+            - [ BANK, 1, "2026-07-14", "6M", 42.5, 0, 2, 25, 60 ]
+        exposure-histogram:
+          columns: [ EDGE_INDEX, EDGE, COUNT ]
+          rows:
+            - [ 0, 25, 1 ]
+            - [ 1, 42.5, 1 ]
+            - [ 2, 60, null ]
+        exposure-fan:
+          columns: [ POINT, QUANTILE, DATE, TENOR, T, VALUE ]
+          rows:
+            - [ 0, 0.05, "2026-04-14", "3M", 0.2493150684931507, 25 ]
+            - [ 0, 0.25, "2026-04-14", "3M", 0.2493150684931507, 25 ]
+            - [ 0, 0.5, "2026-04-14", "3M", 0.2493150684931507, 25 ]
+            - [ 0, 0.75, "2026-04-14", "3M", 0.2493150684931507, 35 ]
+            - [ 0, 0.9, "2026-04-14", "3M", 0.2493150684931507, 35 ]
+            - [ 0, 0.95, "2026-04-14", "3M", 0.2493150684931507, 35 ]
+            - [ 0, 0.975, "2026-04-14", "3M", 0.2493150684931507, 35 ]
+            - [ 0, 0.99, "2026-04-14", "3M", 0.2493150684931507, 35 ]
+            - [ 1, 0.05, "2026-07-14", "6M", 0.4986301369863014, 25 ]
+            - [ 1, 0.25, "2026-07-14", "6M", 0.4986301369863014, 25 ]
+            - [ 1, 0.5, "2026-07-14", "6M", 0.4986301369863014, 25 ]
+            - [ 1, 0.75, "2026-07-14", "6M", 0.4986301369863014, 60 ]
+            - [ 1, 0.9, "2026-07-14", "6M", 0.4986301369863014, 60 ]
+            - [ 1, 0.95, "2026-07-14", "6M", 0.4986301369863014, 60 ]
+            - [ 1, 0.975, "2026-07-14", "6M", 0.4986301369863014, 60 ]
+            - [ 1, 0.99, "2026-07-14", "6M", 0.4986301369863014, 60 ]
+            - [ 2, 0.05, "2028-01-13", "2Y", 2, 10 ]
+            - [ 2, 0.25, "2028-01-13", "2Y", 2, 10 ]
+            - [ 2, 0.5, "2028-01-13", "2Y", 2, 10 ]
+            - [ 2, 0.75, "2028-01-13", "2Y", 2, 60 ]
+            - [ 2, 0.9, "2028-01-13", "2Y", 2, 60 ]
+            - [ 2, 0.95, "2028-01-13", "2Y", 2, 60 ]
+            - [ 2, 0.975, "2028-01-13", "2Y", 2, 60 ]
+            - [ 2, 0.99, "2028-01-13", "2Y", 2, 60 ]
+
+  - id: contributions-by-netting-set
+    source: "by hand: the bank's EE at the second point (42.5) by netting set: NS-1 30 (30/42.5), NS-2 12.5 (12.5/42.5); labelled set and counterparty"
+    request: { outputs: [ exposure-contributions ], params: { scope: BANK, by: netting-set, figure: EE, at: 1 }, visibility: { exposure-path: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        exposure-contributions:
+          columns: [ RANK, KEY, SCOPE, LABEL, KIND, VALUE, PCT, INCREMENTAL ]
+          rows:
+            - [ 0, NS-1, "NSET:NS-1", "NS-1 · CP-1", netting-set, 30, 0.7058823529411765, null ]
+            - [ 1, NS-2, "NSET:NS-2", "NS-2 · CP-2", netting-set, 12.5, 0.29411764705882354, null ]
+
+  - id: what-if-exact-a-copy-into-its-netting-set
+    source: "by hand: a copy of T3 into NS-2 doubles CP-2's set: CE 10 to 20, EE 10, 12.5, 10 to 20, 25, 20, peak PFE 25 to 50; T3 alone is NS-2 (peak PFE 25), its increment 25"
+    request: { outputs: [ exposure-what-if, exposure-what-if-profile ], params: { scope: "CPTY:CP-2", confidence: 0.95, method: paths, candidates: [ { ID: C1, LABEL: copy of T3, NETTING_SET: NS-2, COPY_OF: T3, FACTOR: 1.0 } ] }, visibility: { exposure-path: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        exposure-what-if:
+          columns: [ ROW, LABEL, NETTING_SET, CANONICAL, RUN_ID, CE, EPE, EEPE, PEAK_EE, PEAK_PFE, PEAK_PFE_TENOR, PEAK_PFE_ALONE, INCREMENTAL_PEAK_PFE ]
+          rows:
+            - [ AFTER, null, null, "CPTY:CP-2", XR-2, 20, 21.246575342465754, 23.753424657534246, 25, 50, "6M", null, null ]
+            - [ BEFORE, null, null, "CPTY:CP-2", XR-2, 10, 10.623287671232877, 11.876712328767123, 12.5, 25, "6M", null, null ]
+            - [ "ITEM:C1", copy of T3, NS-2, null, null, null, null, null, null, null, null, 25, 25 ]
+        exposure-what-if-profile:
+          columns: [ POINT, DATE, TENOR, T, EE_BEFORE, EE_AFTER, PFE_BEFORE, PFE_AFTER, ADDED ]
+          rows:
+            - [ 0, "2026-04-14", "3M", 0.2493150684931507, 10, 20, 15, 30, null ]
+            - [ 1, "2026-07-14", "6M", 0.4986301369863014, 12.5, 25, 25, 50, null ]
+            - [ 2, "2028-01-13", "2Y", 2, 10, 20, 10, 20, null ]
+
+  - id: what-if-proxy-an-fx-forward
+    source: "EXPOSURE_GUIDE.md 18.7, the addon method: a 1-year FX trade of 100 notional, MtM 0, delta 1, a netting set of its own: at each point alive (t <= 1) PFE + z(0.95) x 0.04 x 100 x sqrt(t), EE + 0.04 x 100 x sqrt(t) / sqrt(2 pi); nothing at 2Y; EPE over max(horizon, 1) = 1: 10.7968 x 91/365 + 13.6268 x 91/365 + 10 x 183/365 = 11.1029; peak EE 13.6268, peak PFE 29.6460 (both at 6M)"
+    request: { outputs: [ exposure-what-if, exposure-what-if-profile ], params: { scope: "CPTY:CP-2", confidence: 0.95, method: addon, candidates: [ { ID: C2, ASSET_CLASS: FX, NOTIONAL: 100.0, DELTA: 1.0, MTM0: 0.0, LIFE_YEARS: 1.0 } ] }, visibility: { exposure-path: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        exposure-what-if-profile:
+          columns: [ POINT, DATE, TENOR, T, EE_BEFORE, EE_AFTER, PFE_BEFORE, PFE_AFTER, ADDED ]
+          rows:
+            - [ 0, "2026-04-14", "3M", 0.2493150684931507, 10, "0x402597f4f7574b0b", 15, "0x40324902b79a388a", "0x400a4815bcd1c44e" ]
+            - [ 1, "2026-07-14", "6M", 0.4986301369863014, 12.5, "0x402b40f02c89e062", 25, "0x403da55e5da67a25", "0x401295797699e894" ]
+            - [ 2, "2028-01-13", "2Y", 2, 10, 10, 10, 10, 0 ]
+        exposure-what-if:
+          columns: [ ROW, LABEL, NETTING_SET, CANONICAL, RUN_ID, CE, EPE, EEPE, PEAK_EE, PEAK_PFE, PEAK_PFE_TENOR, PEAK_PFE_ALONE, INCREMENTAL_PEAK_PFE ]
+          rows:
+            - [ AFTER, null, null, "CPTY:CP-2", XR-2, null, "0x402634ac271aae40", null, "0x402b40f02c89e062", "0x403da55e5da67a25", null, null, null ]
+            - [ BEFORE, null, null, "CPTY:CP-2", XR-2, null, 10.623287671232877, null, 12.5, 25, null, null, null ]

@@ -233,19 +233,16 @@ final class CcrPreDeal {
                 if (!b.bucket().name().equals(cell.key().get("BUCKET")) || b.points() == 0) {
                     continue;
                 }
-                List<Map<String, Object>> rows = new ArrayList<>();
+                List<Double> before = new ArrayList<>();
+                List<Double> after = new ArrayList<>();
                 for (int i : b.at()) {
-                    Map<String, Object> x = new LinkedHashMap<>();
-                    x.put("POINT", (long) i);
-                    x.put("T", c.times()[i]);
-                    x.put("BEFORE", profile(c.result().before(), m, i));
-                    x.put("AFTER", profile(c.result().after(), m, i));
-                    rows.add(x);
+                    before.add(profile(c.result().before(), m, i));
+                    after.add(profile(c.result().after(), m, i));
                 }
                 List<Step> steps = new ArrayList<>();
-                steps.add(Steps.of("before", "The peak of " + m.text() + " over the bucket's grid points before the trade", "max($.rows, 'BEFORE')",
-                        Map.of("rows", rows), b.before()));
-                steps.add(Steps.of("after", "and after it", "max($.rows, 'AFTER')", Map.of("rows", rows), b.after()));
+                steps.add(Steps.of("before", "The peak of " + m.text() + " over the bucket's grid points before the trade", "max($.values)",
+                        Map.of("values", before), b.before()));
+                steps.add(Steps.of("after", "and after it", "max($.values)", Map.of("values", after), b.after()));
                 switch (cell.column()) {
                     case "BEFORE" -> {
                         return new Explanation(cell, b.before(), steps.subList(0, 1));
@@ -331,16 +328,17 @@ final class CcrPreDeal {
                 wb.name(AnswerBook.name("pre-deal", "BEFORE"), main.name(), "$B$" + at);
                 wb.name(AnswerBook.name("pre-deal", "AFTER"), main.name(), "$B$" + (at + 1));
                 wb.name(AnswerBook.name("pre-deal", "INCREMENT"), main.name(), "$B$" + (at + 2));
-                String t = AnswerBook.range(1, first, last);
                 boolean named = false;
                 for (Bucket k : c.buckets()) {
                     if (k.points() == 0) {
                         continue;
                     }
                     row++;
-                    String in = "(" + t + ">=" + (k.bucket().from() - 1e-12) + ")*(" + t + "<" + (Double.isInfinite(k.bucket().to()) ? "1E+300" : (k.bucket().to() - 1e-12)) + ")";
-                    main.row(row).text(0, k.bucket().name(), "normal").formula(1, "SUMPRODUCT(MAX(" + in + "*" + b + "))", k.before(), "decimal")
-                            .formula(2, "SUMPRODUCT(MAX(" + in + "*" + a + "))", k.after(), "decimal").number(3, k.bucket().limit(), "decimal")
+                    // the bucket's points are consecutive (times rise): the peak is the MAX over their rows of the profile block
+                    int lo = first + k.at().get(0);
+                    int hi = first + k.at().get(k.at().size() - 1);
+                    main.row(row).text(0, k.bucket().name(), "normal").formula(1, "MAX(" + AnswerBook.range(2, lo, hi) + ")", k.before(), "decimal")
+                            .formula(2, "MAX(" + AnswerBook.range(3, lo, hi) + ")", k.after(), "decimal").number(3, k.bucket().limit(), "decimal")
                             .formula(4, "C" + row + "/D" + row, k.after() / k.bucket().limit(), "decimal");
                     if (!named) {
                         named = true;
