@@ -92,13 +92,19 @@ final class CcrSession implements Session, Explaining {
             "exposure-tree", "exposure-tree-ee", "exposure-run", "exposure-flags", "exposure-distribution", "exposure-histogram", "exposure-fan",
             "netting-set-collateral", "pre-deal", "pre-deal-buckets", "exposure-what-if", "exposure-what-if-profile", "exposure-official", "exposure-official-profile", "exposure-trade-ee", "exposure-by-netting-set");
     /** The inputs each output cannot be answered without, beyond the run and the paths. */
-    static final Map<String, List<String>> NEEDS = Map.of(
-            "pre-deal", List.of(CcrExtras.LIMIT, CcrExtras.BUCKET),
-            "pre-deal-buckets", List.of(CcrExtras.LIMIT, CcrExtras.BUCKET),
-            "simm", List.of(CcrExtras.SENSITIVITY, CcrExtras.FACTOR, CcrExtras.SIMM),
-            "simm-total", List.of(CcrExtras.SENSITIVITY, CcrExtras.FACTOR, CcrExtras.SIMM),
-            "simm-product", List.of(CcrExtras.SENSITIVITY, CcrExtras.FACTOR, CcrExtras.SIMM),
-            "simm-version", List.of(CcrExtras.SENSITIVITY, CcrExtras.FACTOR, CcrExtras.SIMM));
+    static final Map<String, List<String>> NEEDS = Map.ofEntries(
+            Map.entry("pre-deal", List.of(CcrExtras.LIMIT, CcrExtras.BUCKET)),
+            Map.entry("pre-deal-buckets", List.of(CcrExtras.LIMIT, CcrExtras.BUCKET)),
+            Map.entry("simm", List.of(CcrExtras.SENSITIVITY, CcrExtras.FACTOR, CcrExtras.SIMM)),
+            Map.entry("simm-total", List.of(CcrExtras.SENSITIVITY, CcrExtras.FACTOR, CcrExtras.SIMM)),
+            Map.entry("simm-product", List.of(CcrExtras.SENSITIVITY, CcrExtras.FACTOR, CcrExtras.SIMM)),
+            Map.entry("simm-version", List.of(CcrExtras.SENSITIVITY, CcrExtras.FACTOR, CcrExtras.SIMM)),
+            Map.entry("simm-charge", List.of(CcrExtras.SENSITIVITY, CcrExtras.FACTOR, CcrExtras.SIMM)),
+            Map.entry("simm-bucket", List.of(CcrExtras.SENSITIVITY, CcrExtras.FACTOR, CcrExtras.SIMM)),
+            Map.entry("simm-factor", List.of(CcrExtras.SENSITIVITY, CcrExtras.FACTOR, CcrExtras.SIMM)),
+            Map.entry("simm-group", List.of(CcrExtras.SENSITIVITY, CcrExtras.FACTOR, CcrExtras.SIMM)),
+            Map.entry("simm-addon", List.of(CcrExtras.SENSITIVITY, CcrExtras.FACTOR, CcrExtras.SIMM)),
+            Map.entry("simm-versions", List.of(CcrExtras.SIMM)));
 
     /** What the outputs asked need and the date does not have, one per input, naming every output it stops. */
     private List<Missing> missing(Request request) {
@@ -272,6 +278,12 @@ final class CcrSession implements Session, Explaining {
                 case "simm-total" -> new CcrSimm(engine.descriptor(), engine.options(), day).totals(c.simm());
                 case "simm-product" -> new CcrSimm(engine.descriptor(), engine.options(), day).products(c.simm());
                 case "simm-version" -> new CcrSimm(engine.descriptor(), engine.options(), day).versions(c.simm());
+                case "simm-charge" -> new CcrSimm(engine.descriptor(), engine.options(), day).charges(c.simm());
+                case "simm-bucket" -> new CcrSimm(engine.descriptor(), engine.options(), day).buckets(c.simm());
+                case "simm-factor" -> new CcrSimm(engine.descriptor(), engine.options(), day).factors(c.simm());
+                case "simm-group" -> new CcrSimm(engine.descriptor(), engine.options(), day).groups(c.simm());
+                case "simm-addon" -> new CcrSimm(engine.descriptor(), engine.options(), day).addOnLines(c.simm());
+                case "simm-versions" -> new CcrSimm(engine.descriptor(), engine.options(), day).versionList();
                 default -> throw new EngineException("ENG-3003", Kind.REFUSED, "ccr has no output " + out);
             });
         }

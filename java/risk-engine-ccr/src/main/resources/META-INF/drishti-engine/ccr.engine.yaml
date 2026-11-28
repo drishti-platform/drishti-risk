@@ -155,7 +155,12 @@ params:
     max-rows: 2000000
     label: SIMM scope members
     help: "Scopes of SIMM the host resolves itself (a netting set's records as its trade master places them, an analytic scope's records): SCOPE, SENSITIVITY_ID; each scope is its records' elements in the input's order, one trade per record; simm-scope is then not read."
-  simm-scope: { type: text, default: "", label: SIMM netting set, help: "NSET:<id> or CPTY:<id>; empty: every netting set of the sensitivities." }
+  simm-scope: { type: text, default: "", label: SIMM netting set, help: "NSET:<id> or CPTY:<id>; EXAMPLE: the hand-built examples (SIMM.md section 15, no data read); empty: every netting set of the sensitivities." }
+  simm-overrides: { type: list, items: text, label: SIMM parameter overrides, help: "key=value, a key as the workbook's Config tab names it (InterestRate.concentration-thresholds.delta.1=3000); any override makes the figures not regulatory." }
+  simm-addon-fixed: { type: number, default: 0, label: Fixed add-on, help: "The CSA's fixed IM add-on, in the calculation currency (the host's CSA terms)." }
+  simm-addon-multipliers: { type: list, items: text, label: Product multipliers, help: "product class=MS (MS >= 1), the CSA's product multipliers." }
+  simm-addon-factors: { type: list, items: text, label: Notional add-on factors, help: "product=factor, the CSA's notional add-on factors." }
+  simm-addon-lines: { type: list, items: text, label: Notional add-on lines, help: "TRADE_ID|PRODUCT|NOTIONAL|CURRENCY, the scope's notional add-on lines; each notional converted to the calculation currency by fx-spot (a line without a mid is left out)." }
   direction: { type: enum, options: [ collect, post ], default: collect, label: Direction }
   calculation-currency: { type: text, default: USD, label: Calculation currency }
   simm-version: { type: text, default: "", label: SIMM version, help: "A VERSION of simm-parameters; empty: the newest." }
@@ -491,7 +496,7 @@ outputs:
   simm:
     title: ISDA SIMM by product and risk class
     about: Initial margin of a netting set's (or every set's) sensitivities under the bank's SIMM version, by product class and risk class (delta, vega, curvature, base correlation), for the bank's side (collect) or the counterparty's (post).
-    params: [ simm-scope, simm-members, direction, calculation-currency, simm-version, concentration, hvr ]
+    params: [ simm-scope, simm-members, direction, calculation-currency, simm-version, concentration, hvr, simm-overrides, simm-addon-fixed, simm-addon-multipliers, simm-addon-factors, simm-addon-lines ]
     needs: [ sensitivity-element, risk-factor, simm-parameters ]
     key: [ SCOPE, PRODUCT_CLASS, RISK_CLASS ]
     columns:
@@ -506,7 +511,7 @@ outputs:
   simm-total:
     title: ISDA SIMM of a scope
     about: The scope's SIMM (the product classes added), its add-on and the total initial margin, with the version used.
-    params: [ simm-scope, simm-members, direction, calculation-currency, simm-version, concentration, hvr ]
+    params: [ simm-scope, simm-members, direction, calculation-currency, simm-version, concentration, hvr, simm-overrides, simm-addon-fixed, simm-addon-multipliers, simm-addon-factors, simm-addon-lines ]
     needs: [ sensitivity-element, risk-factor, simm-parameters ]
     key: [ SCOPE ]
     columns:
@@ -522,7 +527,7 @@ outputs:
   simm-product:
     title: ISDA SIMM by product class
     about: Each scope's SIMM of a product class (its risk classes aggregated by psi, SIMM paragraph 2), for the side asked; the product classes added are simm-total's SIMM.
-    params: [ simm-scope, simm-members, direction, calculation-currency, simm-version, concentration, hvr ]
+    params: [ simm-scope, simm-members, direction, calculation-currency, simm-version, concentration, hvr, simm-overrides, simm-addon-fixed, simm-addon-multipliers, simm-addon-factors, simm-addon-lines ]
     needs: [ sensitivity-element, risk-factor, simm-parameters ]
     key: [ SCOPE, PRODUCT_CLASS ]
     columns:
@@ -532,7 +537,7 @@ outputs:
   simm-version:
     title: The SIMM parameter file of a run
     about: The version each scope's run used, as the parameter file states it (its SHA-256 for provenance, the regimes it recognises, the currency its thresholds are set in).
-    params: [ simm-scope, simm-members, direction, calculation-currency, simm-version, concentration, hvr ]
+    params: [ simm-scope, simm-members, direction, calculation-currency, simm-version, concentration, hvr, simm-overrides, simm-addon-fixed, simm-addon-multipliers, simm-addon-factors, simm-addon-lines ]
     needs: [ sensitivity-element, risk-factor, simm-parameters ]
     key: [ SCOPE ]
     columns:
@@ -543,6 +548,103 @@ outputs:
       - { name: FILE_CURRENCY, type: string, nullable: true, label: Thresholds currency }
       - { name: REGIMES, type: string, nullable: true, label: Regimes recognised }
       - { name: DESCRIPTION, type: string, nullable: true, label: Version described }
+  simm-charge:
+    title: ISDA SIMM charges (the explanation's steps)
+    about: Each scope's charges in the method's order, a charge per product class, risk class and measure (delta, vega, curvature, base correlation); curvature with theta, lambda, the summed CVR and the IR scale.
+    params: [ simm-scope, simm-members, direction, calculation-currency, simm-version, concentration, hvr, simm-overrides, simm-addon-fixed, simm-addon-multipliers, simm-addon-factors, simm-addon-lines ]
+    needs: [ sensitivity-element, risk-factor, simm-parameters ]
+    key: [ SCOPE, CHARGE ]
+    columns:
+      - { name: SCOPE, type: string, nullable: false, label: Scope }
+      - { name: CHARGE, type: integer, nullable: false, label: Charge }
+      - { name: PRODUCT_CLASS, type: string, nullable: false, label: Product class }
+      - { name: RISK_CLASS, type: string, nullable: false, label: Risk class }
+      - { name: MEASURE, type: string, nullable: false, label: Measure }
+      - { name: MARGIN, type: number, nullable: true, label: Margin, measure: true }
+      - { name: ROOT, type: number, nullable: true, label: Root (the buckets aggregated) }
+      - { name: RESIDUAL, type: number, nullable: true, label: Residual bucket's margin }
+      - { name: THETA, type: number, nullable: true, label: Theta }
+      - { name: LAMBDA, type: number, nullable: true, label: Lambda }
+      - { name: SUM_CVR, type: number, nullable: true, label: Summed CVR }
+      - { name: SCALE, type: number, nullable: true, label: Scale }
+  simm-bucket:
+    title: ISDA SIMM buckets of each charge
+    about: Each charge's buckets in the method's order with K, the net sum, S, the bucket's concentration factor and its weighted sensitivities (the RISK indices of simm-factor, in order).
+    params: [ simm-scope, simm-members, direction, calculation-currency, simm-version, concentration, hvr, simm-overrides, simm-addon-fixed, simm-addon-multipliers, simm-addon-factors, simm-addon-lines ]
+    needs: [ sensitivity-element, risk-factor, simm-parameters ]
+    key: [ SCOPE, CHARGE, BUCKET_INDEX ]
+    columns:
+      - { name: SCOPE, type: string, nullable: false, label: Scope }
+      - { name: CHARGE, type: integer, nullable: false, label: Charge }
+      - { name: BUCKET_INDEX, type: integer, nullable: false, label: Bucket index }
+      - { name: BUCKET, type: string, nullable: true, label: Bucket }
+      - { name: RESIDUAL, type: boolean, nullable: false, label: Residual bucket }
+      - { name: K, type: number, nullable: true, label: K, measure: true }
+      - { name: NET, type: number, nullable: true, label: Net }
+      - { name: S, type: number, nullable: true, label: S }
+      - { name: CR, type: number, nullable: true, label: Concentration factor }
+      - { name: MEMBERS, type: list, nullable: false, label: Weighted sensitivities (RISK) }
+  simm-factor:
+    title: ISDA SIMM weighted sensitivities
+    about: Each scope's weighted sensitivities in the method's order (s, the risk weight and its parameter key, HVR, the concentration factor, WS, the trades netted in it).
+    params: [ simm-scope, simm-members, direction, calculation-currency, simm-version, concentration, hvr, simm-overrides, simm-addon-fixed, simm-addon-multipliers, simm-addon-factors, simm-addon-lines ]
+    needs: [ sensitivity-element, risk-factor, simm-parameters ]
+    key: [ SCOPE, RISK ]
+    columns:
+      - { name: SCOPE, type: string, nullable: false, label: Scope }
+      - { name: RISK, type: integer, nullable: false, label: Index }
+      - { name: PRODUCT_CLASS, type: string, nullable: false, label: Product class }
+      - { name: RISK_CLASS, type: string, nullable: false, label: Risk class }
+      - { name: MEASURE, type: string, nullable: false, label: Measure }
+      - { name: FACTOR, type: string, nullable: false, label: Factor }
+      - { name: S, type: number, nullable: true, label: Net sensitivity }
+      - { name: RW, type: number, nullable: true, label: Risk weight }
+      - { name: RW_KEY, type: string, nullable: true, label: Risk weight's parameter }
+      - { name: HVR, type: number, nullable: true, label: HVR }
+      - { name: CR, type: number, nullable: true, label: Concentration factor }
+      - { name: WS, type: number, nullable: true, label: Weighted sensitivity, measure: true }
+      - { name: TRADES, type: integer, nullable: false, label: Trades }
+  simm-group:
+    title: ISDA SIMM concentration groups
+    about: Each scope's concentration groups (the sum against the threshold and the concentration factor CR).
+    params: [ simm-scope, simm-members, direction, calculation-currency, simm-version, concentration, hvr, simm-overrides, simm-addon-fixed, simm-addon-multipliers, simm-addon-factors, simm-addon-lines ]
+    needs: [ sensitivity-element, risk-factor, simm-parameters ]
+    key: [ SCOPE, GROUP_INDEX ]
+    columns:
+      - { name: SCOPE, type: string, nullable: false, label: Scope }
+      - { name: GROUP_INDEX, type: integer, nullable: false, label: Index }
+      - { name: PRODUCT_CLASS, type: string, nullable: false, label: Product class }
+      - { name: RISK_CLASS, type: string, nullable: false, label: Risk class }
+      - { name: MEASURE, type: string, nullable: false, label: Measure }
+      - { name: GROUP, type: string, nullable: true, label: Group }
+      - { name: SUM, type: number, nullable: true, label: Sum }
+      - { name: THRESHOLD, type: number, nullable: true, label: Threshold }
+      - { name: CR, type: number, nullable: true, label: Concentration factor }
+  simm-addon:
+    title: ISDA SIMM add-on lines
+    about: Each scope's add-on, the totals (LINE empty; fixed, notional, multipliers) then line by line (the fixed amount, notional by product, multiplier by product class).
+    params: [ simm-scope, simm-members, direction, calculation-currency, simm-version, concentration, hvr, simm-overrides, simm-addon-fixed, simm-addon-multipliers, simm-addon-factors, simm-addon-lines ]
+    needs: [ sensitivity-element, risk-factor, simm-parameters ]
+    key: [ SCOPE, LINE ]
+    columns:
+      - { name: SCOPE, type: string, nullable: false, label: Scope }
+      - { name: LINE, type: string, nullable: false, label: Line }
+      - { name: FIXED, type: number, nullable: true, label: Fixed }
+      - { name: NOTIONAL, type: number, nullable: true, label: Notional }
+      - { name: MULTIPLIERS, type: number, nullable: true, label: Multipliers }
+      - { name: AMOUNT, type: number, nullable: false, label: Amount, measure: true }
+  simm-versions:
+    title: The SIMM parameter files of the date
+    about: Every version of simm-parameters, installed (read and checked as the method reads it) or refused, with why.
+    params: []
+    needs: [ simm-parameters ]
+    key: [ VERSION ]
+    columns:
+      - { name: VERSION, type: string, nullable: false, label: SIMM version }
+      - { name: INSTALLED, type: boolean, nullable: false, label: Installed }
+      - { name: EFFECTIVE_FROM, type: string, nullable: true, label: Effective from }
+      - { name: PARAMETER_SHA256, type: string, nullable: true, label: Parameter file SHA-256 }
+      - { name: PROBLEM, type: string, nullable: true, label: Why refused }
 capabilities: [ explain, workbook ]
 limits:
   memory: { fixed-bytes: 16777216, per-row-bytes: { exposure-path: 2048 } }
