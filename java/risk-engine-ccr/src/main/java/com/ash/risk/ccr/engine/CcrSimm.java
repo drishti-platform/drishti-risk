@@ -16,6 +16,7 @@
 package com.ash.risk.ccr.engine;
 
 import com.ash.engine.Cell;
+import com.ash.engine.Control;
 import com.ash.engine.Descriptor;
 import com.ash.engine.EngineException;
 import com.ash.engine.EngineException.Kind;
@@ -28,6 +29,7 @@ import com.ash.engine.Table;
 import com.ash.engine.Tables;
 import com.ash.risk.ccr.simm.calc.Simm;
 import com.ash.risk.ccr.simm.calc.SimmChoices;
+import com.ash.risk.ccr.simm.calc.SimmExamples;
 import com.ash.risk.ccr.simm.calc.SimmInput;
 import com.ash.risk.ccr.simm.calc.SimmParams;
 import com.ash.risk.kernel.io.InputRows;
@@ -51,6 +53,9 @@ import java.util.TreeMap;
  */
 final class CcrSimm {
 
+    /** The scope of the hand-built examples (the moved {@link SimmExamples}). */
+    static final String EXAMPLE = "EXAMPLE";
+
     /** One scope's run. */
     record Run(String scope, String version, String direction, SimmInput input, Simm.Result result) {}
 
@@ -64,9 +69,10 @@ final class CcrSimm {
         this.day = day;
     }
 
-    List<Run> runs(Request request, Filter see) throws EngineException {
+    List<Run> runs(Request request, Filter see, Control control) throws EngineException {
+        CcrExtras.SimmInputs in0 = day.simm(control);
         String asked = String.valueOf(request.param("simm-version")).strip();
-        Map<String, String> files = day.extras.simmFiles;
+        Map<String, String> files = in0.simmFiles;
         String version = asked.isEmpty() ? (files.isEmpty() ? null : new TreeMap<>(files).lastKey()) : asked;
         if (version == null || !files.containsKey(version)) {
             throw new EngineException("RSK-3160", Kind.REFUSED, "no SIMM version " + (asked.isEmpty() ? "" : asked + " ") + "in simm-parameters: the versions are "
@@ -74,46 +80,51 @@ final class CcrSimm {
         }
         SimmParams params;
         try {
-            params = SimmParams.parse(files.get(version).getBytes(StandardCharsets.UTF_8), Map.of());
+            params = in0.parameters(version);                           // parsed once a session
         } catch (RuntimeException e) {
             throw new EngineException("RSK-3161", Kind.REFUSED, "the SIMM file " + version + " is refused: " + e.getMessage());
         }
-        SimmChoices choices = new SimmChoices(String.valueOf(request.param("concentration")), String.valueOf(request.param("hvr")), Map.of());
+        Map<String, String> overrides = pairs(request.param("simm-overrides"), "simm-overrides");
+        if (!overrides.isEmpty()) {
+            try {
+                params = SimmParams.parse(files.get(version).getBytes(StandardCharsets.UTF_8), overrides);   // what-if parameters: never the regulatory figure
+            } catch (IllegalArgumentException e) {
+                throw new EngineException("RSK-3164", Kind.REFUSED, e.getMessage());
+            }
+        }
+        SimmChoices choices = new SimmChoices(String.valueOf(request.param("concentration")), String.valueOf(request.param("hvr")), overrides);
         boolean post = "post".equals(String.valueOf(request.param("direction")));
         String calc = String.valueOf(request.param("calculation-currency")).strip().toUpperCase(Locale.ROOT);
-        Double rep = day.extras.usdPer.get(calc);
+        Double rep = in0.usdPer.get(calc);
         if (rep == null) {
             throw new EngineException("RSK-3162", Kind.REFUSED, "no FX mid for the calculation currency " + calc + " (fx-spot)");
         }
-        Double fileCcy = day.extras.usdPer.get(params.calculationCurrency);
-        Map<String, SimmInput.Factor> factors = new TreeMap<>();
-        for (Map<String, Object> r : day.extras.factors) {
-            String name = InputRows.text(r, "RISK_FACTOR");
-            factors.put(name, new SimmInput.Factor(name, InputRows.text(r, "SIMM_RISK_CLASS"), InputRows.text(r, "FACTOR_TYPE"), InputRows.text(r, "SIMM_BUCKET"),
-                    InputRows.text(r, "QUALIFIER"), InputRows.text(r, "SIMM_LABEL1"), InputRows.text(r, "SIMM_LABEL2"), InputRows.text(r, "SENIORITY")));
-        }
+        Double fileCcy = in0.usdPer.get(params.calculationCurrency);
+        Map<String, SimmInput.Factor> factors = in0.factors;
         String scope = String.valueOf(request.param("simm-scope")).strip();
+        if (scope.equalsIgnoreCase(EXAMPLE)) {                          // the hand-built examples (SIMM.md section 15): no data read
+            SimmInput in = SimmExamples.together();
+            return List.of(new Run(EXAMPLE, version, post ? "post" : "collect", in, run(in, params, choices, post)));
+        }
+        SimmInput.AddOns addOns = addOns(request, calc, rep, in0);
         Map<String, List<Map<String, Object>>> byScope = new TreeMap<>();
         // scopes the host resolves (its netting sets' records, an analytic scope's records): SCOPE, SENSITIVITY_ID; each scope's elements in
-        // the input's row order, one trade per record (as the in-tree run builds it), simm-scope not read
+        // the input's row order (read through the session's index of the elements by sensitivity), one trade per record (as the in-tree run
+        // builds it), simm-scope not read
         Map<String, java.util.Set<String>> members = members(request);
         if (members != null) {
             for (Map.Entry<String, java.util.Set<String>> m : members.entrySet()) {
-                byScope.put(m.getKey(), new ArrayList<>());
-            }
-            for (Map<String, Object> r : day.extras.sensitivities) {
-                if (!InputRows.visible(see, r)) {
-                    continue;
-                }
-                String id = InputRows.text(r, "SENSITIVITY_ID");
-                for (Map.Entry<String, java.util.Set<String>> m : members.entrySet()) {
-                    if (id != null && m.getValue().contains(id)) {
-                        byScope.get(m.getKey()).add(r);
+                List<Map<String, Object>> rows = new ArrayList<>();
+                for (int i : in0.rowsOf(m.getValue())) {
+                    Map<String, Object> r = in0.sensitivities.get(i);
+                    if (InputRows.visible(see, r)) {
+                        rows.add(r);
                     }
                 }
+                byScope.put(m.getKey(), rows);
             }
         }
-        for (Map<String, Object> r : members != null ? List.<Map<String, Object>>of() : day.extras.sensitivities) {
+        for (Map<String, Object> r : members != null ? List.<Map<String, Object>>of() : in0.sensitivities) {
             if (!InputRows.visible(see, r)) {
                 continue;
             }
@@ -148,17 +159,87 @@ final class CcrSimm {
                     trades.add(new SimmInput.Trade(id, options.productClass(group), group == null ? Map.of() : Map.of("PRODUCT_GROUP", group)));
                 }
                 String ccy = InputRows.text(r, "CURRENCY") == null ? calc : InputRows.text(r, "CURRENCY").toUpperCase(Locale.ROOT);
-                Double per = day.extras.usdPer.get(ccy);
+                Double per = in0.usdPer.get(ccy);
                 if (per == null) {
                     continue;                                              // no FX for its currency: left out (the input names the rows)
                 }
                 els.add(new SimmInput.Element(idx, factors.get(InputRows.text(r, "RISK_FACTOR")), String.valueOf(InputRows.text(r, "MEASURE"))
                         .toUpperCase(Locale.ROOT), InputRows.number(r, "VALUE") * per / rep, InputRows.number(r, "IMPLIED_VOL")));
             }
-            SimmInput in = new SimmInput(trades, els, calc, SimmInput.AddOns.NONE, fileCcy == null ? 1 : fileCcy / rep);
-            out.add(new Run(e.getKey(), version, post ? "post" : "collect", in, Simm.run(in, params, choices, post)));
+            SimmInput in = new SimmInput(trades, els, calc, addOns, fileCcy == null ? 1 : fileCcy / rep);
+            out.add(new Run(e.getKey(), version, post ? "post" : "collect", in, run(in, params, choices, post)));
         }
         return out;
+    }
+
+    /**
+     * The add-ons of the CSA the host resolved for the scope (SIMM_GUIDE.md, "Add-ons"): {@code simm-addon-fixed}, the product
+     * multipliers ({@code simm-addon-multipliers}, product class=MS) and notional factors ({@code simm-addon-factors}, product=factor), and
+     * the notional lines ({@code simm-addon-lines}, TRADE_ID|PRODUCT|NOTIONAL|CURRENCY), each line's notional in the calculation currency by
+     * the date's FX mids (a line whose currency has none is left out). None given: no add-on.
+     */
+    SimmInput.AddOns addOns(Request request, String calc, double rep, CcrExtras.SimmInputs in0) throws EngineException {
+        Object f = request.param("simm-addon-fixed");
+        double fixed = f instanceof Number n ? n.doubleValue() : f == null || f.toString().isBlank() ? 0 : Double.parseDouble(f.toString());
+        Map<String, Double> multipliers = numbers(pairs(request.param("simm-addon-multipliers"), "simm-addon-multipliers"), "simm-addon-multipliers");
+        Map<String, Double> factors = numbers(pairs(request.param("simm-addon-factors"), "simm-addon-factors"), "simm-addon-factors");
+        List<SimmInput.Line> lines = new ArrayList<>();
+        if (request.param("simm-addon-lines") instanceof List<?> l) {
+            for (Object o : l) {
+                String[] x = String.valueOf(o).split("\\|", -1);
+                if (x.length != 4) {
+                    throw new EngineException("RSK-3165", Kind.REFUSED, "an add-on line is TRADE_ID|PRODUCT|NOTIONAL|CURRENCY, not " + o);
+                }
+                String ccy = x[3].isBlank() ? "USD" : x[3].strip().toUpperCase(Locale.ROOT);
+                Double per = in0.usdPer.get(ccy);
+                if (per == null) {
+                    continue;                                              // no FX for its currency: left out, as the host's run leaves it
+                }
+                double notional = x[2].isBlank() ? 0 : Double.parseDouble(x[2].strip());
+                lines.add(new SimmInput.Line(x[0].isBlank() ? null : x[0], x[1].isBlank() ? null : x[1], notional * per / rep));
+            }
+        }
+        if (fixed == 0 && multipliers.isEmpty() && factors.isEmpty() && lines.isEmpty()) {
+            return SimmInput.AddOns.NONE;
+        }
+        return new SimmInput.AddOns(fixed, multipliers, factors, lines);
+    }
+
+    /** A list param of {@code key=value} texts as an ordered map (the value after the last '='). */
+    static Map<String, String> pairs(Object param, String name) throws EngineException {
+        Map<String, String> out = new LinkedHashMap<>();
+        if (param instanceof List<?> l) {
+            for (Object o : l) {
+                String x = String.valueOf(o);
+                int eq = x.lastIndexOf('=');
+                if (eq <= 0) {
+                    throw new EngineException("RSK-3164", Kind.REFUSED, name + " is key=value, not " + x);
+                }
+                out.put(x.substring(0, eq).strip(), x.substring(eq + 1).strip());
+            }
+        }
+        return out;
+    }
+
+    private static Map<String, Double> numbers(Map<String, String> pairs, String name) throws EngineException {
+        Map<String, Double> out = new LinkedHashMap<>();
+        for (Map.Entry<String, String> e : pairs.entrySet()) {
+            try {
+                out.put(e.getKey(), Double.parseDouble(e.getValue()));
+            } catch (NumberFormatException x) {
+                throw new EngineException("RSK-3165", Kind.REFUSED, name + ": " + e.getValue() + " is not a number");
+            }
+        }
+        return out;
+    }
+
+    /** The method on one input; what it refuses (a CSA multiplier below 1) is the request's, in its words. */
+    private static Simm.Result run(SimmInput in, SimmParams params, SimmChoices choices, boolean post) throws EngineException {
+        try {
+            return Simm.run(in, params, choices, post);
+        } catch (IllegalArgumentException e) {
+            throw new EngineException("RSK-3165", Kind.REFUSED, e.getMessage());
+        }
     }
 
     /** The host's resolved scopes ({@code simm-members}: SCOPE, SENSITIVITY_ID), in the table's order of scopes; null when not given. */
@@ -197,6 +278,91 @@ final class CcrSimm {
         for (Run r : runs) {
             SimmParams p = r.result().params();
             t.row(r.scope(), p.version, p.effectiveFrom, p.hash, p.calculationCurrency, String.join(",", p.regimes), p.describe());
+        }
+        return t.build();
+    }
+
+    /** Each scope's charges (SIMM_GUIDE.md, the explanation's steps): a charge per product class, risk class and measure, in the method's order. */
+    Table charges(List<Run> runs) {
+        Tables.Builder t = Tables.of(descriptor.schema("simm-charge"));
+        for (Run r : runs) {
+            List<Simm.Charge> cs = r.result().charges();
+            for (int i = 0; i < cs.size(); i++) {
+                Simm.Charge c = cs.get(i);
+                boolean curv = c.measure.equals(Simm.CURVATURE);
+                t.row(r.scope(), (long) i, c.productClass, c.riskClass, c.measure, c.margin, c.root, c.residual, curv ? c.theta : null, curv ? c.lambda : null,
+                        curv ? c.sumCvr : null, curv ? c.scale : null);
+            }
+        }
+        return t.build();
+    }
+
+    /** Each charge's buckets: K, the net and S, the bucket's concentration and its factors (the indices of simm-factor, in order). */
+    Table buckets(List<Run> runs) {
+        Tables.Builder t = Tables.of(descriptor.schema("simm-bucket"));
+        for (Run r : runs) {
+            List<Simm.Charge> cs = r.result().charges();
+            for (int i = 0; i < cs.size(); i++) {
+                List<Simm.Bucket> bs = cs.get(i).buckets;
+                for (int j = 0; j < bs.size(); j++) {
+                    Simm.Bucket b = bs.get(j);
+                    t.row(r.scope(), (long) i, (long) j, b.label, b.residual, b.k, b.net, b.s, b.cr, java.util.Arrays.stream(b.members).asDoubleStream().toArray());   // a list column holds doubles
+                }
+            }
+        }
+        return t.build();
+    }
+
+    /** Each weighted sensitivity: s, the risk weight (and its key), HVR, the concentration factor, WS and the trades in it. */
+    Table factors(List<Run> runs) {
+        Tables.Builder t = Tables.of(descriptor.schema("simm-factor"));
+        for (Run r : runs) {
+            List<Simm.Risk> rs = r.result().risks();
+            for (int k = 0; k < rs.size(); k++) {
+                Simm.Risk x = rs.get(k);
+                t.row(r.scope(), (long) k, x.productClass, x.riskClass, x.measure, x.key, x.s, x.rw, x.rwKey, x.hvr, x.cr, x.ws, (long) x.parts.size());
+            }
+        }
+        return t.build();
+    }
+
+    /** Each concentration group: the sum, the threshold and the concentration factor. */
+    Table groups(List<Run> runs) {
+        Tables.Builder t = Tables.of(descriptor.schema("simm-group"));
+        for (Run r : runs) {
+            List<Simm.Group> gs = r.result().groups();
+            for (int i = 0; i < gs.size(); i++) {
+                Simm.Group g = gs.get(i);
+                t.row(r.scope(), (long) i, g.productClass, g.riskClass, g.measure, g.group, g.sum, g.threshold, g.cr);
+            }
+        }
+        return t.build();
+    }
+
+    /** Each scope's add-on, line by line (fixed amount, notional by product, multiplier by product class). */
+    Table addOnLines(List<Run> runs) {
+        Tables.Builder t = Tables.of(descriptor.schema("simm-addon"));
+        for (Run r : runs) {
+            Simm.AddOn a = r.result().addOn();
+            t.row(r.scope(), "", a.fixed(), a.notional(), a.multipliers(), a.total());
+            for (Map.Entry<String, Double> e : a.byProduct().entrySet()) {
+                t.row(r.scope(), e.getKey(), null, null, null, e.getValue());
+            }
+        }
+        return t.build();
+    }
+
+    /** Every version of simm-parameters on the date: installed (checked as the method reads it), or refused with why. */
+    Table versionList(Control control) throws EngineException {
+        CcrExtras.SimmInputs in0 = day.simm(control);
+        Tables.Builder t = Tables.of(descriptor.schema("simm-versions"));
+        for (Map.Entry<String, String> e : new TreeMap<>(in0.simmFiles).entrySet()) {
+            try {
+                SimmParams p = in0.parameters(e.getKey());              // parsed once a session
+                t.row(e.getKey(), true, p.effectiveFrom, p.hash, null);
+            } catch (RuntimeException x) {
+                t.row(e.getKey(), false, null, null, x.getMessage());
+            }
         }
         return t.build();
     }
