@@ -258,6 +258,7 @@ outputs:
       - { name: PEAK_PFE_TENOR, type: string, nullable: true, label: Peak PFE tenor }
       - { name: FLAGS, type: string, nullable: false, label: Flags }
       - { name: NOTE, type: string, nullable: true, label: Note }
+      - { name: ORDER, type: integer, nullable: false, label: Order of the nodes }
   exposure-tree-ee:
     title: The exposure tree's EE lines
     about: Each scope of exposure-tree with figures, its EE at every primary grid point (the tree's sparklines).

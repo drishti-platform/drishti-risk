@@ -3,6 +3,8 @@
 
 ## 0.1.0 (unreleased)
 
+- `ccr`: `exposure-tree` adds `ORDER` (the nodes in the engine's order: the netting sets in the book's order first), so a host reading
+  only its reference data takes the netting sets' order from the engine (Drishti's engine-path tree without the in-tree paths). R2 exposure part 3.
 - `ccr`: new outputs `exposure-official` and `exposure-official-profile` (the figures of Drishti's official exposure record for the scopes
   the host names, param `scopes`, with `scope-members` for a scope only the host resolves, a hierarchy node's trades, never standalone:
   netting sets, partial sets, trades, CE, EPE, EEPE, peak EE, peak PFE at 95% and 99% and its date, flags,

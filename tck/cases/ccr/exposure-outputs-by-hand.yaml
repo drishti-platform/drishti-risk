@@ -58,15 +58,15 @@ cases:
           rows:
             - [ XR-2, 2, 3, 3 ]
         exposure-tree:
-          columns: [ SCOPE, KIND, ID, NETTING_SETS, TRADES, EPE, PEAK_EE, PEAK_PFE, PEAK_PFE_TENOR, FLAGS, NOTE ]
+          columns: [ SCOPE, KIND, ID, NETTING_SETS, TRADES, EPE, PEAK_EE, PEAK_PFE, PEAK_PFE_TENOR, FLAGS, NOTE, ORDER ]
           rows:
-            - [ BANK, bank, BANK, 2, 3, "0x4041cfc7e3f1f8fd", 42.5, 60, "6M", "", null ]
-            - [ "CPTY:CP-1", counterparty, CP-1, 1, 2, 25, 30, 60, "6M", "", null ]
-            - [ "CPTY:CP-2", counterparty, CP-2, 1, 1, 10.623287671232877, 12.5, 25, "6M", "", null ]
-            - [ "LE:LE-1", legal-entity, LE-1, 1, 2, 25, 30, 60, "6M", "", null ]
-            - [ "LE:LE-2", legal-entity, LE-2, 1, 1, 10.623287671232877, 12.5, 25, "6M", "", null ]
-            - [ "NSET:NS-1", netting-set, NS-1, 1, 2, 25, 30, 60, "6M", "", null ]
-            - [ "NSET:NS-2", netting-set, NS-2, 1, 1, 10.623287671232877, 12.5, 25, "6M", "", null ]
+            - [ BANK, bank, BANK, 2, 3, "0x4041cfc7e3f1f8fd", 42.5, 60, "6M", "", null, 4 ]
+            - [ "CPTY:CP-1", counterparty, CP-1, 1, 2, 25, 30, 60, "6M", "", null, 2 ]
+            - [ "CPTY:CP-2", counterparty, CP-2, 1, 1, 10.623287671232877, 12.5, 25, "6M", "", null, 3 ]
+            - [ "LE:LE-1", legal-entity, LE-1, 1, 2, 25, 30, 60, "6M", "", null, 5 ]
+            - [ "LE:LE-2", legal-entity, LE-2, 1, 1, 10.623287671232877, 12.5, 25, "6M", "", null, 6 ]
+            - [ "NSET:NS-1", netting-set, NS-1, 1, 2, 25, 30, 60, "6M", "", null, 0 ]
+            - [ "NSET:NS-2", netting-set, NS-2, 1, 1, 10.623287671232877, 12.5, 25, "6M", "", null, 1 ]
         exposure-tree-ee:
           columns: [ SCOPE, POINT, EE ]
           rows:

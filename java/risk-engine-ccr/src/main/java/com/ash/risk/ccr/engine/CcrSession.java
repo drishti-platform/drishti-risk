@@ -568,16 +568,17 @@ final class CcrSession implements Session, Explaining {
         double q = params(request).q();
         ExposureGrid g = b.grid();
         Tables.Builder t = Tables.of(engine.descriptor().schema("exposure-tree"));
+        long order = 0;
         for (TreeNode n : nodes) {
             if (n.result() == null) {
-                t.row(n.scope(), n.kind(), n.id(), null, null, null, null, null, null, "", n.note());
+                t.row(n.scope(), n.kind(), n.id(), null, null, null, null, null, null, "", n.note(), order++);
                 continue;
             }
             ExposureMath.Stats s = n.result().stats;
             int a = s.at(q);
             String tenor = s.peakAt[a] < 0 ? null : g.tenor(g.primaryAt(s.peakAt[a]));
             t.row(n.scope(), n.kind(), n.id(), (long) n.result().pieces.size(), (long) n.result().trades.size(), s.epe, s.peakEe, s.peakPfe[a], tenor,
-                    String.join(",", n.result().flags), null);
+                    String.join(",", n.result().flags), null, order++);
         }
         return t.build();
     }
