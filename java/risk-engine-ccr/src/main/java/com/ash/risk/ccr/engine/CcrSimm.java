@@ -313,7 +313,7 @@ final class CcrSimm {
                 List<Simm.Bucket> bs = cs.get(i).buckets;
                 for (int j = 0; j < bs.size(); j++) {
                     Simm.Bucket b = bs.get(j);
-                    t.row(r.scope(), (long) i, (long) j, b.label, b.residual, b.k, b.net, b.s, b.cr, b.members.clone());
+                    t.row(r.scope(), (long) i, (long) j, b.label, b.residual, b.k, b.net, b.s, b.cr, java.util.Arrays.stream(b.members).asDoubleStream().toArray());   // a list column holds doubles
                 }
             }
         }
