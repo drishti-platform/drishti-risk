@@ -96,7 +96,9 @@ final class CcrSession implements Session, Explaining {
             "pre-deal", List.of(CcrExtras.LIMIT, CcrExtras.BUCKET),
             "pre-deal-buckets", List.of(CcrExtras.LIMIT, CcrExtras.BUCKET),
             "simm", List.of(CcrExtras.SENSITIVITY, CcrExtras.FACTOR, CcrExtras.SIMM),
-            "simm-total", List.of(CcrExtras.SENSITIVITY, CcrExtras.FACTOR, CcrExtras.SIMM));
+            "simm-total", List.of(CcrExtras.SENSITIVITY, CcrExtras.FACTOR, CcrExtras.SIMM),
+            "simm-product", List.of(CcrExtras.SENSITIVITY, CcrExtras.FACTOR, CcrExtras.SIMM),
+            "simm-version", List.of(CcrExtras.SENSITIVITY, CcrExtras.FACTOR, CcrExtras.SIMM));
 
     /** What the outputs asked need and the date does not have, one per input, naming every output it stops. */
     private List<Missing> missing(Request request) {
@@ -268,6 +270,8 @@ final class CcrSession implements Session, Explaining {
                 case "pre-deal-buckets" -> new CcrPreDeal(engine.descriptor(), engine.options(), day).buckets(c.check());
                 case "simm" -> new CcrSimm(engine.descriptor(), engine.options(), day).classes(c.simm());
                 case "simm-total" -> new CcrSimm(engine.descriptor(), engine.options(), day).totals(c.simm());
+                case "simm-product" -> new CcrSimm(engine.descriptor(), engine.options(), day).products(c.simm());
+                case "simm-version" -> new CcrSimm(engine.descriptor(), engine.options(), day).versions(c.simm());
                 default -> throw new EngineException("ENG-3003", Kind.REFUSED, "ccr has no output " + out);
             });
         }

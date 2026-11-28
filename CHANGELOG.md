@@ -3,6 +3,11 @@
 
 ## 0.1.0 (unreleased)
 
+- `ccr`: SIMM for a host-resolved scope: new param `simm-members` (SCOPE, SENSITIVITY_ID: a netting set's records as the host's trade
+  master places them, an analytic scope's records; each scope its records' elements in the input's order, one trade per record, as
+  Drishti's in-tree run builds it; `simm-scope` is then not read) on `simm` and `simm-total`; new outputs `simm-product` (each scope's SIMM
+  of a product class) and `simm-version` (the run's parameter file: version, effective date, SHA-256, thresholds currency, the regimes it
+  recognises, its description). Drishti's `GET /api/v1/risk/simm` on the engine path reads them, every SIMM input a lake table. R2 SIMM.
 - `ccr`: `exposure-tree` adds `ORDER` (the nodes in the engine's order: the netting sets in the book's order first), so a host reading
   only its reference data takes the netting sets' order from the engine (Drishti's engine-path tree without the in-tree paths). R2 exposure part 3.
 - `ccr`: new outputs `exposure-official` and `exposure-official-profile` (the figures of Drishti's official exposure record for the scopes

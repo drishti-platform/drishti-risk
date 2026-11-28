@@ -94,7 +94,26 @@ final class CcrSimm {
         }
         String scope = String.valueOf(request.param("simm-scope")).strip();
         Map<String, List<Map<String, Object>>> byScope = new TreeMap<>();
-        for (Map<String, Object> r : day.extras.sensitivities) {
+        // scopes the host resolves (its netting sets' records, an analytic scope's records): SCOPE, SENSITIVITY_ID; each scope's elements in
+        // the input's row order, one trade per record (as the in-tree run builds it), simm-scope not read
+        Map<String, java.util.Set<String>> members = members(request);
+        if (members != null) {
+            for (Map.Entry<String, java.util.Set<String>> m : members.entrySet()) {
+                byScope.put(m.getKey(), new ArrayList<>());
+            }
+            for (Map<String, Object> r : day.extras.sensitivities) {
+                if (!InputRows.visible(see, r)) {
+                    continue;
+                }
+                String id = InputRows.text(r, "SENSITIVITY_ID");
+                for (Map.Entry<String, java.util.Set<String>> m : members.entrySet()) {
+                    if (id != null && m.getValue().contains(id)) {
+                        byScope.get(m.getKey()).add(r);
+                    }
+                }
+            }
+        }
+        for (Map<String, Object> r : members != null ? List.<Map<String, Object>>of() : day.extras.sensitivities) {
             if (!InputRows.visible(see, r)) {
                 continue;
             }
@@ -119,7 +138,8 @@ final class CcrSimm {
             Map<String, Integer> index = new LinkedHashMap<>();
             List<SimmInput.Element> els = new ArrayList<>();
             for (Map<String, Object> r : e.getValue()) {
-                String id = InputRows.text(r, "TRADE_ID") != null ? InputRows.text(r, "TRADE_ID") : InputRows.text(r, "POSITION_ID");
+                String id = members != null ? InputRows.text(r, "SENSITIVITY_ID")
+                        : InputRows.text(r, "TRADE_ID") != null ? InputRows.text(r, "TRADE_ID") : InputRows.text(r, "POSITION_ID");
                 Integer idx = index.get(id);
                 if (idx == null) {
                     idx = trades.size();
@@ -139,6 +159,46 @@ final class CcrSimm {
             out.add(new Run(e.getKey(), version, post ? "post" : "collect", in, Simm.run(in, params, choices, post)));
         }
         return out;
+    }
+
+    /** The host's resolved scopes ({@code simm-members}: SCOPE, SENSITIVITY_ID), in the table's order of scopes; null when not given. */
+    static Map<String, java.util.Set<String>> members(Request request) {
+        if (!(request.param("simm-members") instanceof Table t)) {
+            return null;
+        }
+        Map<String, java.util.Set<String>> out = new LinkedHashMap<>();
+        for (int i = 0; i < t.rows(); i++) {
+            Object sc = t.value("SCOPE", i);
+            Object id = t.value("SENSITIVITY_ID", i);
+            if (sc != null) {
+                java.util.Set<String> m = out.computeIfAbsent(sc.toString(), x -> new java.util.HashSet<>());
+                if (id != null) {
+                    m.add(id.toString());
+                }
+            }
+        }
+        return out;
+    }
+
+    /** Each scope's SIMM by product class (SIMM_p, the risk classes aggregated by psi; the product classes are then added). */
+    Table products(List<Run> runs) {
+        Tables.Builder t = Tables.of(descriptor.schema("simm-product"));
+        for (Run r : runs) {
+            for (Simm.ProductIm p : r.result().products()) {
+                t.row(r.scope(), p.productClass(), p.simm());
+            }
+        }
+        return t.build();
+    }
+
+    /** The parameter file of each scope's run: version, effective date, SHA-256, its calculation currency and the regimes it recognises. */
+    Table versions(List<Run> runs) {
+        Tables.Builder t = Tables.of(descriptor.schema("simm-version"));
+        for (Run r : runs) {
+            SimmParams p = r.result().params();
+            t.row(r.scope(), p.version, p.effectiveFrom, p.hash, p.calculationCurrency, String.join(",", p.regimes), p.describe());
+        }
+        return t.build();
     }
 
     Table classes(List<Run> runs) {

@@ -149,6 +149,12 @@ params:
     max-rows: 2000000
     label: Scope members
     help: "Scopes of exposure-official the host resolves itself (a hierarchy's node over the trades' level columns, which the engine's rows do not carry): SCOPE, TRADE_ID; such a scope is its trades evaluated as a set, each netting set whole or partial, never standalone."
+  simm-members:
+    type: table
+    contract: risk/simm-member@1
+    max-rows: 2000000
+    label: SIMM scope members
+    help: "Scopes of SIMM the host resolves itself (a netting set's records as its trade master places them, an analytic scope's records): SCOPE, SENSITIVITY_ID; each scope is its records' elements in the input's order, one trade per record; simm-scope is then not read."
   simm-scope: { type: text, default: "", label: SIMM netting set, help: "NSET:<id> or CPTY:<id>; empty: every netting set of the sensitivities." }
   direction: { type: enum, options: [ collect, post ], default: collect, label: Direction }
   calculation-currency: { type: text, default: USD, label: Calculation currency }
@@ -485,7 +491,7 @@ outputs:
   simm:
     title: ISDA SIMM by product and risk class
     about: Initial margin of a netting set's (or every set's) sensitivities under the bank's SIMM version, by product class and risk class (delta, vega, curvature, base correlation), for the bank's side (collect) or the counterparty's (post).
-    params: [ simm-scope, direction, calculation-currency, simm-version, concentration, hvr ]
+    params: [ simm-scope, simm-members, direction, calculation-currency, simm-version, concentration, hvr ]
     needs: [ sensitivity-element, risk-factor, simm-parameters ]
     key: [ SCOPE, PRODUCT_CLASS, RISK_CLASS ]
     columns:
@@ -500,7 +506,7 @@ outputs:
   simm-total:
     title: ISDA SIMM of a scope
     about: The scope's SIMM (the product classes added), its add-on and the total initial margin, with the version used.
-    params: [ simm-scope, direction, calculation-currency, simm-version, concentration, hvr ]
+    params: [ simm-scope, simm-members, direction, calculation-currency, simm-version, concentration, hvr ]
     needs: [ sensitivity-element, risk-factor, simm-parameters ]
     key: [ SCOPE ]
     columns:
@@ -513,6 +519,30 @@ outputs:
       - { name: TOTAL, type: number, nullable: false, label: Total initial margin, measure: true }
       - { name: REGULATORY, type: boolean, nullable: false, label: Regulatory figures }
       - { name: REFUSED, type: integer, nullable: false, label: Elements refused }
+  simm-product:
+    title: ISDA SIMM by product class
+    about: Each scope's SIMM of a product class (its risk classes aggregated by psi, SIMM paragraph 2), for the side asked; the product classes added are simm-total's SIMM.
+    params: [ simm-scope, simm-members, direction, calculation-currency, simm-version, concentration, hvr ]
+    needs: [ sensitivity-element, risk-factor, simm-parameters ]
+    key: [ SCOPE, PRODUCT_CLASS ]
+    columns:
+      - { name: SCOPE, type: string, nullable: false, label: Scope }
+      - { name: PRODUCT_CLASS, type: string, nullable: false, label: Product class }
+      - { name: SIMM, type: number, nullable: false, label: Product class SIMM, measure: true }
+  simm-version:
+    title: The SIMM parameter file of a run
+    about: The version each scope's run used, as the parameter file states it (its SHA-256 for provenance, the regimes it recognises, the currency its thresholds are set in).
+    params: [ simm-scope, simm-members, direction, calculation-currency, simm-version, concentration, hvr ]
+    needs: [ sensitivity-element, risk-factor, simm-parameters ]
+    key: [ SCOPE ]
+    columns:
+      - { name: SCOPE, type: string, nullable: false, label: Scope }
+      - { name: VERSION, type: string, nullable: false, label: SIMM version }
+      - { name: EFFECTIVE_FROM, type: string, nullable: true, label: Effective from }
+      - { name: PARAMETER_SHA256, type: string, nullable: false, label: Parameter file SHA-256 }
+      - { name: FILE_CURRENCY, type: string, nullable: true, label: Thresholds currency }
+      - { name: REGIMES, type: string, nullable: true, label: Regimes recognised }
+      - { name: DESCRIPTION, type: string, nullable: true, label: Version described }
 capabilities: [ explain, workbook ]
 limits:
   memory: { fixed-bytes: 16777216, per-row-bytes: { exposure-path: 2048 } }
