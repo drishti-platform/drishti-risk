@@ -57,7 +57,7 @@ final class MarketBooks {
      * scratch row the builder copies): nothing delivered is kept after the build.
      */
     static Built build(MarketDay day, MarketDay.ScenarioSet set, int window, String currency, Filter pvSee, Filter pnlSee, MarketOptions o,
-            ParallelSums sums, java.util.function.Consumer<String> note, Control control) throws EngineException {
+            ParallelSums sums, Images images, String visibility, Control control) throws EngineException {
         List<LocalDate> scen = set.dates();
         int w = window <= 0 || window > scen.size() ? scen.size() : window;
         List<ScenarioFx.Rates> rates = new ArrayList<>();
@@ -75,49 +75,45 @@ final class MarketBooks {
         }
         ScenarioFx wfx = new ScenarioFx(w, cutRates);
         String label = set.id() + (w == scen.size() ? "" : "/" + w);
-        VarBook.Builder b = new VarBook.Builder(day.date, label, cut, MarketOptions.ROWS_PER_CHUNK, Long.MAX_VALUE);
-        b.columnHierarchies(o.hierarchies(), day.nodeLimits);
-        b.currencyRates(c -> wfx.rates(c).orElse(null));
-        PositionRules rules = o.positions();
-        Adder add = new Adder(b, rules, w);
-        InputTable pvIn = day.vectors(MarketDay.PV_INPUT);
-        if (pvIn != null) {
-            MarketRows rows = MarketRows.read(pvIn, MarketDay.PV_INPUT.key(), null, control);
-            double[] pnl = new double[scen.size()];
-            rows.eachVector(pvIn, MarketDay.PV_INPUT.vector(), control, (n, p, len) -> {
-                if (!set.id().equals(n.text("SCENARIO_SET_ID")) || !rules.live(n.text("TRADE_STATUS")) || !visible(pvSee, n)) {
-                    return;
-                }
-                ScenarioFx.Rates r = fx.rates(n.text("CURRENCY")).orElse(null);
-                if (r == null) {
-                    return;                                             // a currency without FX: the loader's "not found" (counted)
-                }
-                double[] v = len <= pnl.length ? pnl : new double[len];
-                ScenarioFx.pnlFromPv(n.number("BASE_PV"), p, len, r, v);
-                add.row(n, v, len, n.number("BASE_PV") * r.base(), n.text("CURRENCY"));
-            });
-        }
-        InputTable pnlIn = day.vectors(MarketDay.PNL_INPUT);
-        if (pnlIn != null) {
-            MarketRows rows = MarketRows.read(pnlIn, MarketDay.PNL_INPUT.key(), null, control);
-            rows.eachVector(pnlIn, MarketDay.PNL_INPUT.vector(), control, (n, v, len) -> {
-                if (!set.id().equals(n.text("SCENARIO_SET_ID")) || !rules.live(n.text("TRADE_STATUS")) || !visible(pnlSee, n)) {
-                    return;
-                }
-                add.row(n, v, len, n.number("PV"), null);
-            });
-        }
-        VarBook usd = b.build(sums);
-        if (o.float32Rows()) {                                          // the host's mapped tier: float32 position rows (MC-12)
-            VarBook own = o.zeroCopy() && day.rowsView != null && pvSee == Filter.ALL && pnlSee == Filter.ALL
-                    ? HostRows.swapIn(day.rowsView, usd) : null;          // the host's own rows, read in place (3a), when they are this book's
-            if (o.zeroCopy() && day.rowsView != null) {
-                note.accept("book " + label + ": " + (own != null ? "the host's float32 rows read in place (zero copy)"
-                        : pvSee != Filter.ALL || pnlSee != Filter.ALL ? "a viewer's rows: built (the host's view is every row)"
-                        : "the host's rows are not this book's (positions, trades or scenarios differ): built"));
+        HeapBook heap = () -> {
+            VarBook.Builder b = new VarBook.Builder(day.date, label, cut, MarketOptions.ROWS_PER_CHUNK, Long.MAX_VALUE);
+            b.columnHierarchies(o.hierarchies(), day.nodeLimits);
+            b.currencyRates(c -> wfx.rates(c).orElse(null));
+            PositionRules rules = o.positions();
+            Adder add = new Adder(b, rules, w);
+            InputTable pvIn = day.vectors(MarketDay.PV_INPUT);
+            if (pvIn != null) {
+                MarketRows rows = MarketRows.read(pvIn, MarketDay.PV_INPUT.key(), null, control);
+                double[] pnl = new double[scen.size()];
+                rows.eachVector(pvIn, MarketDay.PV_INPUT.vector(), control, (n, p, len) -> {
+                    if (!set.id().equals(n.text("SCENARIO_SET_ID")) || !rules.live(n.text("TRADE_STATUS")) || !visible(pvSee, n)) {
+                        return;
+                    }
+                    ScenarioFx.Rates r = fx.rates(n.text("CURRENCY")).orElse(null);
+                    if (r == null) {
+                        return;                                             // a currency without FX: the loader's "not found" (counted)
+                    }
+                    double[] v = len <= pnl.length ? pnl : new double[len];
+                    ScenarioFx.pnlFromPv(n.number("BASE_PV"), p, len, r, v);
+                    add.row(n, v, len, n.number("BASE_PV") * r.base(), n.text("CURRENCY"));
+                });
             }
-            usd = own != null ? own : usd.withFloat32Rows();
-        }
+            InputTable pnlIn = day.vectors(MarketDay.PNL_INPUT);
+            if (pnlIn != null) {
+                MarketRows rows = MarketRows.read(pnlIn, MarketDay.PNL_INPUT.key(), null, control);
+                rows.eachVector(pnlIn, MarketDay.PNL_INPUT.vector(), control, (n, v, len) -> {
+                    if (!set.id().equals(n.text("SCENARIO_SET_ID")) || !rules.live(n.text("TRADE_STATUS")) || !visible(pnlSee, n)) {
+                        return;
+                    }
+                    add.row(n, v, len, n.number("PV"), null);
+                });
+            }
+            control.progress(0.9, "building the book of " + label);
+            return b.build(sums);
+        };
+        // the mapped tier: the book's rows and aggregates in the host's kept image (found, or built once from the heap book and written)
+        String tag = "|" + label + "|" + visibility;
+        VarBook usd = o.float32Rows() ? images.book("book|USD" + tag, heap) : heap.build();
         if (currency == null || currency.isBlank() || "USD".equalsIgnoreCase(currency)) {
             return new Built(usd, cut, wfx, o.calc());
         }
@@ -126,13 +122,24 @@ final class MarketBooks {
             usd.close();
             return null;
         }
-        VarBook converted = CurrencyBook.convert(usd, rep,
-                new VarBook.Builder(day.date, label, cut, MarketOptions.ROWS_PER_CHUNK, Long.MAX_VALUE), sums).book();
+        // converted from the USD book's float32 rows (as the host's mapped tier converts), kept as its own image
+        HeapBook convert = () -> CurrencyBook.convert(usd, rep, new VarBook.Builder(day.date, label, cut, MarketOptions.ROWS_PER_CHUNK,
+                Long.MAX_VALUE), sums).book();
+        VarBook converted = o.float32Rows() ? images.book("book|" + currency.toUpperCase(java.util.Locale.ROOT) + tag, convert) : convert.build();
         usd.close();
-        if (o.float32Rows()) {
-            converted = converted.withFloat32Rows();                    // converted from the float32 rows, kept as float32 rows, as the host's
-        }
         return new Built(converted, cut, wfx, o.calc());
+    }
+
+    /** Builds a book on the heap (its rows read from the inputs, or converted from another book). */
+    @FunctionalInterface
+    interface HeapBook {
+        VarBook build() throws EngineException;
+    }
+
+    /** The session's kept books: the image of {@code name} found, or built once from {@code heap} and written; the book read from it. */
+    @FunctionalInterface
+    interface Images {
+        VarBook book(String name, HeapBook heap) throws EngineException;
     }
 
     /**

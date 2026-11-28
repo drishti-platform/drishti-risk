@@ -88,14 +88,10 @@ final class MarketDay {
     private final InputTable pv;
     private final InputTable pnl;
     private volatile MarketExtras extras;
-    /** The host's own float32 rows of the date (InputTable.vectorView {@value #ROWS_VIEW}: zero copy, R2_CUT_PLAN 3a), or null. */
-    final Object rowsView;
-    static final String ROWS_VIEW = "float32-rows";
     private final Map<String, Missing> extrasMissing = new java.util.concurrent.ConcurrentHashMap<>();
 
     private MarketDay(Snapshot snapshot, Inputs inputs, InputTable pv, InputTable pnl, List<ScenarioSet> sets, List<Fx> fx,
-            Map<String, Double> nodeLimits, Map<String, Double> basketLimits, List<Basket> baskets, Map<String, Missing> missing, Object rowsView) {
-        this.rowsView = rowsView;
+            Map<String, Double> nodeLimits, Map<String, Double> basketLimits, List<Basket> baskets, Map<String, Missing> missing) {
         this.snapshot = snapshot;
         this.inputs = inputs;
         this.pv = pv;
@@ -111,11 +107,6 @@ final class MarketDay {
 
     /** The date's small inputs, and whether its vector inputs are there (their rows are read by each use). */
     static MarketDay read(Snapshot snapshot, Inputs inputs, Control control) throws EngineException {
-        return read(snapshot, inputs, control, false);
-    }
-
-    /** The date's small inputs; {@code zeroCopy}: the host's float32 rows asked too ({@link #rowsView}). */
-    static MarketDay read(Snapshot snapshot, Inputs inputs, Control control, boolean zeroCopy) throws EngineException {
         Map<String, Missing> missing = new TreeMap<>();
         Map<String, List<Map<String, Object>>> plain = new HashMap<>();
         for (String name : List.of(SCENARIO_SET, FX, LIMIT, BASKET)) {
@@ -146,15 +137,8 @@ final class MarketDay {
         for (Map<String, Object> r : sorted(plain.get(BASKET), "PORTFOLIO_ID")) {
             baskets.add(new Basket(text(r, "PORTFOLIO_ID"), text(r, "NAME"), text(r, "TYPE"), text(r, "OWNER"), text(r, "SCOPE")));
         }
-        Object view = null;
-        for (String name : zeroCopy ? List.of(SCENARIO_PV, PNL_VECTOR) : List.<String>of()) {   // the host's rows of the date, if it holds them
-            InputTable t = inputs.table(name);
-            if (view == null && t != null && t.present()) {
-                view = t.vectorView(ROWS_VIEW);
-            }
-        }
         return new MarketDay(snapshot, inputs, pv, pnl, List.copyOf(sets), List.copyOf(fx), Collections.unmodifiableMap(nodeLimits),
-                Collections.unmodifiableMap(basketLimits), List.copyOf(baskets), Collections.unmodifiableMap(missing), view);
+                Collections.unmodifiableMap(basketLimits), List.copyOf(baskets), Collections.unmodifiableMap(missing));
     }
 
     /** What is missing of one input (the extras' inputs read first, under {@code control}, when asked of them), or null. */

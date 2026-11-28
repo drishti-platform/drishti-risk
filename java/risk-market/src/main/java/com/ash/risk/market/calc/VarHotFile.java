@@ -314,6 +314,167 @@ public final class VarHotFile {
         return pos - at;
     }
 
+    // ------------------------------------------------------------------------------------------------- the same layout, elsewhere
+
+    /** Where a book's hot layout is written part by part (a host's kept image: ENGINE_SPEC 18 rule 8): sections, then matrices by row. */
+    public interface Sink {
+
+        /** A small section, whole. */
+        void section(String name, byte[] bytes) throws IOException;
+
+        /** A matrix of {@code rows} rows of {@code width} values stored as {@code type}; {@code source} fills row {@code i} in float64. */
+        void matrix(String name, int rows, int width, MappedMatrix.Type type, RowSource source) throws IOException;
+    }
+
+    /** Fills one row of a matrix (float64; a float32 matrix narrows each value once). */
+    @FunctionalInterface
+    public interface RowSource {
+        void row(int i, double[] into);
+    }
+
+    /** Where a hot layout is read from: a section's bytes (null when absent), a matrix's rows read in place. */
+    public interface Parts {
+
+        ByteBuffer section(String name) throws IOException;
+
+        Vectors matrix(String name, int rows, int width, MappedMatrix.Type type) throws IOException;
+    }
+
+    /**
+     * A built book (on the heap, in hierarchy order) written in the hot layout to {@code sink}: the small sections ({@code HEAD} the header
+     * as the file's first 256 bytes), then {@code PMAT} (each position the float64 sum of its trades' rows in ordinal order, narrowed to
+     * float32 once), {@code TMAT} (the trades of positions of several trades, float32) and {@code AGGS} (float64). The rows a book opened
+     * from them ({@link #open(Parts, long)}) reads are those {@link VarBook#withFloat32Rows()} builds: the same bits.
+     */
+    public static void write(Sink sink, VarBook b, String meta) throws IOException {
+        Content c = new Content(b.businessDate(), b.scenarioSet(), b.scenarioDates(), b.tradeIdsArray(), b.trades(), b.positionIdsArray(),
+                b.posFromArray(), b.posToArray(), b.positions(), b.bookRanges(), b.nodes(), b.morningAggregates(), b.failed(), null, "", meta,
+                b.currencyTotals(), b.cellColumns(), b.splitPositions(), null);
+        Vectors store = b.store();
+        int n = store.width();
+        int p = c.positionIds().length;
+        int t = c.tradeIds().length;
+        int[] memberRow = new int[t];
+        int q = 0;
+        for (int k = 0; k < p; k++) {
+            boolean several = c.posTo()[k] - c.posFrom()[k] > 1;
+            for (int o = c.posFrom()[k]; o < c.posTo()[k]; o++) {
+                memberRow[o] = several ? q++ : -1;
+            }
+        }
+        int[] tradeOfRow = new int[q];
+        for (int o = 0; o < t; o++) {
+            if (memberRow[o] >= 0) {
+                tradeOfRow[memberRow[o]] = o;
+            }
+        }
+        List<String> keys = new ArrayList<>(c.aggregates().keySet());
+        ByteBuffer head = header(c, n, p, t, keys.size(), q, 0);
+        byte[] hb = new byte[head.remaining()];
+        head.get(hb);
+        sink.section("HEAD", hb);
+        sink.section("META", c.meta() == null ? new byte[0] : c.meta().getBytes(StandardCharsets.UTF_8));
+        sink.section("SCEN", scen(c.scenarioDates()));
+        sink.section("TIDS", strings(c.tradeIds()));
+        sink.section("TCOL", columns(c.trades()));
+        sink.section("PIDS", strings(c.positionIds()));
+        sink.section("PRUN", runs(c.posFrom(), c.posTo()));
+        sink.section("PCOL", columns(c.positions()));
+        sink.section("BOOK", books(c.bookRange()));
+        sink.section("NODE", nodes(c.nodes()));
+        sink.section("AKEY", strings(keys.toArray(new String[0])));
+        sink.section("TMAP", ints(memberRow));
+        if (c.totals() != null) {
+            sink.section("CTOT", c.totals().write());
+        }
+        if (!c.cellColumns().isEmpty()) {
+            Out cell = new Out();
+            cell.putInt(c.splitPositions()).putInt(c.cellColumns().size());
+            c.cellColumns().forEach(cell::putString);
+            sink.section("CELL", cell.bytes());
+        }
+        int[] from = c.posFrom();
+        int[] to = c.posTo();
+        sink.matrix("PMAT", p, n, MappedMatrix.Type.FLOAT32, (k, into) -> {
+            java.util.Arrays.fill(into, 0.0);
+            store.addRangeInto(into, from[k], to[k]);
+        });
+        if (q > 0) {
+            sink.matrix("TMAT", q, n, MappedMatrix.Type.FLOAT32, (r, into) -> store.copy(tradeOfRow[r], into));
+        }
+        Map<String, double[]> agg = c.aggregates();
+        sink.matrix("AGGS", keys.size(), n, MappedMatrix.Type.FLOAT64, (r, into) -> System.arraycopy(agg.get(keys.get(r)), 0, into, 0, n));
+    }
+
+    /**
+     * A book read from a hot layout's {@code parts} ({@link #write(Sink, VarBook, String)}): the small sections onto the heap (the book's
+     * skeleton), the matrices read in place where the host keeps them (its rows and aggregates never on the heap).
+     */
+    public static VarBook open(Parts parts, long loadMillis) throws IOException {
+        Header h = header(need(parts, "HEAD"));
+        String meta = new String(new In(need(parts, "META")).bytes(), StandardCharsets.UTF_8);
+        List<LocalDate> scen = new ArrayList<>();
+        In s = new In(need(parts, "SCEN"));
+        for (int i = s.getInt(); i > 0; i--) {
+            scen.add(LocalDate.ofEpochDay(s.getInt()));
+        }
+        String[] tids = new In(need(parts, "TIDS")).strings();
+        Columns tcols = new In(need(parts, "TCOL")).columns();
+        String[] pids = new In(need(parts, "PIDS")).strings();
+        In r = new In(need(parts, "PRUN"));
+        int p = r.getInt();
+        int[] from = new int[p];
+        int[] to = new int[p];
+        for (int i = 0; i < p; i++) {
+            from[i] = r.getInt();
+            to[i] = r.getInt();
+        }
+        Columns pcols = new In(need(parts, "PCOL")).columns();
+        Map<String, int[]> bookRange = new LinkedHashMap<>();
+        In b = new In(need(parts, "BOOK"));
+        for (int i = b.getInt(); i > 0; i--) {
+            bookRange.put(b.getString(), new int[] {b.getInt(), b.getInt()});
+        }
+        Map<String, VarBook.Node> nodes = readNodes(new In(need(parts, "NODE")), bookRange);
+        String[] aggKeys = new In(need(parts, "AKEY")).strings();
+        In tm = new In(need(parts, "TMAP"));
+        int[] memberRow = new int[tm.getInt()];
+        for (int i = 0; i < memberRow.length; i++) {
+            memberRow[i] = tm.getInt();
+        }
+        ByteBuffer ct = parts.section("CTOT");
+        CurrencyTotals totals = ct == null ? null : CurrencyTotals.read(new In(ct), h.width());
+        List<String> cellColumns = new ArrayList<>();
+        int split = 0;
+        ByteBuffer cb = parts.section("CELL");
+        if (cb != null) {
+            In cs = new In(cb);
+            split = cs.getInt();
+            for (int i = cs.getInt(); i > 0; i--) {
+                cellColumns.add(cs.getString());
+            }
+        }
+        int[] posOf = new int[tids.length];
+        for (int k = 0; k < pids.length; k++) {
+            java.util.Arrays.fill(posOf, from[k], to[k], k);
+        }
+        Vectors positions = parts.matrix("PMAT", h.positions(), h.width(), MappedMatrix.Type.FLOAT32);
+        Vectors trades = h.tradeRows() > 0 ? parts.matrix("TMAT", h.tradeRows(), h.width(), MappedMatrix.Type.FLOAT32) : null;
+        Map<String, double[]> agg = new MappedAggregates(parts.matrix("AGGS", aggKeys.length, h.width(), MappedMatrix.Type.FLOAT64),
+                java.util.Arrays.asList(aggKeys));
+        Vectors store = new GroupedVectors(positions, trades, posOf, from, to, memberRow);
+        return new VarBook(h.businessDate(), h.scenarioSet(), scen, store, tids, tcols, posOf, pids, from, to, pcols, nodes, bookRange, agg,
+                (int) h.failed(), loadMillis, null, totals, cellColumns, split);
+    }
+
+    private static ByteBuffer need(Parts parts, String name) throws IOException {
+        ByteBuffer b = parts.section(name);
+        if (b == null) {
+            throw new IOException("the hot layout has no " + name + " section");
+        }
+        return b.duplicate().order(ByteOrder.LITTLE_ENDIAN);
+    }
+
     private static long crc(byte[] b) {
         CRC32C c = new CRC32C();
         c.update(b);

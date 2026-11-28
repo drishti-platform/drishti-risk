@@ -403,8 +403,8 @@ final class MarketSession implements Session, Explaining {
             MemoryBudget.Reservation hold = engine.context().memory().reserve(need, "market-risk book " + key);
             MarketBooks.Built b;
             try {
-                b = MarketBooks.build(day, set, window, currency, see[0], see[1], engine.options(), engine.sums(), engine.context().log()::info,
-                        control);
+                b = MarketBooks.build(day, set, window, currency, see[0], see[1], engine.options(), engine.sums(), this::kept,
+                        ALL.equals(signature) ? "all" : signature, control);
             } catch (RuntimeException e) {
                 hold.close();
                 throw e;
@@ -416,6 +416,32 @@ final class MarketSession implements Session, Explaining {
             holds.add(hold);
             books.put(key, b);
             return b;
+        }
+    }
+
+    /**
+     * A book in the host's kept image (ENGINE_SPEC 18 rule 8): found (a restart, an eviction, a second session of the same inputs: mapped,
+     * nothing read), else built on the heap once, written through the host's writer and read back from the image; the heap book is then
+     * released, so the session's heap holds the book's skeleton only.
+     */
+    private com.ash.risk.market.calc.VarBook kept(String name, MarketBooks.HeapBook heap) throws EngineException {
+        com.ash.engine.Kept kept = engine.context().kept();
+        long t0 = engine.context().clock().millis();
+        java.util.Optional<com.ash.engine.Image> found = kept.find(this, name);
+        com.ash.engine.Image image = found.isPresent() ? found.get() : kept.build(this, name, w -> {
+            com.ash.risk.market.calc.VarBook h = heap.build();
+            try {
+                com.ash.risk.market.calc.VarHotFile.write(MarketImage.sink(w), h, null);
+            } catch (IOException e) {
+                throw MarketImage.failed(name, e);
+            } finally {
+                h.close();
+            }
+        });
+        try {
+            return com.ash.risk.market.calc.VarHotFile.open(MarketImage.parts(image), engine.context().clock().millis() - t0);
+        } catch (IOException e) {
+            throw MarketImage.failed(name, e);
         }
     }
 

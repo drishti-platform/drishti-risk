@@ -16,6 +16,7 @@
 package com.ash.risk.market.calc;
 
 import com.ash.risk.kernel.vector.MappedMatrix;
+import com.ash.risk.kernel.vector.Vectors;
 import java.util.AbstractMap;
 import java.util.AbstractSet;
 import java.util.Collections;
@@ -26,18 +27,18 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * A date's aggregates read from its hot file's {@code AGGS} section, mapped (VAR_GUIDE.md section 26.3): every book's, cell's and node's
+ * A date's aggregates read from its hot file's {@code AGGS} section (or a kept image's part of the same layout), mapped (VAR_GUIDE.md section 26.3): every book's, cell's and node's
  * float64 vector stays in the file's pages, not on the heap (642 MB a date at 1,000,000 positions); the heap keeps the key to row index
  * only. {@link #get} returns a fresh copy of the row, the same float64 bits as written (the planner adds them as before, so every answer is
  * unchanged to the bit). Immutable; read after the date's unmapping, a row throws {@link MappedMatrix.Closed} (ask again), as the rows do.
  */
 final class MappedAggregates extends AbstractMap<String, double[]> {
 
-    private final MappedMatrix rows;
+    private final Vectors rows;
     private final Map<String, Integer> index;
     private final List<String> keys;
 
-    MappedAggregates(MappedMatrix rows, List<String> keys) {
+    MappedAggregates(Vectors rows, List<String> keys) {
         this.rows = rows;
         this.keys = List.copyOf(keys);
         Map<String, Integer> ix = new HashMap<>(keys.size() * 2);
@@ -45,10 +46,6 @@ final class MappedAggregates extends AbstractMap<String, double[]> {
             ix.put(keys.get(i), i);
         }
         this.index = Collections.unmodifiableMap(ix);
-    }
-
-    MappedMatrix matrix() {
-        return rows;
     }
 
     /** The heap the index takes (the keys are shared with the book's runs and nodes): about 64 bytes a key. */

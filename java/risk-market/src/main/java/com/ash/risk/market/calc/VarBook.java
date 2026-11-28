@@ -414,36 +414,6 @@ public final class VarBook {
                 positions, nodes, bookRange, aggregates, failed, loadMillis, null, totals, cellColumns, splitPositions);
     }
 
-    /**
-     * This book with the host's own float32 rows in place of the ones {@link #withFloat32Rows()} builds (R2_CUT_PLAN 3a, zero copy):
-     * {@code positions} one float32 row per position and {@code trades} the rows of the trades of positions of several trades (null when
-     * none), read in place where the host keeps them. Taken only when they are this book's own rows: the same positions and trades in
-     * the same order ({@code positionIds}, {@code tradeIds}), the same width and row counts; null otherwise (the caller builds them). The
-     * sums then read the same float32 values in the same order as the rows built here: the same bits.
-     */
-    public VarBook withFloat32Rows(Vectors positions, Vectors trades, String[] positionIds, String[] tradeIds) {
-        if (hot != null || layer != null || sharded() || store instanceof com.ash.risk.kernel.vector.GroupedVectors || positions == null
-                || positionIds == null || tradeIds == null || !java.util.Arrays.equals(positionIds, this.positionIds)
-                || !java.util.Arrays.equals(tradeIds, this.tradeIds) || positions.width() != store.width() || positions.rows() != this.positionIds.length) {
-            return null;
-        }
-        int t = tradeIds.length;
-        int[] memberRow = new int[t];
-        int q = 0;
-        for (int k = 0; k < this.positionIds.length; k++) {
-            boolean several = posTo[k] - posFrom[k] > 1;
-            for (int o = posFrom[k]; o < posTo[k]; o++) {
-                memberRow[o] = several ? q++ : -1;
-            }
-        }
-        if (q > 0 && (trades == null || trades.rows() != q || trades.width() != store.width()) || q == 0 && trades != null && trades.rows() != 0) {
-            return null;
-        }
-        Vectors rows = new com.ash.risk.kernel.vector.GroupedVectors(positions, q == 0 ? null : trades, positionOf, posFrom, posTo, memberRow);
-        return new VarBook(businessDate, scenarioSet, scenarioDates, rows, this.tradeIds, this.trades, positionOf, this.positionIds, posFrom, posTo,
-                this.positions, nodes, bookRange, aggregates, failed, loadMillis, null, totals, cellColumns, splitPositions);
-    }
-
     /** {@code mapped} (the hot file), {@code heap}, or {@code sharded} (a date put together from its shards, DATA_ARCHITECTURE.md#13-var-sharding-how-it-is-built). */
     public String tier() {
         return hot != null ? "mapped" : sharded() ? "sharded" : "heap";

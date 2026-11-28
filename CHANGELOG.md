@@ -3,6 +3,15 @@
 
 ## 0.1.0 (unreleased)
 
+- `market-risk`, R2 speed (2026-11-28, Drishti lane S2; R2 engine speed design steps 2, 5, 8, 9): `descriptor()` read once per engine
+  object; the planner looks only at the books a set touches; each node's and whole position's measures and each visibility's rows kept
+  with the built book as session state (`MarketDerived`); a scope's parts summed as Drishti's in-tree parts (a node whole its aggregate, a
+  position whole its row). The date opens with its small inputs only; the vector inputs are read in one pass straight into the book
+  (`MarketRows`), nothing delivered kept; the extras read at the first output that needs them. On the mapped tier each book lives in the
+  host's kept image (`MarketImage`: the hot layout of `VarHotFile` written through the host's `ImageWriter` and read back in place), so a
+  restart or a second session maps it; option `zero-copy` and `HostRows` removed (the image replaces them). The open names its stage
+  (`Control.progress`: "reading 62,000 of 100,000 rows") for a host that shows "preparing". Kit case `headline-mapped-by-hand`.
+
 - `ccr`: SIMM for a host-resolved scope: new param `simm-members` (SCOPE, SENSITIVITY_ID: a netting set's records as the host's trade
   master places them, an analytic scope's records; each scope its records' elements in the input's order, one trade per record, as
   Drishti's in-tree run builds it; `simm-scope` is then not read) on `simm` and `simm-total`; new outputs `simm-product` (each scope's SIMM

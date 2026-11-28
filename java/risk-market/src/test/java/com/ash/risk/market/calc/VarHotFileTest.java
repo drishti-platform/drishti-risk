@@ -29,6 +29,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -185,32 +186,61 @@ class VarHotFileTest {
     }
 
     /**
-     * R2_CUT_PLAN 3a (zero copy): the host's own float32 rows (here the hot file's matrices, read in place) swapped in at
-     * {@link VarBook#withFloat32Rows(com.ash.risk.kernel.vector.Vectors, com.ash.risk.kernel.vector.Vectors, String[], String[])} give the
-     * book the engine builds itself, to the bit; rows of another book (other ids, another width) are refused (null: the engine builds).
+     * ENGINE_SPEC 18 rule 8 (kept images): the hot layout written part by part ({@link VarHotFile#write(VarHotFile.Sink, VarBook, String)})
+     * and read back from the parts ({@link VarHotFile#open(VarHotFile.Parts, long)}: the matrices read in place, as a host's image serves
+     * them) is the float32 book the engine would build itself, to the bit: every position, trade and node, every aggregate, 30 random sets.
      */
     @Test
-    void theHostsOwnRowsSwappedInAreTheBuiltRowsToTheBit() {
-        String[] pos = new String[heap.positionCount()];
-        for (int k = 0; k < pos.length; k++) {
-            pos[k] = heap.positionId(k);
-        }
-        String[] trd = new String[heap.tradeCount()];
-        for (int o = 0; o < trd.length; o++) {
-            trd[o] = heap.tradeId(o);
-        }
-        VarBook.Hot hot = mapped.hot();
-        VarBook in = heap.withFloat32Rows(hot.positions(), hot.trades(), pos, trd);
-        assertThat(in).isNotNull();
+    void theHotLayoutWrittenToPartsAndReadBackIsTheFloat32BookToTheBit() throws IOException {
+        Map<String, byte[]> sections = new java.util.HashMap<>();
+        Map<String, com.ash.risk.kernel.vector.MappedMatrix> matrices = new java.util.HashMap<>();
+        VarHotFile.write(new VarHotFile.Sink() {
+            @Override
+            public void section(String name, byte[] bytes) {
+                sections.put(name, bytes.clone());
+            }
+
+            @Override
+            public void matrix(String name, int rows, int width, com.ash.risk.kernel.vector.MappedMatrix.Type type, VarHotFile.RowSource source) {
+                double[] row = new double[width];
+                matrices.put(name, com.ash.risk.kernel.vector.MappedMatrix.held(Path.of(name), rows, width, type, (b, i) -> {
+                    source.row(i, row);
+                    for (double v : row) {
+                        if (type == com.ash.risk.kernel.vector.MappedMatrix.Type.FLOAT32) {
+                            b.putFloat((float) v);
+                        } else {
+                            b.putDouble(v);
+                        }
+                    }
+                }));
+            }
+        }, heap, "{}");
+        VarBook image = VarHotFile.open(new VarHotFile.Parts() {
+            @Override
+            public java.nio.ByteBuffer section(String name) {
+                byte[] b = sections.get(name);
+                return b == null ? null : java.nio.ByteBuffer.wrap(b).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+            }
+
+            @Override
+            public com.ash.risk.kernel.vector.Vectors matrix(String name, int rows, int width, com.ash.risk.kernel.vector.MappedMatrix.Type type) {
+                return matrices.get(name);
+            }
+        }, 0);
         VarBook built = heap.withFloat32Rows();
-        for (int p = 0; p < pos.length; p++) {
-            assertThat(in.positionVector(p)).as("position " + p).containsExactly(built.positionVector(p));
+        assertThat(image.tradeCount()).isEqualTo(built.tradeCount());
+        assertThat(image.nodes().keySet()).containsExactlyElementsOf(built.nodes().keySet());
+        for (int p = 0; p < built.positionCount(); p++) {
+            assertThat(image.positionId(p)).isEqualTo(built.positionId(p));
+            assertThat(image.positionVector(p)).as("position " + p).containsExactly(built.positionVector(p));
         }
-        for (int o = 0; o < trd.length; o++) {
-            assertThat(in.tradeVector(o)).as("trade " + o).containsExactly(built.tradeVector(o));
+        for (int o = 0; o < built.tradeCount(); o++) {
+            assertThat(image.tradeId(o)).isEqualTo(built.tradeId(o));
+            assertThat(image.tradeVector(o)).as("trade " + o).containsExactly(built.tradeVector(o));
         }
-        for (VarBook.Node n : heap.nodes().values()) {
-            assertThat(in.vector(n.members(), sums)).as(n.id()).containsExactly(built.vector(n.members(), sums));
+        for (VarBook.Node n : built.nodes().values()) {
+            assertThat(image.aggregate(n.id())).as(n.id() + " aggregate").containsExactly(built.aggregate(n.id()));
+            assertThat(image.vector(n.members(), sums)).as(n.id()).containsExactly(built.vector(n.members(), sums));
         }
         Random r = new Random(7);
         for (int k = 0; k < 30; k++) {
@@ -219,12 +249,9 @@ class VarHotFileTest {
                 b.add(r.nextInt(1800));
             }
             OrdinalSet set = b.build();
-            assertThat(in.vector(set, sums)).containsExactly(built.vector(set, sums));
+            assertThat(image.vector(set, sums)).containsExactly(built.vector(set, sums));
         }
-        String[] other = pos.clone();
-        other[0] = "NOT-" + other[0];
-        assertThat(heap.withFloat32Rows(hot.positions(), hot.trades(), other, trd)).as("another book's positions").isNull();
-        assertThat(mapped.withFloat32Rows(hot.positions(), hot.trades(), pos, trd)).as("a mapped book keeps its own").isNull();
+        assertThat(image.vectorBytes()).isEqualTo(built.vectorBytes());
     }
 
     @Test

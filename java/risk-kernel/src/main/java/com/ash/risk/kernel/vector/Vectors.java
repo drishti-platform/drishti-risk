@@ -41,6 +41,13 @@ public interface Vectors {
     /** Row {@code row} copied into {@code out} (length {@code >= width}). */
     void copy(int row, double[] out);
 
+    /** Row {@code row}'s values as stored, bit for bit ({@code -0.0} stays {@code -0.0}; float32 widened), into {@code out}. */
+    default void read(int row, double[] out) {
+        for (int j = 0; j < width(); j++) {
+            out[j] = value(row, j);
+        }
+    }
+
     /** Row {@code row} added into {@code acc}. */
     void addInto(double[] acc, int row);
 
