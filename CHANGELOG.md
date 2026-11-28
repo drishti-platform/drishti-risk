@@ -4,7 +4,8 @@
 ## 0.1.0 (unreleased)
 
 - `ccr`: new outputs `exposure-official` and `exposure-official-profile` (the figures of Drishti's official exposure record for the scopes
-  the host names, param `scopes`: netting sets, partial sets, trades, CE, EPE, EEPE, peak EE, peak PFE at 95% and 99% and its date, flags,
+  the host names, param `scopes`, with `scope-members` for a scope only the host resolves, a hierarchy node's trades, never standalone:
+  netting sets, partial sets, trades, CE, EPE, EEPE, peak EE, peak PFE at 95% and 99% and its date, flags,
   the profile; a scope the book cannot answer is a row with its note), `exposure-trade-ee` (every trade's EE contribution at every primary
   point, the record's audit) and `exposure-by-netting-set` (a scope's netting sets with their own figures and their part of the scope's
   peak PFE, Drishti's captures); kit cases for each. R2 exposure part 3.
