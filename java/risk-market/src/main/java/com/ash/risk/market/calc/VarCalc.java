@@ -88,9 +88,19 @@ public record VarCalc(double confidence, double esConfidence, VarMath.RankRule r
 
     /** Each part's figures in the scope whose vector is {@code total}. Parts that do not add up to the total are fine (a selection). */
     public List<Contribution> contributions(double[] total, Measures m, List<Part> parts) {
+        return contributions(total, m, parts, i -> null);
+    }
+
+    /**
+     * The same, each part's own measures taken from {@code known} when it has them (a node's or a position's, measured once and kept by
+     * the caller: {@code measures} of the same vector, so the same bits); null: measured here.
+     */
+    public List<Contribution> contributions(double[] total, Measures m, List<Part> parts, java.util.function.IntFunction<Measures> known) {
         List<Contribution> out = new ArrayList<>(parts.size());
-        for (Part p : parts) {
-            Measures own = measures(p.vector());
+        for (int i = 0; i < parts.size(); i++) {
+            Part p = parts.get(i);
+            Measures kept = known.apply(i);
+            Measures own = kept != null ? kept : measures(p.vector());
             double comp = VarMath.component(p.vector(), m.tail(), m.scale());
             double compEs = VarMath.componentEs(p.vector(), m.order(), esConfidence);
             double without = VarMath.var(VarMath.minus(total, p.vector()), confidence, rule);

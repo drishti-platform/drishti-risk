@@ -48,11 +48,11 @@ final class MarketTables {
         this.sums = sums;
     }
 
-    Table nodeVar(VarBook b) {
-        VarCalc calc = options.calc();
+    Table nodeVar(MarketBooks.Built built) {
+        VarBook b = built.book();
         Tables.Builder t = Tables.of(descriptor.schema("node-var"));
         for (VarBook.Node x : b.nodes().values()) {
-            VarCalc.Measures ms = calc.measures(b.aggregate(x.id()));
+            VarCalc.Measures ms = built.derived().node(x.id());
             double limit = x.limit();
             Double use = Double.isNaN(limit) || limit == 0 ? null : ms.var() / limit;
             t.row(x.id(), x.hierarchy(), x.parent(), x.level(), x.name(), (long) x.members().size(), ms.var(), ms.es(),
@@ -62,7 +62,8 @@ final class MarketTables {
         return t.build();
     }
 
-    Table nodeComponents(VarBook b, Control control) throws EngineException {
+    Table nodeComponents(MarketBooks.Built built, Control control) throws EngineException {
+        VarBook b = built.book();
         VarCalc calc = options.calc();
         Tables.Builder t = Tables.of(descriptor.schema("node-components"));
         for (VarBook.Node x : b.nodes().values()) {
@@ -71,12 +72,12 @@ final class MarketTables {
             }
             control.check();
             double[] v = b.aggregate(x.id());
-            VarCalc.Measures ms = calc.measures(v);
+            VarCalc.Measures ms = built.derived().node(x.id());
             List<VarCalc.Part> parts = new ArrayList<>();
             for (String c : new TreeSet<>(x.children())) {
                 parts.add(new VarCalc.Part(c, c, "node", b.aggregate(c), b.node(c).members().size()));
             }
-            for (VarCalc.Contribution c : calc.contributions(v, ms, parts)) {
+            for (VarCalc.Contribution c : calc.contributions(v, ms, parts, i -> built.derived().node(parts.get(i).key()))) {
                 t.row(x.id(), c.key(), c.componentVar(), c.standaloneVar(), c.incrementalVar());
             }
         }
@@ -113,15 +114,15 @@ final class MarketTables {
         return t.build();
     }
 
-    Table headline(VarBook b) {
-        VarCalc calc = options.calc();
+    Table headline(MarketBooks.Built built) {
+        VarBook b = built.book();
         Tables.Builder t = Tables.of(descriptor.schema("headline"));
         for (String h : b.hierarchies()) {
             VarBook.Node root = b.root(h);
             if (root == null) {
                 continue;
             }
-            VarCalc.Measures ms = calc.measures(b.aggregate(root.id()));
+            VarCalc.Measures ms = built.derived().node(root.id());
             t.row(h, root.id(), ms.var(), ms.es(), Math.round(ms.var()), Math.round(ms.es()));
         }
         return t.build();

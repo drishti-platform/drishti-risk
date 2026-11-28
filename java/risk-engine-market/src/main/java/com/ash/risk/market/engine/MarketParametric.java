@@ -58,12 +58,17 @@ final class MarketParametric {
         return ParametricVar.of(v, options.calc().confidence(), options.calc().esConfidence(), options.parametric());
     }
 
-    Table nodes(VarBook b) {
-        return nodes(b, null);
+    /** Every node's figures on the book's own 1-day vectors; each node's historical measures the session's, measured once. */
+    Table nodes(MarketBooks.Built built) {
+        return nodes(built.book(), null, built.derived());
     }
 
-    /** Every node's figures; through {@code lens} (a horizon or the stress set: null for the book's own 1-day vectors) the lens's vectors. */
+    /** Every node's figures through {@code lens} (a horizon or the stress set). */
     Table nodes(VarBook b, com.ash.risk.market.calc.VarLens lens) {
+        return nodes(b, lens, null);
+    }
+
+    private Table nodes(VarBook b, com.ash.risk.market.calc.VarLens lens, MarketDerived derived) {
         Tables.Builder t = Tables.of(descriptor.schema("node-pvar"));
         String set = b.scenarioSet().replaceFirst("/\\d+$", "");          // the set's id: a book cut to a window is labelled id/window
         String last = b.scenarioDates().isEmpty() ? null : b.scenarioDates().get(b.scenarioDates().size() - 1).toString();
@@ -72,7 +77,7 @@ final class MarketParametric {
             double[] v = lens == null ? one : lens.apply(one);
             ParametricVar.Figures f = lens == null ? figures(v)                // through a lens: at the lens's confidences
                     : ParametricVar.of(v, lens.confidence(), lens.esConfidence(), options.parametric());
-            VarCalc.Measures h = lens == null ? options.calc().measures(v) : lens.measures(options.calc(), one, v);
+            VarCalc.Measures h = lens != null ? lens.measures(options.calc(), one, v) : derived != null ? derived.node(x.id()) : options.calc().measures(v);
             t.row(x.id(), x.hierarchy(), (long) v.length, f.fit().mu(), f.fit().sigma(), f.z(), f.var(), f.es(), h.var(),
                     (long) f.beyond(), f.expectedBeyond(), f.fit().skew(), f.fit().excessKurtosis(), f.zEs(), f.esFactor(), (long) h.k(),
                     set, last);

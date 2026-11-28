@@ -96,7 +96,7 @@ final class MarketSession implements Session, Explaining {
         }
         long b = day.bytes();
         for (MarketBooks.Built x : books.values()) {
-            b += x.book().heapBytes();
+            b += x.book().heapBytes() + x.derived().bytes();
         }
         return b;
     }
@@ -196,12 +196,12 @@ final class MarketSession implements Session, Explaining {
                 return null;
             }
             return switch (out) {
-                case "node-var" -> t.nodeVar(b.book());
-                case "node-components" -> t.nodeComponents(b.book(), c.control);
+                case "node-var" -> t.nodeVar(b);
+                case "node-components" -> t.nodeComponents(b, c.control);
                 case "basket-var" -> t.basketVar(b, day, String.valueOf(request.param("currency")));
-                case "headline" -> t.headline(b.book());
-                case "node-pvar" -> new MarketParametric(engine.descriptor(), o).nodes(b.book(), lensed ? new MarketHorizon(engine.descriptor(), o)
-                        .lens(request) : null);
+                case "headline" -> t.headline(b);
+                case "node-pvar" -> lensed ? new MarketParametric(engine.descriptor(), o).nodes(b.book(), new MarketHorizon(engine.descriptor(), o)
+                        .lens(request)) : new MarketParametric(engine.descriptor(), o).nodes(b);
                 case "node-pvar-components" -> new MarketParametric(engine.descriptor(), o).components(b.book(), c.control);
                 case "node-var-horizon" -> {
                     MarketHorizon h = new MarketHorizon(engine.descriptor(), o);

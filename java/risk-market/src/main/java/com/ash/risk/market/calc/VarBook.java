@@ -896,15 +896,12 @@ public final class VarBook {
         if (root == null || set.isEmpty()) {
             return set.isEmpty() ? acc : sums.sum(store, set);
         }
-        Map<String, Integer> covered = new HashMap<>();
-        boolean anyWhole = false;
-        for (Map.Entry<String, int[]> e : bookRange.entrySet()) {
-            int c = set.countIn(e.getValue()[0], e.getValue()[1]);
-            covered.put(e.getKey(), c);
-            anyWhole |= c > 0 && c == e.getValue()[1] - e.getValue()[0];
-        }
-        if (!anyWhole) {                       // scattered leaves (a basket, a rule): no aggregate helps; one parallel pass over them
+        if (!anyWhole(set)) {                  // scattered leaves (a basket, a rule): no aggregate helps; one parallel pass over them
             return sums.sum(store, set);
+        }
+        Map<String, Integer> covered = new HashMap<>();
+        for (Map.Entry<String, int[]> e : bookRange.entrySet()) {
+            covered.put(e.getKey(), set.countIn(e.getValue()[0], e.getValue()[1]));
         }
         Deferred d = sharded() ? new Deferred() : null;
         plan(root, set, acc, covered, sums, d);
@@ -1068,10 +1065,63 @@ public final class VarBook {
         return java.util.Arrays.asList(out);
     }
 
-    /** True when {@code set} holds some book of the hierarchy whole (then {@link #plannedVector} uses the aggregates). */
+    /**
+     * True when {@code set} holds some book of the hierarchy whole (then {@link #plannedVector} uses the aggregates). The books are
+     * disjoint runs of ordinals: only the books the set's runs touch are looked at, each once, in ordinal order (the cost of a small set
+     * is its runs, not the date's books); books that overlap (never built so) are each looked at, as before.
+     */
     private boolean anyWhole(OrdinalSet set) {
-        return bookRange.values().stream().anyMatch(r -> r[1] > r[0] && set.countIn(r[0], r[1]) == r[1] - r[0]);
+        int[][] spans = bookSpans();
+        if (spans == null) {
+            return bookRange.values().stream().anyMatch(r -> r[1] > r[0] && set.countIn(r[0], r[1]) == r[1] - r[0]);
+        }
+        boolean[] found = {false};
+        int[] next = {0};                                              // the first span not yet looked at (runs come in order)
+        set.forEachRun((f, t) -> {
+            if (found[0]) {
+                return;
+            }
+            int lo = next[0];
+            int hi = spans.length;
+            while (lo < hi) {                                          // the first span at or after next[0] that ends after f
+                int mid = (lo + hi) >>> 1;
+                if (spans[mid][1] <= f) {
+                    lo = mid + 1;
+                } else {
+                    hi = mid;
+                }
+            }
+            int k = lo;
+            for (; k < spans.length && spans[k][0] < t; k++) {
+                if (set.countIn(spans[k][0], spans[k][1]) == spans[k][1] - spans[k][0]) {
+                    found[0] = true;
+                    return;
+                }
+            }
+            next[0] = k;                       // a span looked at is counted over the whole set: never looked at again
+        });
+        return found[0];
     }
+
+    /** The books' non-empty runs sorted by their start, once; null when two overlap. */
+    private int[][] bookSpans() {
+        int[][] s = bookSpans;
+        if (s == null && !bookSpansOverlap) {
+            s = bookRange.values().stream().filter(r -> r[1] > r[0]).map(r -> new int[] {r[0], r[1]})
+                    .sorted(java.util.Comparator.comparingInt((int[] r) -> r[0])).toArray(int[][]::new);
+            for (int i = 1; i < s.length; i++) {
+                if (s[i][0] < s[i - 1][1]) {
+                    bookSpansOverlap = true;
+                    return null;
+                }
+            }
+            bookSpans = s;
+        }
+        return s;
+    }
+
+    private volatile int[][] bookSpans;
+    private volatile boolean bookSpansOverlap;
 
     /** True when this date's rows are sharded across Drishti*net members (DATA_ARCHITECTURE.md#13-var-sharding-how-it-is-built): a set is summed by the shards' owners. */
     public boolean sharded() {

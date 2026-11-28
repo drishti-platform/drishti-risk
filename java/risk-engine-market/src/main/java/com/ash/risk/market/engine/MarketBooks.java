@@ -37,8 +37,13 @@ final class MarketBooks {
     /** What a book is made of; equal keys give the same bits. */
     record Key(String set, int window, String currency, String visibility) {}
 
-    /** A built book, with the scenario dates and FX of its window. */
-    record Built(VarBook book, List<LocalDate> scenarios, ScenarioFx fx) {}
+    /** A built book, with the scenario dates and FX of its window, and what the session derives from it ({@link MarketDerived}). */
+    record Built(VarBook book, List<LocalDate> scenarios, ScenarioFx fx, MarketDerived derived) {
+
+        Built(VarBook book, List<LocalDate> scenarios, ScenarioFx fx, com.ash.risk.market.calc.VarCalc calc) {
+            this(book, scenarios, fx, new MarketDerived(book, calc));
+        }
+    }
 
     private MarketBooks() {
     }
@@ -98,7 +103,7 @@ final class MarketBooks {
             usd = own != null ? own : usd.withFloat32Rows();
         }
         if (currency == null || currency.isBlank() || "USD".equalsIgnoreCase(currency)) {
-            return new Built(usd, cut, wfx);
+            return new Built(usd, cut, wfx, o.calc());
         }
         ScenarioFx.Rates rep = wfx.rates(currency).orElse(null);
         if (rep == null) {
@@ -111,7 +116,7 @@ final class MarketBooks {
         if (o.float32Rows()) {
             converted = converted.withFloat32Rows();                    // converted from the float32 rows, kept as float32 rows, as the host's
         }
-        return new Built(converted, cut, wfx);
+        return new Built(converted, cut, wfx, o.calc());
     }
 
     /**

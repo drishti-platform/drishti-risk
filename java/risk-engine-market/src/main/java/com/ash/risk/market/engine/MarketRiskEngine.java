@@ -53,9 +53,17 @@ public final class MarketRiskEngine implements Engine {
     private volatile LifecycleState lifecycle = LifecycleState.NEW;
     private volatile String failure;
 
+    /** The jar's descriptor, read at the first call (ENGINE_SPEC 4.1: constant, at constant cost); every later call returns it. */
+    private volatile Descriptor descriptor;
+
     @Override
     public Descriptor descriptor() {
-        return Descriptors.of(MarketRiskEngine.class, ID);
+        Descriptor d = descriptor;
+        if (d == null) {
+            d = Descriptors.of(MarketRiskEngine.class, ID);
+            descriptor = d;
+        }
+        return d;
     }
 
     @Override

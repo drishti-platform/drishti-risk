@@ -190,7 +190,7 @@ final class MarketScopes {
         if (a == null) {
             return null;                                                // the reporting currency has no FX on the set: named as missing
         }
-        VarCalc.Measures ms = options.calc().measures(a.v());
+        VarCalc.Measures ms = a.measures(options.calc());
         Tables.Builder t = Tables.of(descriptor.schema("scope-var"));
         t.row((long) a.members(), (long) a.hidden(), ms.var(), ms.es(), ms.varScenario() < 0 ? null : (long) ms.varScenario(), a.v().clone());
         return t.build();
@@ -206,7 +206,7 @@ final class MarketScopes {
         if (a == null) {
             return null;
         }
-        VarCalc.Measures ms = options.calc().measures(a.v());
+        VarCalc.Measures ms = a.measures(options.calc());
         Object bp = request.param("bins");
         int bins = bp instanceof Number n ? n.intValue() : 40;
         if (bins < 1 || bins > 10_000) {
@@ -278,7 +278,7 @@ final class MarketScopes {
                 continue;
             }
             int i = vectors.size();
-            Summed s = summed(request, control, usd, one, i < nodes.length ? nodes[i] : null);
+            Summed s = part(request, control, usd, one, i < nodes.length ? nodes[i] : null);
             if (s == null) {
                 return null;
             }
@@ -313,6 +313,7 @@ final class MarketScopes {
         String[] nodes = pn == null || String.valueOf(pn).isEmpty() ? new String[0] : String.valueOf(pn).split(",", -1);
         List<VarCalc.Part> parts = new ArrayList<>();
         List<Integer> members = new ArrayList<>();
+        List<VarCalc.Measures> known = new ArrayList<>();
         List<Object> one = new ArrayList<>();
         for (Object x : all) {
             if (((Number) x).intValue() >= 0) {
@@ -320,16 +321,17 @@ final class MarketScopes {
                 continue;
             }
             int i = parts.size();
-            Summed s = summed(request, control, usd, one, i < nodes.length ? nodes[i] : null);
+            Summed s = part(request, control, usd, one, i < nodes.length ? nodes[i] : null);
             if (s == null) {
                 return null;
             }
             parts.add(new VarCalc.Part(Integer.toString(i), null, null, s.v(), Double.NaN));
+            known.add(s.own());
             members.add(s.members());
             one = new ArrayList<>();
         }
-        VarCalc.Measures ms = options.calc().measures(a.v());
-        List<VarCalc.Contribution> cs = options.calc().contributions(a.v(), ms, parts);
+        VarCalc.Measures ms = a.measures(options.calc());
+        List<VarCalc.Contribution> cs = options.calc().contributions(a.v(), ms, parts, known::get);
         Tables.Builder t = Tables.of(descriptor.schema("scope-contributions"));
         for (int i = 0; i < cs.size(); i++) {
             VarCalc.Contribution c = cs.get(i);
@@ -365,7 +367,7 @@ final class MarketScopes {
                 one.add(x);
                 continue;
             }
-            Summed s = summed(request, control, usd, one, i < nodes.length ? nodes[i] : null);
+            Summed s = part(request, control, usd, one, i < nodes.length ? nodes[i] : null);
             if (s == null) {
                 return null;
             }
@@ -435,13 +437,35 @@ final class MarketScopes {
         return t.build();
     }
 
-    /** A row set's summed scenario P&amp;L as the caller sees it, with its counts; null when the currency has no FX. */
-    private record Summed(double[] v, int members, int hidden) {}
+    /**
+     * A row set's summed scenario P&amp;L as the caller sees it, with its counts, and its measures when the session keeps them (a node
+     * whole: the node's); null when the currency has no FX.
+     */
+    private record Summed(double[] v, int members, int hidden, VarCalc.Measures own) {
+
+        /** The measures of the sum: the kept ones, else measured now (the same calculator on the same vector: the same bits). */
+        VarCalc.Measures measures(VarCalc calc) {
+            return own != null ? own : calc.measures(v);
+        }
+    }
 
     private Summed summed(Request request, Control control, MarketBooks.Built usd, Object rowsParam, Object nodeParam) throws EngineException {
+        return sum(request, control, usd, rowsParam, nodeParam, false);
+    }
+
+    /**
+     * One part of a scope (a child node, a position, a trade) summed as Drishti's in-tree parts are: a node whole is its aggregate, a
+     * position whole its own row ({@link VarBook#positionVector}), anything else the planner's sum of its rows.
+     */
+    private Summed part(Request request, Control control, MarketBooks.Built usd, Object rowsParam, Object nodeParam) throws EngineException {
+        return sum(request, control, usd, rowsParam, nodeParam, true);
+    }
+
+    private Summed sum(Request request, Control control, MarketBooks.Built usd, Object rowsParam, Object nodeParam, boolean part)
+            throws EngineException {
         VarBook b = usd.book();
         OrdinalSet asked = rows(rowsParam, b.tradeCount());
-        OrdinalSet set = asked.and(visible(request, b));
+        OrdinalSet set = asked.and(visible(request, usd));
         String node = nodeParam == null ? "" : String.valueOf(nodeParam);
         VarBook.Node n = node.isBlank() ? null : b.node(node);
         boolean whole = n != null && set.equals(n.members());
@@ -449,17 +473,32 @@ final class MarketScopes {
         control.check();
         // the book converted to the reporting currency first, then summed (Drishti owner decision 2026-11-27: one rule in every currency;
         // node-var reads the same converted book, so a node whole is its figure to the bit)
-        VarBook cb = "USD".equals(currency) || currency.isBlank() ? b : inCurrency(request, control, usd).book();
-        double[] v = whole ? cb.aggregate(n.id()) : cb.vector(set, sums);
-        return new Summed(v, set.size(), asked.size() - set.size());
+        MarketBooks.Built cbuilt = "USD".equals(currency) || currency.isBlank() ? usd : inCurrency(request, control, usd);
+        VarBook cb = cbuilt.book();
+        if (whole) {
+            return new Summed(cb.aggregate(n.id()), set.size(), asked.size() - set.size(), cbuilt.derived().node(n.id()));
+        }
+        int pi = part && !set.isEmpty() ? cb.positionOf(set.first()) : -1;
+        if (pi >= 0 && cb.positionMemberCount(pi) == set.size() && cb.positionWithin(pi, set)) {
+            return new Summed(cb.positionVector(pi), set.size(), asked.size() - set.size(), cbuilt.derived().position(pi));
+        }
+        return new Summed(cb.vector(set, sums), set.size(), asked.size() - set.size(), null);
     }
 
-    /** The book's rows the request's visibility lets the caller read (the in-tree view's {@code visible()}). */
-    OrdinalSet visible(Request request, VarBook b) throws EngineException {
+    /**
+     * The book's rows the request's visibility lets the caller read (the in-tree view's {@code visible()}), made once per book and
+     * visibility signature and kept with the book (session state): a caller who sees every row reads every row.
+     */
+    OrdinalSet visible(Request request, MarketBooks.Built built) throws EngineException {
         Filter[] see = MarketSession.visibility(request);
+        VarBook b = built.book();
         if (see[0] == Filter.ALL && see[1] == Filter.ALL) {
             return OrdinalSet.range(0, b.tradeCount());
         }
+        return built.derived().visible(request.visibility().signature(), k -> selected(see, b));
+    }
+
+    private OrdinalSet selected(Filter[] see, VarBook b) {
         Map<String, MarketDay.Row> pv = new HashMap<>();
         Map<String, MarketDay.Row> pnl = new HashMap<>();
         for (MarketDay.Row r : session.day().pv) {
