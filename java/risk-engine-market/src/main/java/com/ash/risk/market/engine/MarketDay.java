@@ -89,9 +89,13 @@ final class MarketDay {
     final Map<String, Missing> missing;
     /** The inputs beyond the scenario vectors (histories, sensitivities, reports). */
     final MarketExtras extras;
+    /** The host's own float32 rows of the date (InputTable.vectorView {@value #ROWS_VIEW}: zero copy, R2_CUT_PLAN 3a), or null. */
+    final Object rowsView;
+    static final String ROWS_VIEW = "float32-rows";
 
     private MarketDay(Snapshot snapshot, List<Row> pv, List<Row> pnl, List<ScenarioSet> sets, List<Fx> fx, Map<String, Double> nodeLimits,
-            Map<String, Double> basketLimits, List<Basket> baskets, Map<String, Missing> missing, MarketExtras extras) {
+            Map<String, Double> basketLimits, List<Basket> baskets, Map<String, Missing> missing, MarketExtras extras, Object rowsView) {
+        this.rowsView = rowsView;
         this.snapshot = snapshot;
         this.date = LocalDate.parse(snapshot.dimensions().get("date"));
         this.pv = pv;
@@ -106,6 +110,11 @@ final class MarketDay {
     }
 
     static MarketDay read(Snapshot snapshot, Inputs inputs, Control control) throws EngineException {
+        return read(snapshot, inputs, control, false);
+    }
+
+    /** The date's inputs; {@code zeroCopy}: the host's float32 rows asked too ({@link #rowsView}). */
+    static MarketDay read(Snapshot snapshot, Inputs inputs, Control control, boolean zeroCopy) throws EngineException {
         Map<String, Missing> missing = new TreeMap<>();
         Map<String, List<Map<String, Object>>> plain = new HashMap<>();
         for (String name : List.of(SCENARIO_SET, FX, LIMIT, BASKET)) {
@@ -137,8 +146,15 @@ final class MarketDay {
             baskets.add(new Basket(text(r, "PORTFOLIO_ID"), text(r, "NAME"), text(r, "TYPE"), text(r, "OWNER"), text(r, "SCOPE")));
         }
         MarketExtras extras = MarketExtras.read(snapshot, inputs, missing, control);
+        Object view = null;
+        for (String name : zeroCopy ? List.of(SCENARIO_PV, PNL_VECTOR) : List.<String>of()) {   // the host's rows of the date, if it holds them
+            InputTable t = inputs.table(name);
+            if (view == null && t != null && t.present()) {
+                view = t.vectorView(ROWS_VIEW);
+            }
+        }
         return new MarketDay(snapshot, pv, pnl, List.copyOf(sets), List.copyOf(fx), Collections.unmodifiableMap(nodeLimits),
-                Collections.unmodifiableMap(basketLimits), List.copyOf(baskets), Collections.unmodifiableMap(missing), extras);
+                Collections.unmodifiableMap(basketLimits), List.copyOf(baskets), Collections.unmodifiableMap(missing), extras, view);
     }
 
     /** The table when it is there with every needed column; otherwise null, with what is missing recorded. */

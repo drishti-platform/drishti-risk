@@ -36,7 +36,7 @@ import java.util.Map;
  */
 record MarketOptions(List<HierarchySpec> hierarchies, PositionRules positions, VarCalc calc, int threads, String linearAlgebra,
         Map<String, String> words, ParametricVar.Settings parametric, String stressedPrefix, Regulatory regulatory, Sensitivities sensitivities,
-        RiskLimits limits, FrtbParams frtb, boolean rraoFromPositions, boolean float32Rows) {
+        RiskLimits limits, FrtbParams frtb, boolean rraoFromPositions, boolean float32Rows, boolean zeroCopy) {
 
     /** The backtest, the stress window selection and the period statistics: Drishti's regulatory settings as options. */
     record Regulatory(int backtestWindow, String count, List<Double> multipliers, int stressLength, int stressTop, MonthDay yearEnd,
@@ -131,7 +131,7 @@ record MarketOptions(List<HierarchySpec> hierarchies, PositionRules positions, V
         return new MarketOptions(List.copyOf(specs), rules, calc, (int) o.integer("threads"), o.text("linear-algebra"), Map.copyOf(words), pv,
                 o.text("stressed-prefix"), reg, new Sensitivities(java.util.Collections.unmodifiableMap(grid), Map.copyOf(ladderLimits)),
                 new RiskLimits(o.number("limit-near")), builtInFrtb(), o.flag("rrao-from-positions"),
-                "mapped".equals(o.text("vector-tier")));
+                "mapped".equals(o.text("vector-tier")), "on".equals(o.text("zero-copy")));
     }
 
     /** The JAR's FRTB-SA parameters, checked at init (a missing or broken file refuses the engine's start in words). */
