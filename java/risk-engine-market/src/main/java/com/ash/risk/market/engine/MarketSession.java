@@ -401,7 +401,7 @@ final class MarketSession implements Session, Explaining {
             MemoryBudget.Reservation hold = engine.context().memory().reserve(need, "market-risk book " + key);
             MarketBooks.Built b;
             try {
-                b = MarketBooks.build(day, set, window, currency, see[0], see[1], engine.options(), engine.sums());
+                b = MarketBooks.build(day, set, window, currency, see[0], see[1], engine.options(), engine.sums(), engine.context().log()::info);
             } catch (RuntimeException e) {
                 hold.close();
                 throw e;

@@ -45,7 +45,7 @@ final class MarketBooks {
 
     /** Null when the set is unknown or its FX is missing; the caller answers NOT_FOUND. */
     static Built build(MarketDay day, MarketDay.ScenarioSet set, int window, String currency, Filter pvSee, Filter pnlSee, MarketOptions o,
-            ParallelSums sums) {
+            ParallelSums sums, java.util.function.Consumer<String> note) {
         List<LocalDate> scen = set.dates();
         int w = window <= 0 || window > scen.size() ? scen.size() : window;
         List<ScenarioFx.Rates> rates = new ArrayList<>();
@@ -90,6 +90,11 @@ final class MarketBooks {
         if (o.float32Rows()) {                                          // the host's mapped tier: float32 position rows (MC-12)
             VarBook own = o.zeroCopy() && day.rowsView != null && pvSee == Filter.ALL && pnlSee == Filter.ALL
                     ? HostRows.swapIn(day.rowsView, usd) : null;          // the host's own rows, read in place (3a), when they are this book's
+            if (o.zeroCopy() && day.rowsView != null) {
+                note.accept("book " + label + ": " + (own != null ? "the host's float32 rows read in place (zero copy)"
+                        : pvSee != Filter.ALL || pnlSee != Filter.ALL ? "a viewer's rows: built (the host's view is every row)"
+                        : "the host's rows are not this book's (positions, trades or scenarios differ): built"));
+            }
             usd = own != null ? own : usd.withFloat32Rows();
         }
         if (currency == null || currency.isBlank() || "USD".equalsIgnoreCase(currency)) {

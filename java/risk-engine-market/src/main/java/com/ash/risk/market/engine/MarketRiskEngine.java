@@ -104,7 +104,12 @@ public final class MarketRiskEngine implements Engine {
     @Override
     public Session session(Snapshot snapshot, Inputs inputs, Control control) throws EngineException {
         running();
-        MarketDay day = MarketDay.read(snapshot, inputs, control, options.zeroCopy() && options.float32Rows());
+        boolean zeroCopy = options.zeroCopy() && options.float32Rows();
+        MarketDay day = MarketDay.read(snapshot, inputs, control, zeroCopy);
+        if (options.zeroCopy()) {                                       // said once a session: whether the host's own rows came (3a)
+            context.log().info("market-risk " + snapshot.text() + ": zero copy " + (!options.float32Rows() ? "on, but the tier is not mapped: rows built"
+                    : day.rowsView == null ? "asked; the host served no rows (it logs why): rows built" : "asked; the host served its float32 rows"));
+        }
         meter.sessionOpened();
         return new MarketSession(this, snapshot, day);
     }
