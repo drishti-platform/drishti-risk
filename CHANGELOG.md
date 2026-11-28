@@ -3,6 +3,13 @@
 
 ## 0.1.0 (unreleased)
 
+- `ccr`: the rest of Drishti's SIMM on the engine: params `simm-overrides` (key=value parameter what-ifs, as the workbook's Config tab
+  names them: never the regulatory figure), `simm-addon-fixed`, `simm-addon-multipliers`, `simm-addon-factors`, `simm-addon-lines` (the
+  CSA's add-on terms and the scope's notional lines, the host's; each notional converted by `fx-spot`); `simm-scope: EXAMPLE` runs the
+  hand-built examples (no data read); new outputs `simm-charge`, `simm-bucket`, `simm-factor`, `simm-group`, `simm-addon` (the
+  explanation's steps: charges, buckets with K and S, weighted sensitivities, concentration groups, add-on lines) and `simm-versions`
+  (every version of `simm-parameters`, installed or refused with why). A refused override or add-on term is RSK-3164/RSK-3165 in the
+  method's words. R2 SIMM leftovers.
 - `ccr`: SIMM for a host-resolved scope: new param `simm-members` (SCOPE, SENSITIVITY_ID: a netting set's records as the host's trade
   master places them, an analytic scope's records; each scope its records' elements in the input's order, one trade per record, as
   Drishti's in-tree run builds it; `simm-scope` is then not read) on `simm` and `simm-total`; new outputs `simm-product` (each scope's SIMM
