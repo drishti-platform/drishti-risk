@@ -36,9 +36,11 @@ import java.util.Set;
 import java.util.TreeMap;
 
 /**
- * One business date's inputs, as delivered, kept in a canonical order: every input's rows sorted by its key. The order of delivery is free
- * (ENGINE_SPEC 5.2 rule 3) and a sum in floating point depends on order, so the engine fixes it here; the reference recorder feeds
- * Drishti's own book in the same order, which is what makes the two comparable bit for bit.
+ * One business date's small inputs (the scenario sets, the FX, the limits, the baskets), read at the session's open and kept in a
+ * canonical order (sorted by key: a sum in floating point depends on order, and the order of delivery is free, ENGINE_SPEC 5.2 rule 3).
+ * The vector inputs are not read here: each use reads them in one pass ({@link MarketRows}) and keeps nothing it was delivered (5.2 rule
+ * 9); the inputs beyond the scenario vectors ({@link MarketExtras}) are read at the first output that needs them. {@code inputs} stays
+ * valid until the session is closed (4.1).
  */
 final class MarketDay {
 
@@ -51,8 +53,6 @@ final class MarketDay {
     static final Map<String, String> CONTRACT = Map.of(SCENARIO_PV, "risk/scenario-pv@1", PNL_VECTOR, "risk/pnl-vector@1", SCENARIO_SET,
             "risk/scenario-set@1", FX, "risk/fx-scenario@1", LIMIT, "risk/var-limit@1", BASKET, "risk/system-basket@1");
 
-    /** The numbers of a vector row; everything else is text. */
-    private static final Set<String> NUMBERS = Set.of("BASE_PV", "PV", "QUANTITY", "RATE", "LIMIT_VAR");
     /** The columns without which an input cannot be used (the rest are optional attributes). */
     private static final Map<String, List<String>> NEEDED = Map.of(
             SCENARIO_PV, List.of("SCENARIO_PV_ID", "SCENARIO_SET_ID", "CURRENCY", "BASE_PV", "SCENARIO_PV"),
@@ -62,13 +62,11 @@ final class MarketDay {
             LIMIT, List.of("HIERARCHY", "NODE_ID", "LIMIT_VAR"),
             BASKET, List.of("PORTFOLIO_ID", "SCOPE"));
 
-    /** A row of a vector input: its key, its texts by column, its two numbers and its vector. */
-    record Row(String key, Map<String, String> texts, double pv, double quantity, double[] vector) {
-        String text(String column) {
-            String v = texts.get(column);
-            return v == null || v.isEmpty() ? null : v;
-        }
-    }
+    /** A vector input: its name, key column, vector column and the column of its PV. */
+    record Vectors(String name, String key, String vector, String pv) {}
+
+    static final Vectors PV_INPUT = new Vectors(SCENARIO_PV, "SCENARIO_PV_ID", "SCENARIO_PV", "BASE_PV");
+    static final Vectors PNL_INPUT = new Vectors(PNL_VECTOR, "VECTOR_ID", "PNL", "PV");
 
     record ScenarioSet(String id, String type, List<LocalDate> dates) {}
 
@@ -78,42 +76,45 @@ final class MarketDay {
 
     final Snapshot snapshot;
     final LocalDate date;
-    final List<Row> pv;
-    final List<Row> pnl;
     final List<ScenarioSet> sets;
     final List<Fx> fx;
     final Map<String, Double> nodeLimits;
     final Map<String, Double> basketLimits;
     final List<Basket> baskets;
-    /** Inputs absent or lacking columns, by input name. */
-    final Map<String, Missing> missing;
-    /** The inputs beyond the scenario vectors (histories, sensitivities, reports). */
-    final MarketExtras extras;
+    /** The small inputs and the vector inputs absent or lacking columns, by input name (the extras' own: {@link #missing(String)}). */
+    private final Map<String, Missing> missing;
+    private final Inputs inputs;
+    /** The vector inputs usable on the date (present with every needed column): scenario PVs, P&amp;L vectors. */
+    private final InputTable pv;
+    private final InputTable pnl;
+    private volatile MarketExtras extras;
     /** The host's own float32 rows of the date (InputTable.vectorView {@value #ROWS_VIEW}: zero copy, R2_CUT_PLAN 3a), or null. */
     final Object rowsView;
     static final String ROWS_VIEW = "float32-rows";
+    private final Map<String, Missing> extrasMissing = new java.util.concurrent.ConcurrentHashMap<>();
 
-    private MarketDay(Snapshot snapshot, List<Row> pv, List<Row> pnl, List<ScenarioSet> sets, List<Fx> fx, Map<String, Double> nodeLimits,
-            Map<String, Double> basketLimits, List<Basket> baskets, Map<String, Missing> missing, MarketExtras extras, Object rowsView) {
+    private MarketDay(Snapshot snapshot, Inputs inputs, InputTable pv, InputTable pnl, List<ScenarioSet> sets, List<Fx> fx,
+            Map<String, Double> nodeLimits, Map<String, Double> basketLimits, List<Basket> baskets, Map<String, Missing> missing, Object rowsView) {
         this.rowsView = rowsView;
         this.snapshot = snapshot;
-        this.date = LocalDate.parse(snapshot.dimensions().get("date"));
+        this.inputs = inputs;
         this.pv = pv;
         this.pnl = pnl;
+        this.date = LocalDate.parse(snapshot.dimensions().get("date"));
         this.sets = sets;
         this.fx = fx;
         this.nodeLimits = nodeLimits;
         this.basketLimits = basketLimits;
         this.baskets = baskets;
         this.missing = missing;
-        this.extras = extras;
     }
 
+    /** The date's small inputs, and whether its vector inputs are there (their rows are read by each use). */
     static MarketDay read(Snapshot snapshot, Inputs inputs, Control control) throws EngineException {
         return read(snapshot, inputs, control, false);
     }
 
-    /** The date's inputs; {@code zeroCopy}: the host's float32 rows asked too ({@link #rowsView}). */
+    /** The date's small inputs; {@code zeroCopy}: the host's float32 rows asked too ({@link #rowsView}). */
     static MarketDay read(Snapshot snapshot, Inputs inputs, Control control, boolean zeroCopy) throws EngineException {
         Map<String, Missing> missing = new TreeMap<>();
         Map<String, List<Map<String, Object>>> plain = new HashMap<>();
@@ -121,8 +122,8 @@ final class MarketDay {
             InputTable t = usable(name, inputs, snapshot, missing);
             plain.put(name, t == null ? List.of() : scan(t, control));
         }
-        List<Row> pv = vectors(SCENARIO_PV, "SCENARIO_PV_ID", "SCENARIO_PV", "BASE_PV", inputs, snapshot, missing, control);
-        List<Row> pnl = vectors(PNL_VECTOR, "VECTOR_ID", "PNL", "PV", inputs, snapshot, missing, control);
+        InputTable pv = usable(SCENARIO_PV, inputs, snapshot, missing);
+        InputTable pnl = usable(PNL_VECTOR, inputs, snapshot, missing);
         List<ScenarioSet> sets = new ArrayList<>();
         for (Map<String, Object> r : sorted(plain.get(SCENARIO_SET), "SCENARIO_SET_ID")) {
             sets.add(new ScenarioSet(text(r, "SCENARIO_SET_ID"), text(r, "SET_TYPE"), dates(r.get("SCENARIO_DATES"))));
@@ -145,7 +146,6 @@ final class MarketDay {
         for (Map<String, Object> r : sorted(plain.get(BASKET), "PORTFOLIO_ID")) {
             baskets.add(new Basket(text(r, "PORTFOLIO_ID"), text(r, "NAME"), text(r, "TYPE"), text(r, "OWNER"), text(r, "SCOPE")));
         }
-        MarketExtras extras = MarketExtras.read(snapshot, inputs, missing, control);
         Object view = null;
         for (String name : zeroCopy ? List.of(SCENARIO_PV, PNL_VECTOR) : List.<String>of()) {   // the host's rows of the date, if it holds them
             InputTable t = inputs.table(name);
@@ -153,8 +153,92 @@ final class MarketDay {
                 view = t.vectorView(ROWS_VIEW);
             }
         }
-        return new MarketDay(snapshot, pv, pnl, List.copyOf(sets), List.copyOf(fx), Collections.unmodifiableMap(nodeLimits),
-                Collections.unmodifiableMap(basketLimits), List.copyOf(baskets), Collections.unmodifiableMap(missing), extras, view);
+        return new MarketDay(snapshot, inputs, pv, pnl, List.copyOf(sets), List.copyOf(fx), Collections.unmodifiableMap(nodeLimits),
+                Collections.unmodifiableMap(basketLimits), List.copyOf(baskets), Collections.unmodifiableMap(missing), view);
+    }
+
+    /** What is missing of one input (the extras' inputs read first, under {@code control}, when asked of them), or null. */
+    Missing missing(String input, Control control) throws EngineException {
+        Missing m = missing.get(input);
+        if (m == null && MarketExtras.SPECS.containsKey(input)) {
+            extras(control);
+            m = extrasMissing.get(input);
+        }
+        return m;
+    }
+
+    /** True when the date has rows in neither vector input (absent, or delivered empty); found once a session. */
+    boolean noVectors() throws EngineException {
+        Boolean n = noVectors;
+        if (n == null) {
+            n = empty(pv, PV_INPUT.key()) && empty(pnl, PNL_INPUT.key());
+            noVectors = n;
+        }
+        return n;
+    }
+
+    private volatile Boolean noVectors;
+
+    private static boolean empty(InputTable t, String key) throws EngineException {
+        if (t == null) {
+            return true;
+        }
+        long n = t.rows();
+        if (n >= 0) {
+            return n == 0;
+        }
+        boolean[] any = {false};                                       // a host that does not count: its key column read once
+        t.scan(new Scan(List.of(key), Filter.ALL, 65_536), b -> any[0] |= b.rows() > 0);
+        return !any[0];
+    }
+
+    /** The table of a usable vector input, or null. */
+    InputTable vectors(Vectors which) {
+        return which == PV_INPUT ? pv : which == PNL_INPUT ? pnl : null;
+    }
+
+    /** The rows the vector inputs are read with (for a budget, before a book is built): their host's count, or -1 when not known yet. */
+    long vectorRows() {
+        long n = 0;
+        for (InputTable t : java.util.Arrays.asList(pv, pnl)) {
+            if (t != null) {
+                long r = t.rows();
+                if (r < 0) {
+                    return -1;
+                }
+                n += r;
+            }
+        }
+        return n;
+    }
+
+    /** The inputs beyond the scenario vectors, read at the first output that needs them and kept for the session. */
+    MarketExtras extras(Control control) throws EngineException {
+        MarketExtras e = extras;
+        if (e == null) {
+            synchronized (this) {
+                e = extras;
+                if (e == null) {
+                    Map<String, Missing> m = new TreeMap<>();
+                    e = MarketExtras.read(snapshot, inputs, m, control);
+                    extrasMissing.putAll(m);
+                    extras = e;
+                }
+            }
+        }
+        return e;
+    }
+
+    /**
+     * The extras of an output that needs them: read already when the request's missing inputs were named ({@link #missing(String,
+     * Control)} for each input the output needs), so this is the kept value.
+     */
+    MarketExtras extras() {
+        MarketExtras e = extras;
+        if (e == null) {
+            throw new IllegalStateException("the extras are read when a request names what it needs (MarketSession.missing), before any use");
+        }
+        return e;
     }
 
     /** The table when it is there with every needed column; otherwise null, with what is missing recorded. */
@@ -172,12 +256,9 @@ final class MarketDay {
         return t;
     }
 
-    /** The inputs' vector columns (the descriptor's {@code vector:} of scenario-pv, pnl-vector and fx-scenario). */
-    private static final java.util.Set<String> VECTOR_COLUMNS = java.util.Set.of("SCENARIO_PV", "PNL", "RATES");
-
     private static List<Map<String, Object>> scan(InputTable t, Control control) throws EngineException {
         java.util.TreeSet<String> all = new java.util.TreeSet<>(t.columns());
-        all.removeAll(VECTOR_COLUMNS);                                  // a vector column is read with vectors(), never as a row value
+        all.removeAll(MarketRows.VECTOR_COLUMNS);                       // a vector column is read with vectors(), never as a row value
         List<String> cols = List.copyOf(all);
         List<Map<String, Object>> out = new ArrayList<>();
         t.scan(new Scan(cols, Filter.ALL, 4_096), b -> {
@@ -185,7 +266,7 @@ final class MarketDay {
             // each column's array once per batch (a batch builds it on each call), then the rows
             Object[] arrays = new Object[cols.size()];
             for (int k = 0; k < cols.size(); k++) {
-                arrays[k] = NUMBERS.contains(cols.get(k)) ? b.numbers(cols.get(k)) : b.texts(cols.get(k));
+                arrays[k] = MarketRows.NUMBERS.contains(cols.get(k)) ? b.numbers(cols.get(k)) : b.texts(cols.get(k));
             }
             for (int i = 0; i < b.rows(); i++) {
                 Map<String, Object> m = new HashMap<>();
@@ -199,28 +280,6 @@ final class MarketDay {
             }
         });
         return out;
-    }
-
-    private static List<Row> vectors(String name, String key, String vector, String pvColumn, Inputs inputs, Snapshot snapshot,
-            Map<String, Missing> missing, Control control) throws EngineException {
-        InputTable t = usable(name, inputs, snapshot, missing);
-        if (t == null) {
-            return List.of();
-        }
-        List<Map<String, Object>> rows = scan(t, control);
-        Map<String, double[]> v = vectorsOf(t, key, vector, false, control);
-        List<Row> out = new ArrayList<>(rows.size());
-        for (Map<String, Object> r : sorted(rows, key)) {
-            Map<String, String> texts = new HashMap<>();
-            r.forEach((c, x) -> {
-                if (x instanceof String s) {
-                    texts.put(c, s);
-                }
-            });
-            String id = text(r, key);
-            out.add(new Row(id, Map.copyOf(texts), number(r, pvColumn), number(r, "QUANTITY"), v.get(id)));
-        }
-        return List.copyOf(out);
     }
 
     private static Map<String, double[]> vectorsOf(InputTable t, String key, String vector, boolean absent, Control control)
@@ -287,17 +346,13 @@ final class MarketDay {
         return null;
     }
 
-    /** Bytes held by the rows (vectors dominate). */
+    /** Bytes held: the FX vectors and the extras once read (the vector inputs' rows are never held). */
     long bytes() {
         long b = 0;
-        for (List<Row> l : List.of(pv, pnl)) {
-            for (Row r : l) {
-                b += 64 + 48L * r.texts().size() + (r.vector() == null ? 0 : 8L * r.vector().length);
-            }
-        }
         for (Fx f : fx) {
             b += 64 + 8L * f.rates().length;
         }
-        return b + extras.bytes();
+        MarketExtras e = extras;
+        return b + (e == null ? 0 : e.bytes());
     }
 }

@@ -70,7 +70,7 @@ final class MarketHistory {
     /** The official records a request sees, to the session's date: by date, then node id, then confidence. */
     private Map<LocalDate, Map<String, Map<Double, MarketExtras.Official>>> officials(Filter see) {
         Map<LocalDate, Map<String, Map<Double, MarketExtras.Official>>> out = new TreeMap<>();
-        for (MarketExtras.Official o : day.extras.officials) {
+        for (MarketExtras.Official o : day.extras().officials) {
             if (o.date().isAfter(day.date)) {
                 continue;
             }
@@ -180,7 +180,7 @@ final class MarketHistory {
         String asked = String.valueOf(request.param("node"));
         Set<String> nodes = asked.isBlank() ? new TreeSet<>(last.keySet()) : Set.of(asked);
         Map<LocalDate, List<MarketExtras.DeskPnl>> pnl = new TreeMap<>();
-        for (MarketExtras.DeskPnl d : day.extras.deskPnl) {
+        for (MarketExtras.DeskPnl d : day.extras().deskPnl) {
             if (!d.date().isAfter(day.date) && InputRows.visible(seeDesks, d.row())) {
                 pnl.computeIfAbsent(d.date(), x -> new ArrayList<>()).add(d);
             }
@@ -374,8 +374,8 @@ final class MarketHistory {
         Set<LocalDate> have = new java.util.HashSet<>();
         pts.forEach(x -> have.add(x.date()));
         Set<LocalDate> deskDays = new java.util.HashSet<>();
-        boolean desks = day.extras.present.contains(MarketExtras.DESK_PNL);
-        for (MarketExtras.DeskPnl d : day.extras.deskPnl) {
+        boolean desks = day.extras().present.contains(MarketExtras.DESK_PNL);
+        for (MarketExtras.DeskPnl d : day.extras().deskPnl) {
             if (InputRows.visible(seeDesks, d.row())) {
                 deskDays.add(d.date());
             }
@@ -840,7 +840,7 @@ final class MarketHistory {
         String measure = String.valueOf(request.param("measure"));
         String asked = String.valueOf(request.param("report"));
         Map<String, List<Map<String, Object>>> byReport = new TreeMap<>();
-        for (Map<String, Object> r : day.extras.reportRows) {
+        for (Map<String, Object> r : day.extras().reportRows) {
             String id = InputRows.text(r, "REPORT_ID");
             if (id != null && (asked.isBlank() || asked.equals(id))) {
                 byReport.computeIfAbsent(id, x -> new ArrayList<>()).add(r);
@@ -1044,7 +1044,7 @@ final class MarketHistory {
         int len = options.regulatory().stressLength();
         VarCalc c = options.calc();
         List<Window> out = new ArrayList<>();
-        for (MarketExtras.History h : day.extras.histories) {
+        for (MarketExtras.History h : day.extras().histories) {
             if (!asked.isBlank() && !asked.equals(h.node()) || !InputRows.visible(see, h.row())) {
                 continue;
             }

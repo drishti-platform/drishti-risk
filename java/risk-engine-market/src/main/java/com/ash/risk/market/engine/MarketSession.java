@@ -104,7 +104,7 @@ final class MarketSession implements Session, Explaining {
     @Override
     public Answer ask(Request request, Control control) throws EngineException {
         engine.running();
-        return engine.meter().measure(() -> answer(request, control), day.pv.size() + day.pnl.size(), 0);
+        return engine.meter().measure(() -> answer(request, control), Math.max(0, day.vectorRows()), 0);
     }
 
     /** What one request computed, kept for the explanation and the workbook of the same request. */
@@ -157,7 +157,7 @@ final class MarketSession implements Session, Explaining {
     }
 
     private Answer answer(Request request, Control control) throws EngineException {
-        Map<String, Missing> missing = missing(request);
+        Map<String, Missing> missing = missing(request, control);
         Computed c = new Computed(request, control);
         List<Table> tables = new ArrayList<>();
         for (String out : request.outputs()) {
@@ -291,23 +291,25 @@ final class MarketSession implements Session, Explaining {
     }
 
     /** What the outputs asked need and the date does not have, by input and output: the answer names it; nothing is substituted. */
-    private Map<String, Missing> missing(Request request) {
+    private Map<String, Missing> missing(Request request, Control control) throws EngineException {
         Map<String, Missing> out = new LinkedHashMap<>();
         List<String> book = request.outputs().stream().filter(x -> BOOK.contains(x) || MarketScopes.OUTPUTS.contains(x)).toList();
         if (!book.isEmpty()) {
             for (String name : List.of(MarketDay.SCENARIO_SET, MarketDay.FX)) {
-                Missing m = day.missing.get(name);
+                Missing m = day.missing(name, control);
                 if (m != null) {
                     out.put(name, new Missing(m.input(), m.contract(), m.snapshot(), m.columns(), book));
                 }
             }
-            if (day.pv.isEmpty() && day.pnl.isEmpty()) {
-                Missing m = day.missing.getOrDefault(MarketDay.SCENARIO_PV,
-                        new Missing(MarketDay.SCENARIO_PV, MarketDay.CONTRACT.get(MarketDay.SCENARIO_PV), snapshot, List.of(), List.of()));
+            if (day.noVectors()) {
+                Missing m = day.missing(MarketDay.SCENARIO_PV, control);
+                if (m == null) {
+                    m = new Missing(MarketDay.SCENARIO_PV, MarketDay.CONTRACT.get(MarketDay.SCENARIO_PV), snapshot, List.of(), List.of());
+                }
                 out.put(MarketDay.SCENARIO_PV, new Missing(m.input(), m.contract(), m.snapshot(), m.columns(), book));
             }
-            if (request.outputs().contains("basket-var") && day.missing.containsKey(MarketDay.BASKET)) {
-                Missing m = day.missing.get(MarketDay.BASKET);
+            if (request.outputs().contains("basket-var") && day.missing(MarketDay.BASKET, control) != null) {
+                Missing m = day.missing(MarketDay.BASKET, control);
                 out.put(MarketDay.BASKET, new Missing(m.input(), m.contract(), m.snapshot(), m.columns(), List.of("basket-var")));
             }
             if (!out.containsKey(MarketDay.SCENARIO_SET)) {
@@ -325,7 +327,7 @@ final class MarketSession implements Session, Explaining {
         }
         for (String o : request.outputs()) {
             for (String input : NEEDS.getOrDefault(o, List.of())) {
-                Missing m = day.missing.get(input);
+                Missing m = day.missing(input, control);
                 if (m != null) {
                     out.put(input + "|" + o, new Missing(m.input(), m.contract(), m.snapshot(), m.columns(), List.of(o)));
                 }
@@ -397,11 +399,12 @@ final class MarketSession implements Session, Explaining {
                 return have;
             }
             control.check();
-            long need = 16L * 1024 * 1024 + 2L * 8 * (long) set.dates().size() * (day.pv.size() + day.pnl.size());
+            long need = 16L * 1024 * 1024 + 2L * 8 * (long) set.dates().size() * Math.max(0, day.vectorRows());
             MemoryBudget.Reservation hold = engine.context().memory().reserve(need, "market-risk book " + key);
             MarketBooks.Built b;
             try {
-                b = MarketBooks.build(day, set, window, currency, see[0], see[1], engine.options(), engine.sums(), engine.context().log()::info);
+                b = MarketBooks.build(day, set, window, currency, see[0], see[1], engine.options(), engine.sums(), engine.context().log()::info,
+                        control);
             } catch (RuntimeException e) {
                 hold.close();
                 throw e;
@@ -420,7 +423,7 @@ final class MarketSession implements Session, Explaining {
     public Explanation explain(Request request, Cell cell, Control control) throws EngineException {
         engine.running();
         Computed c = new Computed(request, control);
-        if (!missing(request).values().stream().filter(m -> m.outputs().contains(cell.output())).toList().isEmpty()) {
+        if (!missing(request, control).values().stream().filter(m -> m.outputs().contains(cell.output())).toList().isEmpty()) {
             throw new EngineException("ENG-3005", Kind.REFUSED, "the cell is not in this request's answer: an input it needs is missing");
         }
         MarketOptions o = engine.options();

@@ -116,7 +116,7 @@ final class MarketSensitivities {
 
     private FactorDictionary dictionary() throws EngineException {
         List<FactorDictionary.Factor> fs = new ArrayList<>();
-        for (Map<String, Object> r : day.extras.factors) {
+        for (Map<String, Object> r : day.extras().factors) {
             fs.add(new FactorDictionary.Factor(InputRows.text(r, "RISK_FACTOR"), InputRows.text(r, "RISK_CLASS"), InputRows.text(r, "FACTOR_TYPE"),
                     InputRows.text(r, "QUALIFIER"), InputRows.text(r, "CURVE"), InputRows.text(r, "UNDERLYING"), InputRows.text(r, "TENOR"),
                     InputRows.text(r, "UNDERLYING_TENOR"), InputRows.text(r, "FRTB_BUCKET"), InputRows.text(r, "SIMM_BUCKET"), List.of()));
@@ -132,13 +132,13 @@ final class MarketSensitivities {
     Scoped scoped(Request request, Filter see) throws EngineException {
         String scope = request.params().containsKey("scope") ? String.valueOf(request.param("scope")) : "BANK";
         String reporting = String.valueOf(request.param("currency")).toUpperCase(Locale.ROOT);
-        Double rep = day.extras.usdPer.get(reporting);
+        Double rep = day.extras().usdPer.get(reporting);
         if (rep == null) {
             throw new EngineException("RSK-3141", Kind.REFUSED, "no FX mid for the reporting currency " + reporting + " on " + day.date + " (fx-spot)");
         }
         FactorDictionary dict = dictionary();
         Map<String, List<Map<String, Object>>> byRecord = new TreeMap<>();
-        for (Map<String, Object> r : day.extras.sensitivities) {
+        for (Map<String, Object> r : day.extras().sensitivities) {
             if (InputRows.visible(see, r)) {
                 byRecord.computeIfAbsent(InputRows.text(r, "SENSITIVITY_ID"), x -> new ArrayList<>()).add(r);
             }
@@ -175,7 +175,7 @@ final class MarketSensitivities {
             records.add(rec);
             for (Map<String, Object> r : e.getValue()) {
                 String ccy = InputRows.text(r, "CURRENCY") == null ? reporting : InputRows.text(r, "CURRENCY").toUpperCase(Locale.ROOT);
-                Double per = day.extras.usdPer.get(ccy);
+                Double per = day.extras().usdPer.get(ccy);
                 if (per == null) {
                     noFx++;
                     continue;
@@ -402,17 +402,17 @@ final class MarketSensitivities {
         for (Element e : s.elements()) {
             elements.add(new FrtbInput.Element(index.get(e.record()), e.factor(), e.measure(), e.value(), e.shockSize(), e.impliedVol()));
         }
-        Double rep = day.extras.usdPer.get(s.reporting());
+        Double rep = day.extras().usdPer.get(s.reporting());
         List<FrtbInput.DrcPosition> drc = null;
-        if (day.extras.present.contains(MarketExtras.DEFAULT_RISK)) {
+        if (day.extras().present.contains(MarketExtras.DEFAULT_RISK)) {
             drc = new ArrayList<>();
-            for (Map<String, Object> n : day.extras.defaultRisk) {
+            for (Map<String, Object> n : day.extras().defaultRisk) {
                 String trade = InputRows.text(n, "TRADE_ID");
                 Integer idx = trade == null ? null : byTrade.get(trade);
                 if (idx == null && InputRows.text(n, "POSITION_ID") != null) {
                     idx = byPosition.get(InputRows.text(n, "POSITION_ID"));
                 }
-                Double per = day.extras.usdPer.get(InputRows.text(n, "CURRENCY") == null ? "USD" : InputRows.text(n, "CURRENCY").toUpperCase(Locale.ROOT));
+                Double per = day.extras().usdPer.get(InputRows.text(n, "CURRENCY") == null ? "USD" : InputRows.text(n, "CURRENCY").toUpperCase(Locale.ROOT));
                 if (idx == null || per == null) {
                     continue;                                              // not in the scope, or no FX for its currency
                 }
@@ -427,12 +427,12 @@ final class MarketSensitivities {
             }
         }
         List<FrtbInput.RraoItem> rrao = null;
-        if (day.extras.present.contains(MarketExtras.RESIDUAL_RISK)) {
+        if (day.extras().present.contains(MarketExtras.RESIDUAL_RISK)) {
             rrao = new ArrayList<>();
-            for (Map<String, Object> n : day.extras.residualRisk) {
+            for (Map<String, Object> n : day.extras().residualRisk) {
                 String trade = InputRows.text(n, "TRADE_ID");
                 Integer idx = trade == null ? null : byTrade.get(trade);
-                Double per = day.extras.usdPer.get(InputRows.text(n, "CURRENCY") == null ? "USD" : InputRows.text(n, "CURRENCY").toUpperCase(Locale.ROOT));
+                Double per = day.extras().usdPer.get(InputRows.text(n, "CURRENCY") == null ? "USD" : InputRows.text(n, "CURRENCY").toUpperCase(Locale.ROOT));
                 if (idx != null && per != null) {
                     rrao.add(new FrtbInput.RraoItem(trade, idx, positions.get(idx).productType(), InputRows.text(n, "RRAO_CLASS"),
                             InputRows.number(n, "GROSS_NOTIONAL") * per / rep, InputRows.text(n, "BACK_TO_BACK_OF") != null,

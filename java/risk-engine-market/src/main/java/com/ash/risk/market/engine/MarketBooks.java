@@ -15,7 +15,10 @@
  */
 package com.ash.risk.market.engine;
 
+import com.ash.engine.Control;
+import com.ash.engine.EngineException;
 import com.ash.engine.Filter;
+import com.ash.engine.InputTable;
 import com.ash.risk.kernel.scope.PositionRules;
 import com.ash.risk.kernel.vector.ParallelSums;
 import com.ash.risk.market.calc.CurrencyBook;
@@ -48,9 +51,13 @@ final class MarketBooks {
     private MarketBooks() {
     }
 
-    /** Null when the set is unknown or its FX is missing; the caller answers NOT_FOUND. */
+    /**
+     * Null when the set is unknown or its FX is missing; the caller answers NOT_FOUND. The vector inputs are read in one pass each, every
+     * row straight into the builder (its texts resolved to the builder's columns once per row, its vector converted or cut into one
+     * scratch row the builder copies): nothing delivered is kept after the build.
+     */
     static Built build(MarketDay day, MarketDay.ScenarioSet set, int window, String currency, Filter pvSee, Filter pnlSee, MarketOptions o,
-            ParallelSums sums, java.util.function.Consumer<String> note) {
+            ParallelSums sums, java.util.function.Consumer<String> note, Control control) throws EngineException {
         List<LocalDate> scen = set.dates();
         int w = window <= 0 || window > scen.size() ? scen.size() : window;
         List<ScenarioFx.Rates> rates = new ArrayList<>();
@@ -72,24 +79,33 @@ final class MarketBooks {
         b.columnHierarchies(o.hierarchies(), day.nodeLimits);
         b.currencyRates(c -> wfx.rates(c).orElse(null));
         PositionRules rules = o.positions();
-        for (MarketDay.Row n : day.pv) {
-            if (!set.id().equals(n.text("SCENARIO_SET_ID")) || n.vector() == null || !rules.live(n.text("TRADE_STATUS")) || !visible(pvSee, n)) {
-                continue;
-            }
-            ScenarioFx.Rates r = fx.rates(n.text("CURRENCY")).orElse(null);
-            if (r == null) {
-                continue;                                               // a currency without FX: the loader's "not found" (counted)
-            }
-            double[] p = n.vector();
-            double[] v = new double[p.length];
-            ScenarioFx.pnlFromPv(n.pv(), p, p.length, r, v);
-            add(b, rules, n, tail(v, w, n), n.pv() * r.base(), n.text("CURRENCY"));
+        Adder add = new Adder(b, rules, w);
+        InputTable pvIn = day.vectors(MarketDay.PV_INPUT);
+        if (pvIn != null) {
+            MarketRows rows = MarketRows.read(pvIn, MarketDay.PV_INPUT.key(), null, control);
+            double[] pnl = new double[scen.size()];
+            rows.eachVector(pvIn, MarketDay.PV_INPUT.vector(), control, (n, p, len) -> {
+                if (!set.id().equals(n.text("SCENARIO_SET_ID")) || !rules.live(n.text("TRADE_STATUS")) || !visible(pvSee, n)) {
+                    return;
+                }
+                ScenarioFx.Rates r = fx.rates(n.text("CURRENCY")).orElse(null);
+                if (r == null) {
+                    return;                                             // a currency without FX: the loader's "not found" (counted)
+                }
+                double[] v = len <= pnl.length ? pnl : new double[len];
+                ScenarioFx.pnlFromPv(n.number("BASE_PV"), p, len, r, v);
+                add.row(n, v, len, n.number("BASE_PV") * r.base(), n.text("CURRENCY"));
+            });
         }
-        for (MarketDay.Row n : day.pnl) {
-            if (!set.id().equals(n.text("SCENARIO_SET_ID")) || n.vector() == null || !rules.live(n.text("TRADE_STATUS")) || !visible(pnlSee, n)) {
-                continue;
-            }
-            add(b, rules, n, tail(n.vector(), w, n), n.pv(), null);
+        InputTable pnlIn = day.vectors(MarketDay.PNL_INPUT);
+        if (pnlIn != null) {
+            MarketRows rows = MarketRows.read(pnlIn, MarketDay.PNL_INPUT.key(), null, control);
+            rows.eachVector(pnlIn, MarketDay.PNL_INPUT.vector(), control, (n, v, len) -> {
+                if (!set.id().equals(n.text("SCENARIO_SET_ID")) || !rules.live(n.text("TRADE_STATUS")) || !visible(pnlSee, n)) {
+                    return;
+                }
+                add.row(n, v, len, n.number("PV"), null);
+            });
         }
         VarBook usd = b.build(sums);
         if (o.float32Rows()) {                                          // the host's mapped tier: float32 position rows (MC-12)
@@ -132,49 +148,78 @@ final class MarketBooks {
     }
 
     /** The id a row is kept under in the book: its trade, else (a position sent whole) its position. */
-    static String tradeKey(MarketDay.Row n) {
+    static String tradeKey(MarketRows.Row n) {
         String trade = n.text("TRADE_ID");
         return trade != null ? trade : n.text("POSITION_ID");
     }
 
-    private static boolean visible(Filter see, MarketDay.Row n) {
+    private static boolean visible(Filter see, MarketRows.Row n) {
         return see == Filter.ALL || see.test(n::text);
     }
 
-    private static double[] tail(double[] v, int n, MarketDay.Row row) {
-        if (v.length < n) {
-            // the set's dates say n scenarios and a row's vector holds fewer: the supplier's error, named (never padded, never cut short)
-            throw new IllegalArgumentException(row.key() + ": its scenario vector holds " + v.length + " values and the scenario set's window needs " + n);
-        }
-        return n == v.length ? v.clone() : Arrays.copyOfRange(v, v.length - n, v.length);
-    }
+    /**
+     * Adds rows exactly as Drishti's loader under its goldens adds them (the position rules, the record's own currency, the newest
+     * {@code window} scenarios of each vector), the builder's text columns resolved to their positions once.
+     */
+    private static final class Adder {
+        private final VarBook.Builder b;
+        private final PositionRules rules;
+        private final int window;
+        private final List<String> cols;
+        private final int currency;
+        private final int position;
+        private final int rule;
+        private final int instrument;
+        private final int security;
+        private final int pvCurrency;
+        private final double[] scratch;
 
-    /** A row into the book, exactly as Drishti's loader under its goldens adds it (the position rules, the record's own currency). */
-    private static void add(VarBook.Builder b, PositionRules rules, MarketDay.Row n, double[] v, double pvUsd, String pvCurrency) {
-        List<String> cols = b.textColumns();
-        String[] texts = new String[cols.size()];
-        for (int c = 0; c < texts.length; c++) {
-            texts[c] = n.text(cols.get(c));
+        Adder(VarBook.Builder b, PositionRules rules, int window) {
+            this.b = b;
+            this.rules = rules;
+            this.window = window;
+            this.cols = b.textColumns();
+            this.currency = cols.indexOf("CURRENCY");
+            this.position = cols.indexOf("POSITION_ID");
+            this.rule = cols.indexOf("POSITION_RULE");
+            this.instrument = cols.indexOf("INSTRUMENT_ID");
+            this.security = cols.indexOf("SECURITY_ID");
+            this.pvCurrency = cols.indexOf(CurrencyTotals.COLUMN);
+            this.scratch = new double[window];
         }
-        String own = n.text("TRADE_CURRENCY");
-        if (own != null) {
-            texts[cols.indexOf("CURRENCY")] = own;
+
+        /** One row: {@code v[0..length)} its vector (read now, not kept), its PV in USD and the currency its PVs came in. */
+        void row(MarketRows.Row n, double[] v, int length, double pvUsd, String pvCcy) {
+            if (length < window) {
+                // the set's dates say n scenarios and a row's vector holds fewer: the supplier's error, named (never padded, never cut short)
+                throw new IllegalArgumentException(n.key() + ": its scenario vector holds " + length + " values and the scenario set's window needs "
+                        + window);
+            }
+            System.arraycopy(v, length - window, scratch, 0, window);  // the newest window scenarios; the builder copies the row
+            String[] texts = new String[cols.size()];
+            for (int c = 0; c < texts.length; c++) {
+                texts[c] = n.text(cols.get(c));
+            }
+            String own = n.text("TRADE_CURRENCY");
+            if (own != null) {
+                texts[currency] = own;
+            }
+            String trade = n.text("TRADE_ID");
+            if (trade == null) {
+                trade = n.text("POSITION_ID");                          // a position sent whole: never derived
+                texts[position] = trade;
+                texts[rule] = VarBook.SUPPLIED;
+                texts[instrument] = n.text("SECURITY_ID") != null ? n.text("SECURITY_ID") : trade;
+                texts[security] = n.text("SECURITY_ID");
+            } else {
+                PositionRules.Derived d = rules.derive(trade, n.text("TT_BOOK"), n.text("PRODUCT_GROUP"), n.text("PRODUCT_TYPE"), n::text);
+                texts[position] = d.positionId();
+                texts[rule] = d.rule();
+                texts[instrument] = d.instrumentId();
+                texts[security] = d.securityId();
+            }
+            texts[pvCurrency] = pvCcy;
+            b.trade(trade, scratch, window, texts, new double[] {n.number("QUANTITY"), pvUsd});
         }
-        String trade = n.text("TRADE_ID");
-        if (trade == null) {
-            trade = n.text("POSITION_ID");                              // a position sent whole: never derived
-            texts[cols.indexOf("POSITION_ID")] = trade;
-            texts[cols.indexOf("POSITION_RULE")] = VarBook.SUPPLIED;
-            texts[cols.indexOf("INSTRUMENT_ID")] = n.text("SECURITY_ID") != null ? n.text("SECURITY_ID") : trade;
-            texts[cols.indexOf("SECURITY_ID")] = n.text("SECURITY_ID");
-        } else {
-            PositionRules.Derived d = rules.derive(trade, n.text("TT_BOOK"), n.text("PRODUCT_GROUP"), n.text("PRODUCT_TYPE"), n::text);
-            texts[cols.indexOf("POSITION_ID")] = d.positionId();
-            texts[cols.indexOf("POSITION_RULE")] = d.rule();
-            texts[cols.indexOf("INSTRUMENT_ID")] = d.instrumentId();
-            texts[cols.indexOf("SECURITY_ID")] = d.securityId();
-        }
-        texts[cols.indexOf(CurrencyTotals.COLUMN)] = pvCurrency;
-        b.trade(trade, v, v.length, texts, new double[] {n.quantity(), pvUsd});
     }
 }

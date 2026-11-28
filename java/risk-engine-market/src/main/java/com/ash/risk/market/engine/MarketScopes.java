@@ -465,7 +465,7 @@ final class MarketScopes {
             throws EngineException {
         VarBook b = usd.book();
         OrdinalSet asked = rows(rowsParam, b.tradeCount());
-        OrdinalSet set = asked.and(visible(request, usd));
+        OrdinalSet set = asked.and(visible(request, usd, control));
         String node = nodeParam == null ? "" : String.valueOf(nodeParam);
         VarBook.Node n = node.isBlank() ? null : b.node(node);
         boolean whole = n != null && set.equals(n.members());
@@ -489,34 +489,49 @@ final class MarketScopes {
      * The book's rows the request's visibility lets the caller read (the in-tree view's {@code visible()}), made once per book and
      * visibility signature and kept with the book (session state): a caller who sees every row reads every row.
      */
-    OrdinalSet visible(Request request, MarketBooks.Built built) throws EngineException {
+    OrdinalSet visible(Request request, MarketBooks.Built built, Control control) throws EngineException {
         Filter[] see = MarketSession.visibility(request);
         VarBook b = built.book();
         if (see[0] == Filter.ALL && see[1] == Filter.ALL) {
             return OrdinalSet.range(0, b.tradeCount());
         }
-        return built.derived().visible(request.visibility().signature(), k -> selected(see, b));
+        OrdinalSet have = built.derived().visible(request.visibility().signature());
+        if (have == null) {
+            have = built.derived().keepVisible(request.visibility().signature(), selected(see, b, control));
+        }
+        return have;
     }
 
-    private OrdinalSet selected(Filter[] see, VarBook b) {
-        Map<String, MarketDay.Row> pv = new HashMap<>();
-        Map<String, MarketDay.Row> pnl = new HashMap<>();
-        for (MarketDay.Row r : session.day().pv) {
-            pv.put(MarketBooks.tradeKey(r), r);
-        }
-        for (MarketDay.Row r : session.day().pnl) {
-            pnl.put(MarketBooks.tradeKey(r), r);
+    /**
+     * The rows of the book a visibility passes: each vector input's key, trade and position and the filter's columns read in one pass
+     * (no vector), each row tested under its own input's filter; a trade delivered in both inputs is tested as its scenario-PV row.
+     */
+    private OrdinalSet selected(Filter[] see, VarBook b, Control control) throws EngineException {
+        Map<String, Boolean> passes = new HashMap<>();
+        MarketDay day = session.day();
+        MarketDay.Vectors[] inputs = {MarketDay.PV_INPUT, MarketDay.PNL_INPUT};
+        for (int k = 0; k < inputs.length; k++) {
+            com.ash.engine.InputTable t = day.vectors(inputs[k]);
+            if (t == null) {
+                continue;
+            }
+            Filter f = see[k];
+            java.util.Set<String> cols = new java.util.TreeSet<>(f.columns());
+            cols.add("TRADE_ID");
+            cols.add("POSITION_ID");
+            MarketRows rows = MarketRows.read(t, inputs[k].key(), cols, control);
+            for (int r = 0; r < rows.size(); r++) {
+                int row = r;
+                String trade = rows.text("TRADE_ID", row);
+                String id = trade != null ? trade : rows.text("POSITION_ID", row);
+                if (id != null && !passes.containsKey(id)) {
+                    passes.put(id, f == Filter.ALL || f.test(c -> rows.text(c, row)));
+                }
+            }
         }
         OrdinalSet.Builder out = new OrdinalSet.Builder();
         for (int o = 0; o < b.tradeCount(); o++) {
-            String id = b.tradeId(o);
-            MarketDay.Row r = pv.get(id);
-            Filter f = see[0];
-            if (r == null) {
-                r = pnl.get(id);
-                f = see[1];
-            }
-            if (r != null && (f == Filter.ALL || f.test(r::text))) {
+            if (Boolean.TRUE.equals(passes.get(b.tradeId(o)))) {
                 out.add(o);
             }
         }
