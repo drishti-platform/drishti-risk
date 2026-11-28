@@ -104,7 +104,7 @@ public final class MarketRiskEngine implements Engine {
     @Override
     public Session session(Snapshot snapshot, Inputs inputs, Control control) throws EngineException {
         running();
-        MarketDay day = MarketDay.read(snapshot, inputs, control);
+        MarketDay day = MarketDay.read(snapshot, inputs, control, options.zeroCopy() && options.float32Rows());
         meter.sessionOpened();
         return new MarketSession(this, snapshot, day);
     }

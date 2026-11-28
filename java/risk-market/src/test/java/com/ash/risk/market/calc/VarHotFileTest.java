@@ -184,6 +184,49 @@ class VarHotFileTest {
         }
     }
 
+    /**
+     * R2_CUT_PLAN 3a (zero copy): the host's own float32 rows (here the hot file's matrices, read in place) swapped in at
+     * {@link VarBook#withFloat32Rows(com.ash.risk.kernel.vector.Vectors, com.ash.risk.kernel.vector.Vectors, String[], String[])} give the
+     * book the engine builds itself, to the bit; rows of another book (other ids, another width) are refused (null: the engine builds).
+     */
+    @Test
+    void theHostsOwnRowsSwappedInAreTheBuiltRowsToTheBit() {
+        String[] pos = new String[heap.positionCount()];
+        for (int k = 0; k < pos.length; k++) {
+            pos[k] = heap.positionId(k);
+        }
+        String[] trd = new String[heap.tradeCount()];
+        for (int o = 0; o < trd.length; o++) {
+            trd[o] = heap.tradeId(o);
+        }
+        VarBook.Hot hot = mapped.hot();
+        VarBook in = heap.withFloat32Rows(hot.positions(), hot.trades(), pos, trd);
+        assertThat(in).isNotNull();
+        VarBook built = heap.withFloat32Rows();
+        for (int p = 0; p < pos.length; p++) {
+            assertThat(in.positionVector(p)).as("position " + p).containsExactly(built.positionVector(p));
+        }
+        for (int o = 0; o < trd.length; o++) {
+            assertThat(in.tradeVector(o)).as("trade " + o).containsExactly(built.tradeVector(o));
+        }
+        for (VarBook.Node n : heap.nodes().values()) {
+            assertThat(in.vector(n.members(), sums)).as(n.id()).containsExactly(built.vector(n.members(), sums));
+        }
+        Random r = new Random(7);
+        for (int k = 0; k < 30; k++) {
+            OrdinalSet.Builder b = new OrdinalSet.Builder();
+            for (int i = r.nextInt(1800); i > 0; i--) {
+                b.add(r.nextInt(1800));
+            }
+            OrdinalSet set = b.build();
+            assertThat(in.vector(set, sums)).containsExactly(built.vector(set, sums));
+        }
+        String[] other = pos.clone();
+        other[0] = "NOT-" + other[0];
+        assertThat(heap.withFloat32Rows(hot.positions(), hot.trades(), other, trd)).as("another book's positions").isNull();
+        assertThat(mapped.withFloat32Rows(hot.positions(), hot.trades(), pos, trd)).as("a mapped book keeps its own").isNull();
+    }
+
     @Test
     void aTradeAndAPositionReadTheirOwnRows() {
         for (int p = 0; p < heap.positionCount(); p += 11) {

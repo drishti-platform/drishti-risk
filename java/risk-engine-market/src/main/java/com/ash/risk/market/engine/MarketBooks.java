@@ -87,8 +87,10 @@ final class MarketBooks {
             add(b, rules, n, tail(n.vector(), w, n), n.pv(), null);
         }
         VarBook usd = b.build(sums);
-        if (o.float32Rows()) {
-            usd = usd.withFloat32Rows();                                // the host's mapped tier: float32 position rows (MC-12)
+        if (o.float32Rows()) {                                          // the host's mapped tier: float32 position rows (MC-12)
+            VarBook own = o.zeroCopy() && day.rowsView != null && pvSee == Filter.ALL && pnlSee == Filter.ALL
+                    ? HostRows.swapIn(day.rowsView, usd) : null;          // the host's own rows, read in place (3a), when they are this book's
+            usd = own != null ? own : usd.withFloat32Rows();
         }
         if (currency == null || currency.isBlank() || "USD".equalsIgnoreCase(currency)) {
             return new Built(usd, cut, wfx);
