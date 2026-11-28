@@ -561,8 +561,8 @@ outputs:
       - { name: RISK_CLASS, type: string, nullable: false, label: Risk class }
       - { name: MEASURE, type: string, nullable: false, label: Measure }
       - { name: MARGIN, type: number, nullable: true, label: Margin, measure: true }
-      - { name: ROOT, type: number, nullable: true, label: Root (the buckets aggregated) }
-      - { name: RESIDUAL, type: number, nullable: true, label: Residual bucket's margin }
+      - { name: ROOT, type: number, nullable: true, label: Root of the buckets }
+      - { name: RESIDUAL, type: number, nullable: true, label: Residual bucket margin }
       - { name: THETA, type: number, nullable: true, label: Theta }
       - { name: LAMBDA, type: number, nullable: true, label: Lambda }
       - { name: SUM_CVR, type: number, nullable: true, label: Summed CVR }
@@ -583,7 +583,7 @@ outputs:
       - { name: NET, type: number, nullable: true, label: Net }
       - { name: S, type: number, nullable: true, label: S }
       - { name: CR, type: number, nullable: true, label: Concentration factor }
-      - { name: MEMBERS, type: list, nullable: false, label: Weighted sensitivities (RISK) }
+      - { name: MEMBERS, type: list, nullable: false, label: Weighted sensitivities }
   simm-factor:
     title: ISDA SIMM weighted sensitivities
     about: Each scope's weighted sensitivities in the method's order (s, the risk weight and its parameter key, HVR, the concentration factor, WS, the trades netted in it).
@@ -599,7 +599,7 @@ outputs:
       - { name: FACTOR, type: string, nullable: false, label: Factor }
       - { name: S, type: number, nullable: true, label: Net sensitivity }
       - { name: RW, type: number, nullable: true, label: Risk weight }
-      - { name: RW_KEY, type: string, nullable: true, label: Risk weight's parameter }
+      - { name: RW_KEY, type: string, nullable: true, label: Risk weight parameter }
       - { name: HVR, type: number, nullable: true, label: HVR }
       - { name: CR, type: number, nullable: true, label: Concentration factor }
       - { name: WS, type: number, nullable: true, label: Weighted sensitivity, measure: true }
