@@ -107,7 +107,7 @@ final class CcrSession implements Session, Explaining {
             Map.entry("simm-versions", List.of(CcrExtras.SIMM)));
 
     /** What the outputs asked need and the date does not have, one per input, naming every output it stops. */
-    private List<Missing> missing(Request request) {
+    private List<Missing> missing(Request request, Control control) throws EngineException {
         Map<String, Missing> out = new LinkedHashMap<>();
         for (String o : request.outputs()) {
             List<String> needs = new ArrayList<>();
@@ -117,7 +117,7 @@ final class CcrSession implements Session, Explaining {
             }
             needs.addAll(NEEDS.getOrDefault(o, List.of()));
             for (String input : needs) {
-                Missing m = day.missing.get(input);
+                Missing m = day.missing(input, control);
                 if (m == null && input.equals(CcrDay.RUN) && day.run == null) {
                     m = new Missing(CcrDay.RUN, CcrDay.CONTRACT.get(CcrDay.RUN), snapshot, List.of(), List.of());
                 }
@@ -167,14 +167,14 @@ final class CcrSession implements Session, Explaining {
                     public Map<String, double[]> paths(java.util.Collection<String> trades) {
                         return CcrSession.this.paths(trades);
                     }
-                });
+                }, control);
             }
             return check;
         }
 
         List<CcrSimm.Run> simm() throws EngineException {
             if (simm == null) {
-                simm = new CcrSimm(engine.descriptor(), engine.options(), day).runs(request, see(request, CcrExtras.SENSITIVITY));
+                simm = new CcrSimm(engine.descriptor(), engine.options(), day).runs(request, see(request, CcrExtras.SENSITIVITY), control);
             }
             return simm;
         }
@@ -239,7 +239,7 @@ final class CcrSession implements Session, Explaining {
     }
 
     private Answer answer(Request request, Control control) throws EngineException {
-        List<Missing> missing = missing(request);
+        List<Missing> missing = missing(request, control);
         Computed c = new Computed(request, control);
         List<Table> tables = new ArrayList<>();
         for (String out : request.outputs()) {
@@ -283,7 +283,7 @@ final class CcrSession implements Session, Explaining {
                 case "simm-factor" -> new CcrSimm(engine.descriptor(), engine.options(), day).factors(c.simm());
                 case "simm-group" -> new CcrSimm(engine.descriptor(), engine.options(), day).groups(c.simm());
                 case "simm-addon" -> new CcrSimm(engine.descriptor(), engine.options(), day).addOnLines(c.simm());
-                case "simm-versions" -> new CcrSimm(engine.descriptor(), engine.options(), day).versionList();
+                case "simm-versions" -> new CcrSimm(engine.descriptor(), engine.options(), day).versionList(control);
                 default -> throw new EngineException("ENG-3003", Kind.REFUSED, "ccr has no output " + out);
             });
         }
@@ -426,22 +426,7 @@ final class CcrSession implements Session, Explaining {
 
     /** The trades' full paths (grid points × paths), for pieces that are part of a netting set. */
     Map<String, double[]> paths(java.util.Collection<String> ids) {
-        ExposureGrid g;
-        try {
-            g = day.grid();
-        } catch (RuntimeException e) {
-            return Map.of();
-        }
-        int p = (int) CcrDay.num(day.run, "PATHS");
-        java.util.Set<String> want = new java.util.HashSet<>(ids);
-        Map<String, double[]> out = new HashMap<>();
-        for (CcrDay.PathRow r : day.paths) {
-            if (want.contains(r.trade()) && r.mtm() != null) {
-                double[] tp = out.computeIfAbsent(r.trade(), x -> new double[g.size() * p]);
-                System.arraycopy(r.mtm(), 0, tp, r.k() * p, p);
-            }
-        }
-        return out;
+        return day.tradePaths(ids);
     }
 
     private Table summary(ExposureBook b, Request request) throws EngineException {
@@ -536,7 +521,7 @@ final class CcrSession implements Session, Explaining {
             ExposureMath.Stats s = r.stats;
             int q = s.at(prm.q());
             String peakDate = s.peakAt[q] < 0 ? null : g.date(g.primaryAt(s.peakAt[q])).toString();
-            CcrExtras.Limit l = day.extras.limits.get(cp);
+            CcrExtras.Limit l = day.limits(control).limits().get(cp);
             t.row(cp, (long) r.pieces.size(), (long) r.trades.size(), s.ce, s.epe, s.eepe, s.peakEe, s.peakPfe[q], peakDate, l == null ? null : l.id(),
                     l == null ? null : l.amount());
         }
@@ -717,7 +702,7 @@ final class CcrSession implements Session, Explaining {
     @Override
     public Explanation explain(Request request, Cell cell, Control control) throws EngineException {
         engine.running();
-        if (missing(request).stream().anyMatch(m -> m.outputs().contains(cell.output()))) {
+        if (missing(request, control).stream().anyMatch(m -> m.outputs().contains(cell.output()))) {
             throw new EngineException("ENG-3005", Kind.REFUSED, "the cell is not in this request's answer: an input it needs is missing");
         }
         Computed c = new Computed(request, control);

@@ -17,6 +17,7 @@ package com.ash.risk.ccr.engine;
 
 import com.ash.engine.Cell;
 import com.ash.engine.Descriptor;
+import com.ash.engine.Control;
 import com.ash.engine.EngineException;
 import com.ash.engine.EngineException.Kind;
 import com.ash.engine.Explanation;
@@ -75,13 +76,13 @@ final class CcrPreDeal {
         java.util.Map<String, double[]> paths(java.util.Collection<String> trades);
     }
 
-    Check check(Request request, ExposureBook b, Scopes scopes) throws EngineException {
+    Check check(Request request, ExposureBook b, Scopes scopes, Control control) throws EngineException {
         String cp = String.valueOf(request.param("counterparty")).strip();
         String template = String.valueOf(request.param("template")).strip();
         if (cp.isEmpty() || template.isEmpty()) {
             throw new EngineException("RSK-3150", Kind.REFUSED, "a pre-deal check names the counterparty and a template trade (the exact method)");
         }
-        CcrExtras.Limit limit = day.extras.limits.get(cp);
+        CcrExtras.Limit limit = day.limits(control).limits().get(cp);
         LimitMeasure measure = limit == null ? null : LimitMeasure.of(limit.measure(), options.pfeConfidence());
         double q = measure == null ? options.pfeConfidence() : measure.q();
         List<String> reasons = new ArrayList<>();
