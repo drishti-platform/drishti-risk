@@ -219,3 +219,53 @@ cases:
           rows:
             - [ AFTER, null, null, "CPTY:CP-2", XR-2, null, "0x402634ac271aae40", null, "0x402b40f02c89e062", "0x403da55e5da67a25", null, null, null ]
             - [ BEFORE, null, null, "CPTY:CP-2", XR-2, null, 10.623287671232877, null, 12.5, 25, null, null, null ]
+
+  - id: official-figures-of-the-record
+    source: "by hand: the record's scopes in one ask (no interactive limit): the bank and G-1 hold the whole book (CE 30, EPE 13002.5/365, EEPE 14375/365, peak EE 42.5, peak PFE 60 at both 95% and 99% with two paths, at 2026-07-14); NS-1 (CE 20, EPE 25, EEPE 10040/365, peak EE 30, peak PFE 60); a netting set the date does not hold is a row with its note; profiles: the bank EE 30, 42.5, 35, ENE 0, -7.5, -5, effective EE 30, 42.5, 42.5, PFE 35, 60, 60; NS-1 EE 20, 30, 25, ENE 0, -5, -5, effective EE 20, 30, 30, PFE 30, 60, 50"
+    request: { outputs: [ exposure-official, exposure-official-profile ], params: { scopes: [ BANK, "NSET:NS-1", "GROUP:G-1", "NSET:NS-9" ], confidence: 0.95, groups: [ { GROUP: G-1, COUNTERPARTY: CP-1 }, { GROUP: G-1, COUNTERPARTY: CP-2 } ] }, visibility: { exposure-path: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        exposure-official:
+          columns: [ SCOPE, NETTING_SETS, PARTIAL_SETS, TRADES, CE, EPE, EEPE, PEAK_EE, PEAK_PFE_95, PEAK_PFE_99, PEAK_PFE_DATE, FLAGS, NOTE ]
+          rows:
+            - [ BANK, 2, 0, 3, 30, "0x4041cfc7e3f1f8fd", 39.38356164383562, 42.5, 60, 60, "2026-07-14", "", null ]
+            - [ "GROUP:G-1", 2, 0, 3, 30, "0x4041cfc7e3f1f8fd", 39.38356164383562, 42.5, 60, 60, "2026-07-14", "", null ]
+            - [ "NSET:NS-1", 1, 0, 2, 20, 25, 27.506849315068497, 30, 60, 60, "2026-07-14", "", null ]
+            - [ "NSET:NS-9", null, null, null, null, null, null, null, null, null, null, "", "the scope names what the date does not hold: NS-9" ]
+        exposure-official-profile:
+          columns: [ SCOPE, POINT, DATE, TENOR, EE, ENE, EEE, PFE_95, PFE_99 ]
+          rows:
+            - [ BANK, 0, "2026-04-14", "3M", 30, 0, 30, 35, 35 ]
+            - [ BANK, 1, "2026-07-14", "6M", 42.5, -7.5, 42.5, 60, 60 ]
+            - [ BANK, 2, "2028-01-13", "2Y", 35, -5, 42.5, 60, 60 ]
+            - [ "GROUP:G-1", 0, "2026-04-14", "3M", 30, 0, 30, 35, 35 ]
+            - [ "GROUP:G-1", 1, "2026-07-14", "6M", 42.5, -7.5, 42.5, 60, 60 ]
+            - [ "GROUP:G-1", 2, "2028-01-13", "2Y", 35, -5, 42.5, 60, 60 ]
+            - [ "NSET:NS-1", 0, "2026-04-14", "3M", 20, 0, 20, 30, 30 ]
+            - [ "NSET:NS-1", 1, "2026-07-14", "6M", 30, -5, 30, 60, 60 ]
+            - [ "NSET:NS-1", 2, "2028-01-13", "2Y", 25, -5, 30, 50, 50 ]
+
+  - id: each-trades-ee-and-the-netting-sets-of-a-scope
+    source: "by hand: T3 is all of NS-2 (its EE 10, 12.5, 10); T1 and T2 share NS-1's exposure path by path in proportion to their MtM (T1 10, 30, 15; T2 10, 0, 10: on the second path at 3M T1 -20 and T2 30 of a set value 10); the bank's netting sets: NS-1 (EPE 25, peak EE 30, peak PFE 60) and NS-2 (EPE 3877.5/365, peak EE 12.5, peak PFE 25) over the bank's horizon, each one's part of the bank's peak PFE 60 in proportion to its EE there (30 and 12.5 of 42.5)"
+    request: { outputs: [ exposure-trade-ee, exposure-by-netting-set ], params: { scope: BANK, confidence: 0.95 }, visibility: { exposure-path: all }, seed: 0 }
+    expect:
+      status: complete
+      tables:
+        exposure-trade-ee:
+          columns: [ TRADE_ID, NETTING_SET, POINT, ORDER, EE ]
+          rows:
+            - [ T1, NS-1, 0, 0, 10 ]
+            - [ T1, NS-1, 1, 0, 30 ]
+            - [ T1, NS-1, 2, 0, 15 ]
+            - [ T2, NS-1, 0, 1, 10 ]
+            - [ T2, NS-1, 1, 1, 0 ]
+            - [ T2, NS-1, 2, 1, 10 ]
+            - [ T3, NS-2, 0, 2, 10 ]
+            - [ T3, NS-2, 1, 2, 12.5 ]
+            - [ T3, NS-2, 2, 2, 10 ]
+        exposure-by-netting-set:
+          columns: [ NETTING_SET, RANK, COUNTERPARTY, PARTIAL, EPE, PEAK_EE, PEAK_PFE, PFE_CONTRIBUTION ]
+          rows:
+            - [ NS-1, 0, CP-1, false, 25, 30, 60, "0x40452d2d2d2d2d2e" ]
+            - [ NS-2, 1, CP-2, false, 10.623287671232877, 12.5, 25, "0x4031a5a5a5a5a5a6" ]

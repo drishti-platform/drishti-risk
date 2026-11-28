@@ -142,6 +142,7 @@ params:
     max-rows: 200
     label: Candidates
     help: "The hypothetical trades: ID, LABEL, NETTING_SET (empty: a set of its own), RUN_ID (the run its paths are of; empty: the date's), COPY_OF (a booked trade whose paths are copied) and FACTOR, or MTM (the G x P paths, grid-date-major), MTM0 (its MtM today; empty: the copy's or the paths' mean), LIFE_YEARS; addon: ASSET_CLASS, NOTIONAL, DELTA, MTM0, LIFE_YEARS."
+  scopes: { type: list, items: text, label: Scopes, help: "The scopes of exposure-official, in order (BANK, NSET:<id>, CPTY:<id>, GROUP:<id>, LE:<id>, WHERE:...)." }
   simm-scope: { type: text, default: "", label: SIMM netting set, help: "NSET:<id> or CPTY:<id>; empty: every netting set of the sensitivities." }
   direction: { type: enum, options: [ collect, post ], default: collect, label: Direction }
   calculation-currency: { type: text, default: USD, label: Calculation currency }
@@ -351,6 +352,65 @@ outputs:
       - { name: PFE_BEFORE, type: number, nullable: false, label: PFE before, measure: true }
       - { name: PFE_AFTER, type: number, nullable: false, label: PFE after, measure: true }
       - { name: ADDED, type: number, nullable: true, label: Addon increment, measure: true }
+  exposure-official:
+    title: Official exposure figures of scopes
+    about: "The figures of Drishti's official exposure record (EXPOSURE_GUIDE.md section 20) for each scope asked, in order, evaluated with no interactive limit (the batch's): netting sets, partial sets, trades, CE, EPE, EEPE, peak EE, peak PFE at 95% and 99%, the peak PFE's date at the request's confidence, flags; a scope the book cannot answer is a row with its note. The record's versions, store and published tables are the host's."
+    params: [ scopes, confidence, collateral, groups ]
+    key: [ SCOPE ]
+    columns:
+      - { name: SCOPE, type: string, nullable: false, label: Scope }
+      - { name: NETTING_SETS, type: integer, nullable: true, label: Netting sets }
+      - { name: PARTIAL_SETS, type: integer, nullable: true, label: Partial netting sets }
+      - { name: TRADES, type: integer, nullable: true, label: Trades }
+      - { name: CE, type: number, nullable: true, label: Current exposure, measure: true }
+      - { name: EPE, type: number, nullable: true, label: EPE, measure: true }
+      - { name: EEPE, type: number, nullable: true, label: Effective EPE, measure: true }
+      - { name: PEAK_EE, type: number, nullable: true, label: Peak EE, measure: true }
+      - { name: PEAK_PFE_95, type: number, nullable: true, label: Peak PFE 95%, measure: true }
+      - { name: PEAK_PFE_99, type: number, nullable: true, label: Peak PFE 99%, measure: true }
+      - { name: PEAK_PFE_DATE, type: string, nullable: true, label: Peak PFE date at the confidence asked }
+      - { name: FLAGS, type: string, nullable: false, label: Flags }
+      - { name: NOTE, type: string, nullable: true, label: Why not answered }
+  exposure-official-profile:
+    title: Official exposure profiles of scopes
+    about: Each answered scope of exposure-official at every primary point (EE, ENE, effective EE, PFE at 95% and 99%).
+    params: [ scopes, confidence, collateral, groups ]
+    key: [ SCOPE, POINT ]
+    columns:
+      - { name: SCOPE, type: string, nullable: false, label: Scope }
+      - { name: POINT, type: integer, nullable: false, label: Primary point }
+      - { name: DATE, type: string, nullable: false, label: Date }
+      - { name: TENOR, type: string, nullable: false, label: Tenor }
+      - { name: EE, type: number, nullable: false, label: EE, measure: true }
+      - { name: ENE, type: number, nullable: false, label: ENE, measure: true }
+      - { name: EEE, type: number, nullable: false, label: Effective EE, measure: true }
+      - { name: PFE_95, type: number, nullable: true, label: PFE 95%, measure: true }
+      - { name: PFE_99, type: number, nullable: true, label: PFE 99%, measure: true }
+  exposure-trade-ee:
+    title: Each trade's EE contribution
+    about: Every trade's part of its netting set's EE at every primary point (the mean over the paths of its share of the set's exposure), every netting set with paths in the book's order, each set's trades in the calculation's order (ORDER); the official record's audit of who drove the exposure.
+    params: [ confidence, collateral ]
+    key: [ TRADE_ID, POINT ]
+    columns:
+      - { name: TRADE_ID, type: string, nullable: false, label: Trade }
+      - { name: NETTING_SET, type: string, nullable: false, label: Netting set }
+      - { name: POINT, type: integer, nullable: false, label: Primary point }
+      - { name: ORDER, type: integer, nullable: false, label: Order }
+      - { name: EE, type: number, nullable: false, label: EE contribution, measure: true }
+  exposure-by-netting-set:
+    title: A scope's netting sets
+    about: "Each netting set of the scope (its part of the scope's exposure, in the calculation's order) with its own EPE, peak EE and peak PFE at the request's confidence over the scope's horizon, and its contribution to the scope's peak PFE; PARTIAL when the scope holds only some of its trades (Drishti's scope answer, byNettingSet)."
+    params: [ scope, standalone, confidence, collateral, groups ]
+    key: [ NETTING_SET ]
+    columns:
+      - { name: NETTING_SET, type: string, nullable: false, label: Netting set }
+      - { name: RANK, type: integer, nullable: false, label: Order }
+      - { name: COUNTERPARTY, type: string, nullable: true, label: Counterparty }
+      - { name: PARTIAL, type: boolean, nullable: false, label: Partial }
+      - { name: EPE, type: number, nullable: false, label: EPE, measure: true }
+      - { name: PEAK_EE, type: number, nullable: false, label: Peak EE, measure: true }
+      - { name: PEAK_PFE, type: number, nullable: false, label: Peak PFE, measure: true }
+      - { name: PFE_CONTRIBUTION, type: number, nullable: false, label: Contribution to the peak PFE, measure: true }
   netting-set-collateral:
     title: Netting and collateral by netting set
     about: Each netting set's CSA terms, collateral and initial margin held, its MtM today, current exposure uncollateralised and collateralised, and EPE and peak PFE without and with collateral (the collateral's benefit).

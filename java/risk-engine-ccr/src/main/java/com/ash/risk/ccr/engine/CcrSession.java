@@ -90,7 +90,7 @@ final class CcrSession implements Session, Explaining {
     /** The outputs answered from the exposure book (they need the run and the paths). */
     static final Set<String> PATHS = Set.of("exposure-summary", "exposure-profile", "exposure-contributions", "scope-resolution", "netting-set-summary", "counterparty-summary",
             "exposure-tree", "exposure-tree-ee", "exposure-run", "exposure-flags", "exposure-distribution", "exposure-histogram", "exposure-fan",
-            "netting-set-collateral", "pre-deal", "pre-deal-buckets", "exposure-what-if", "exposure-what-if-profile");
+            "netting-set-collateral", "pre-deal", "pre-deal-buckets", "exposure-what-if", "exposure-what-if-profile", "exposure-official", "exposure-official-profile", "exposure-trade-ee", "exposure-by-netting-set");
     /** The inputs each output cannot be answered without, beyond the run and the paths. */
     static final Map<String, List<String>> NEEDS = Map.of(
             "pre-deal", List.of(CcrExtras.LIMIT, CcrExtras.BUCKET),
@@ -135,6 +135,7 @@ final class CcrSession implements Session, Explaining {
         List<TreeNode> tree;
         Evaluated evaluated;
         CcrWhatIf.Done whatIf;
+        List<CcrOfficial.Scope> official;
 
         Computed(Request request, Control control) {
             this.request = request;
@@ -175,6 +176,16 @@ final class CcrSession implements Session, Explaining {
                 evaluated = evaluate(book(), request);
             }
             return evaluated;
+        }
+
+        List<CcrOfficial.Scope> official() throws EngineException {
+            if (official == null) {
+                ExposureBook b = book();
+                ExposureCalc.Params prm = params(request);
+                ExposureScopes.Groups gs = groups(request);
+                official = new CcrOfficial(engine.descriptor()).evaluate(request, scope -> CcrSession.this.evaluate(b, scope, false, prm, gs), control);
+            }
+            return official;
         }
 
         CcrWhatIf.Done whatIf() throws EngineException {
@@ -241,6 +252,14 @@ final class CcrSession implements Session, Explaining {
                 case "exposure-distribution" -> distribution(c.book(), request, c.evaluated());
                 case "exposure-histogram" -> histogram(c.book(), request, c.evaluated());
                 case "exposure-fan" -> fan(c.book(), c.evaluated(), control);
+                case "exposure-by-netting-set" -> bySet(c.book(), c.evaluated());
+                case "exposure-official" -> new CcrOfficial(engine.descriptor()).table(c.book(), c.official(), params(request).q());
+                case "exposure-official-profile" -> new CcrOfficial(engine.descriptor()).profile(c.book(), c.official());
+                case "exposure-trade-ee" -> {
+                    ExposureBook b = c.book();
+                    ExposureCalc.Params prm = params(request);
+                    yield new CcrOfficial(engine.descriptor()).tradeEe(b, scope -> evaluate(b, scope, false, prm), this::paths, control);
+                }
                 case "exposure-what-if" -> new CcrWhatIf(engine.descriptor(), engine.options()).table(c.whatIf());
                 case "exposure-what-if-profile" -> new CcrWhatIf(engine.descriptor(), engine.options()).profile(c.book(), c.whatIf());
                 case "netting-set-collateral" -> new CcrCollateral(engine.descriptor(), engine.options()).table(c.collateral());
@@ -564,6 +583,29 @@ final class CcrSession implements Session, Explaining {
     private Table flags(ExposureBook b, Request request) throws EngineException {
         Evaluated e = evaluate(b, request);
         return Tables.of(engine.descriptor().schema("exposure-flags")).row(e.scope(), (long) e.result().pieces.size(), String.join(",", e.result().flags)).build();
+    }
+
+    /**
+     * The scope's netting sets as Drishti's scope answer lists them ({@code byNettingSet}): each part by netting set with its own statistics
+     * over the scope's horizon at the request's confidence and its contribution to the scope's peak PFE, in the parts' order ({@code RANK}).
+     */
+    private Table bySet(ExposureBook b, Evaluated e) {
+        ExposureCalc.Result r = e.result();
+        List<ExposureCalc.Part> parts = ExposureCalc.parts(r, "netting-set", ids -> Map.of());
+        Map<String, Double> pfe = new HashMap<>();
+        for (ExposureCalc.Contribution c : ExposureCalc.contributions(r, parts, "PFE", -1)) {
+            pfe.put(c.key(), c.value());
+        }
+        double[] times = ExposureCalc.times(b.grid());
+        Tables.Builder t = Tables.of(engine.descriptor().schema("exposure-by-netting-set"));
+        long rank = 0;
+        for (ExposureCalc.Part pt : parts) {
+            ExposureCalc.Piece pc = r.pieces.stream().filter(x -> b.set(x.set).id().equals(pt.key())).findFirst().orElseThrow();
+            ExposureMath.Stats one = ExposureMath.statistics(pt.x(), new double[pt.x().length], null, times, b.paths(), r.stats.horizon,
+                    new double[] {e.q()}, pc.ce, engine.params().rule());
+            t.row(pt.key(), rank++, b.set(pc.set).counterparty(), !pc.whole, one.epe, one.peakEe, one.peakPfe[0], pfe.getOrDefault(pt.key(), 0.0));
+        }
+        return t.build();
     }
 
     /** The quantiles of exposure-fan: the path fan's (5 to 95%) and a distribution's (50 to 99%). */
