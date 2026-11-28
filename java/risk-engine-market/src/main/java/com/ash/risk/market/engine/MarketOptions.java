@@ -34,9 +34,17 @@ import java.util.Map;
  * rules, the VaR method (confidence, ES confidence, rank rule, component window, scaling) and the summation threads. The settings that
  * Drishti's properties classes held become these options; the old keys are the host's aliases.
  */
-record MarketOptions(List<HierarchySpec> hierarchies, PositionRules positions, VarCalc calc, int threads,
+record MarketOptions(List<HierarchySpec> hierarchies, PositionRules positions, VarCalc calc, int threads, LinearAlgebraChoice linearAlgebra,
         Map<String, String> words, ParametricVar.Settings parametric, String stressedPrefix, Regulatory regulatory, Sensitivities sensitivities,
         RiskLimits limits, FrtbParams frtb, boolean rraoFromPositions, boolean float32Rows) {
+
+    /**
+     * The linear algebra the many-set sums and the parametric matrix use: {@code java} pure Java always; {@code auto} the bundled OpenBLAS,
+     * Java when it is missing or fails to load (never a failed start). The option that forces the exact path ({@code exact-path}) is Java
+     * too (ENGINE_SPEC 8.1 rule 6). {@code gemmMinSets}, {@code gemmMinDensity}: when a tile of rows is one {@code dgemm} (measured once,
+     * BENCHMARK.md; Drishti's in-tree defaults).
+     */
+    record LinearAlgebraChoice(boolean java, int gemmMinSets, double gemmMinDensity) {}
 
     /** The backtest, the stress window selection and the period statistics: Drishti's regulatory settings as options. */
     record Regulatory(int backtestWindow, String count, List<Double> multipliers, int stressLength, int stressTop, MonthDay yearEnd,
@@ -128,7 +136,9 @@ record MarketOptions(List<HierarchySpec> hierarchies, PositionRules positions, V
             Map<String, Object> m = (Map<String, Object>) r;
             ladderLimits.put(String.valueOf(m.get("cell")).strip().toUpperCase(java.util.Locale.ROOT), ((Number) m.get("limit")).doubleValue());
         }
-        return new MarketOptions(List.copyOf(specs), rules, calc, (int) o.integer("threads"), Map.copyOf(words), pv,
+        LinearAlgebraChoice la = new LinearAlgebraChoice("java".equals(o.text("linear-algebra")) || o.flag("exact-path"),
+                (int) o.integer("gemm-min-sets"), o.number("gemm-min-density"));
+        return new MarketOptions(List.copyOf(specs), rules, calc, (int) o.integer("threads"), la, Map.copyOf(words), pv,
                 o.text("stressed-prefix"), reg, new Sensitivities(java.util.Collections.unmodifiableMap(grid), Map.copyOf(ladderLimits)),
                 new RiskLimits(o.number("limit-near")), builtInFrtb(), o.flag("rrao-from-positions"),
                 "mapped".equals(o.text("vector-tier")));

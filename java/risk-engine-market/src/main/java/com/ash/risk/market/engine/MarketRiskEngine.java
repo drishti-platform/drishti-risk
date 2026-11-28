@@ -29,6 +29,8 @@ import com.ash.engine.Inputs;
 import com.ash.engine.LifecycleState;
 import com.ash.engine.Session;
 import com.ash.engine.Snapshot;
+import com.ash.risk.kernel.linalg.Blas;
+import com.ash.risk.kernel.vector.MultiSums;
 import com.ash.risk.kernel.vector.ParallelSums;
 import java.util.ArrayList;
 import java.util.List;
@@ -49,6 +51,7 @@ public final class MarketRiskEngine implements Engine {
     private volatile EngineContext context;
     private volatile MarketOptions options;
     private volatile ParallelSums sums;
+    private volatile Blas.Choice linearAlgebra;
     private volatile EngineMeter meter = EngineMeter.unstarted();
     private volatile LifecycleState lifecycle = LifecycleState.NEW;
     private volatile String failure;
@@ -89,7 +92,17 @@ public final class MarketRiskEngine implements Engine {
             throw new EngineException("ENG-5020", Kind.REFUSED, "start follows init; this engine is " + lifecycle);
         }
         // the summation runs on the host's executor (ENGINE_SPEC 8.5 rule 3): one per engine instance, never a static one
-        sums = new ParallelSums(context.executor(), options.threads(), MarketOptions.PARALLEL_ROWS);
+        // the linear algebra, bound once per engine instance (ENGINE_SPEC 8.4: OpenBLAS from this JAR behind the guard, else Java)
+        MarketOptions.LinearAlgebraChoice want = options.linearAlgebra();
+        Blas.Choice la = Blas.choose(want.java(), context.workDir().resolve("native"));
+        linearAlgebra = la;
+        if (!want.java() && !la.status().isNative()) {
+            context.log().warn("linear algebra: Java (" + la.status().reason() + "); the figures are the same, the many-scope sums slower");
+        } else {
+            context.log().info("linear algebra: " + (la.status().isNative() ? "OpenBLAS " + la.status().version() : "Java (chosen)"));
+        }
+        sums = new ParallelSums(context.executor(), options.threads(), MarketOptions.PARALLEL_ROWS, null,
+                new MultiSums.Gemm(la.la(), want.gemmMinDensity(), want.gemmMinSets()));
         lifecycle = LifecycleState.RUNNING;
     }
 
@@ -149,7 +162,9 @@ public final class MarketRiskEngine implements Engine {
         List<String> out = new ArrayList<>();
         MarketOptions o = options;
         if (o != null) {
-            out.add("linear algebra: java; summation threads: " + o.threads());
+            Blas.Choice la = linearAlgebra;
+            out.add("linear algebra: " + (la == null ? "not bound yet" : la.status().isNative() ? "OpenBLAS" + (la.status().version() == null ? ""
+                    : " " + la.status().version()) : "Java (" + la.status().reason() + ")") + "; summation threads: " + o.threads());
         }
         return out;
     }

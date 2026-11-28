@@ -177,6 +177,34 @@ class BlasResilienceTest {
         assertThat(b.now().reason()).contains("did not load").contains("UnsatisfiedLinkError");
     }
 
+    /**
+     * An engine's binding (Blas.choose, the market-risk engine's start): {@code auto} with a native library that is missing or fails to
+     * load serves Java with the reason recorded (the engine card's words), never a failed start; {@code java} never tries native.
+     */
+    @Test
+    void anEnginesAutoBindingFallsBackToJavaWithTheReasonWhenTheNativeLoadFails() {
+        java.nio.file.Path dir = java.nio.file.Path.of(System.getProperty("java.io.tmpdir"), "blas-choose-test");
+        Blas.Settings auto = new Blas.Settings(Blas.Mode.AUTO, dir, 256L << 20, 1024L << 20);
+        Blas.Choice missing = Blas.choose(auto, () -> {
+            throw new BlasUnavailableException("the bundled OpenBLAS is not in this JAR", null);
+        });
+        assertThat(missing.la()).isSameAs(JavaBlas.INSTANCE);
+        assertThat(missing.status().isNative()).isFalse();
+        assertThat(missing.status().reason()).contains("not in this JAR");
+        Blas.Choice broken = Blas.choose(auto, () -> {
+            throw new UnsatisfiedLinkError("libopenblas.so: cannot open shared object file");
+        });
+        assertThat(broken.la()).isSameAs(JavaBlas.INSTANCE);
+        assertThat(broken.status().reason()).contains("did not load").contains("libopenblas.so");
+        java.util.concurrent.atomic.AtomicInteger tried = new java.util.concurrent.atomic.AtomicInteger();
+        Blas.Choice java = Blas.choose(new Blas.Settings(Blas.Mode.JAVA, null, 256L << 20, 1024L << 20), () -> {
+            tried.incrementAndGet();
+            return new Spoiled(Spoiled.How.THROW, 0);
+        });
+        assertThat(java.la()).isSameAs(JavaBlas.INSTANCE);
+        assertThat(tried.get()).as("java never tries the native library").isZero();
+    }
+
     @Test
     void badArgumentsStopInJavaBeforeAnyNativeCall() {
         Spoiled s = new Spoiled(Spoiled.How.THROW, 0);

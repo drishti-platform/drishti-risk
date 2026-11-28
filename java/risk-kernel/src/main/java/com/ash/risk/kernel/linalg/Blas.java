@@ -401,6 +401,26 @@ public final class Blas {
         }
     }
 
+    /** What an engine bound: the linear algebra (guarded OpenBLAS, or Java) and its status in words. */
+    public record Choice(LinearAlgebra la, Status status) {}
+
+    /**
+     * The linear algebra of one engine instance (ENGINE_SPEC 8.4: native code only from the engine's own JAR, behind a guard that falls
+     * back to Java; no system property, no static binding): {@code java} true (the engine's option that forces the exact path) is Java;
+     * otherwise the bundled OpenBLAS unpacked under {@code nativeDir} (the engine's work folder) behind {@link GuardedBlas} when it loads and
+     * passes its self-test, else Java with the reason. Never throws.
+     */
+    public static Choice choose(boolean java, Path nativeDir) {
+        Settings st = new Settings(java ? Mode.JAVA : Mode.AUTO, java ? null : nativeDir, 256L << 20, 1024L << 20);
+        return choose(st, () -> NativeBlas.load(st.cacheDir(), st.maxNativeBytes()));
+    }
+
+    /** {@link #choose(boolean, Path)} with the native implementation from {@code loader} (a test hands in one that fails). */
+    static Choice choose(Settings st, Supplier<LinearAlgebra> loader) {
+        Binding b = select(st, loader);
+        return new Choice(b.la(), b.status());
+    }
+
     /** The bundled OpenBLAS for a test, or null where it cannot load (the test then skips its native half). */
     public static LinearAlgebra nativeOrNull() {
         try {

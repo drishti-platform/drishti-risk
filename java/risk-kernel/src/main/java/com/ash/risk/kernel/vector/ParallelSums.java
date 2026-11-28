@@ -39,6 +39,7 @@ public final class ParallelSums implements AutoCloseable {
     private final int threads;
     private final int parallelRows;
     private final Runnable release;
+    private final MultiSums.Gemm gemm;
 
     /**
      * @param pool the executor the blocks are summed on (the caller's; never shut down here)
@@ -51,10 +52,24 @@ public final class ParallelSums implements AutoCloseable {
 
     /** As {@link #ParallelSums(ExecutorService, int, int)}; {@code release} runs at {@link #close} (the owner's way to stop its executor). */
     public ParallelSums(ExecutorService pool, int threads, int parallelRows, Runnable release) {
+        this(pool, threads, parallelRows, release, MultiSums.Gemm.JAVA);
+    }
+
+    /**
+     * As {@link #ParallelSums(ExecutorService, int, int, Runnable)}; {@code gemm}: the linear algebra its owner bound for the many-set sums
+     * ({@link MultiSums#sums(Vectors, java.util.List, ParallelSums)}) and when a tile is a {@code dgemm}.
+     */
+    public ParallelSums(ExecutorService pool, int threads, int parallelRows, Runnable release, MultiSums.Gemm gemm) {
         this.pool = java.util.Objects.requireNonNull(pool, "pool");
         this.threads = Math.max(1, threads);
         this.parallelRows = Math.max(1, parallelRows);
         this.release = release;
+        this.gemm = gemm == null ? MultiSums.Gemm.JAVA : gemm;
+    }
+
+    /** The linear algebra and thresholds of the many-set sums (Java unless the owner bound OpenBLAS). */
+    public MultiSums.Gemm gemm() {
+        return gemm;
     }
 
     public int threads() {

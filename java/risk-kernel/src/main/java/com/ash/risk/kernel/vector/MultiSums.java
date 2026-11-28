@@ -70,11 +70,34 @@ public final class MultiSums {
     }
 
     /**
-     * {@link #sums(Vectors, List, ParallelSums, LinearAlgebra, double)} on Java's linear algebra (an engine loads no native library,
-     * ENGINE_SPEC 8.4; Java gives {@link ParallelSums#sum}'s bits exactly) with the default threshold.
+     * The linear algebra the many-set sums use and when a tile is a {@code dgemm}: the engine binds it once in its {@code start} (OpenBLAS
+     * from its own JAR behind the guard, else Java; ENGINE_SPEC 8.4) and hands it to its {@link ParallelSums}; never a static.
+     *
+     * @param la the bound linear algebra; Java gives {@link ParallelSums#sum}'s bits exactly
+     * @param minDensity the least share of a tile's (set, row) pairs that are members for the tile to be a {@code dgemm}
+     * @param minSets the fewest sets a tile must feed for a {@code dgemm}
      */
+    public record Gemm(LinearAlgebra la, double minDensity, int minSets) {
+
+        /** Java's linear algebra with the measured thresholds (a test, a tool, a pool given none). */
+        public static final Gemm JAVA = new Gemm(JavaBlas.INSTANCE, DEFAULT_MIN_DENSITY, MIN_GEMM_SETS);
+
+        public Gemm {
+            java.util.Objects.requireNonNull(la, "la");
+            minDensity = minDensity > 0 && minDensity <= 1 ? minDensity : DEFAULT_MIN_DENSITY;
+            minSets = minSets >= 2 ? minSets : MIN_GEMM_SETS;
+        }
+    }
+
+    /** {@link #sums(Vectors, List, ParallelSums, LinearAlgebra, double)} with the pool's bound linear algebra and thresholds ({@link ParallelSums#gemm}). */
     public static List<double[]> sums(Vectors store, List<OrdinalSet> sets, ParallelSums pool) {
-        return sums(store, sets, pool, JavaBlas.INSTANCE, DEFAULT_MIN_DENSITY);
+        Gemm g = pool.gemm();
+        return sums(store, sets, pool, g.la(), g.minDensity(), g.minSets());
+    }
+
+    /** As {@link #sums(Vectors, List, ParallelSums, LinearAlgebra, double, int)} with the measured fewest sets. */
+    public static List<double[]> sums(Vectors store, List<OrdinalSet> sets, ParallelSums pool, LinearAlgebra la, double minDensity) {
+        return sums(store, sets, pool, la, minDensity, MIN_GEMM_SETS);
     }
 
     /**
@@ -82,8 +105,9 @@ public final class MultiSums {
      *
      * @param la the linear algebra; Java gives {@link ParallelSums#sum}'s bits exactly
      * @param minDensity the least share of a tile's (set, row) pairs that are members for the tile to be a {@code dgemm}
+     * @param minSets the fewest sets a tile must feed for a {@code dgemm}
      */
-    public static List<double[]> sums(Vectors store, List<OrdinalSet> sets, ParallelSums pool, LinearAlgebra la, double minDensity) {
+    public static List<double[]> sums(Vectors store, List<OrdinalSet> sets, ParallelSums pool, LinearAlgebra la, double minDensity, int minSets) {
         int k = sets.size();
         double[][] out = new double[k][];
         int kind = kind(store);
@@ -101,7 +125,7 @@ public final class MultiSums {
             large.clear();
         }
         if (!large.isEmpty()) {
-            new Pass(store, kind == 2 ? (GroupedVectors) store : null, sets, large, pool, la, minDensity).run(out);
+            new Pass(store, kind == 2 ? (GroupedVectors) store : null, sets, large, pool, la, minDensity, minSets).run(out);
         }
         return Arrays.asList(out);
     }
@@ -137,13 +161,14 @@ public final class MultiSums {
         final double minDensity;
         final int minGemmSets;
 
-        Pass(Vectors store, GroupedVectors grouped, List<OrdinalSet> all, List<Integer> large, ParallelSums pool, LinearAlgebra la, double minDensity) {
+        Pass(Vectors store, GroupedVectors grouped, List<OrdinalSet> all, List<Integer> large, ParallelSums pool, LinearAlgebra la, double minDensity,
+                int minSets) {
             this.store = store;
             this.grouped = grouped;
             this.pool = pool;
             this.la = la;
             this.minDensity = minDensity;
-            this.minGemmSets = minDensity <= 0 ? 2 : MIN_GEMM_SETS;  // a density of 0 asks for dgemm wherever two sets share a tile (tests)
+            this.minGemmSets = minDensity <= 0 ? 2 : minSets;         // a density of 0 asks for dgemm wherever two sets share a tile (tests)
             this.width = store.width();
             int n = large.size();
             this.sets = new OrdinalSet[n];

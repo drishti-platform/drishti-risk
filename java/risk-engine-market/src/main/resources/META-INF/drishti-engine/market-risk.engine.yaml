@@ -158,6 +158,9 @@ options:
   scale-to-var: { type: bool, default: true, label: Scale components to VaR }
   threads: { type: int, default: 4, min: 1, max: 256, label: Summation threads, help: The sums are the same bits at any count. }
   vector-tier: { type: enum, options: [ heap, mapped ], default: heap, label: Vector rows, help: "The rows as the host's VaR tier keeps them. heap: float64 rows as delivered; mapped: every position one float32 row (the float64 sum of its trades, converted once) and the trades of positions of several trades float32, as a mapped tier's hot file: the host and the engine agree to the bit (R2_CUT_PLAN MC-12). The aggregates of nodes and books stay float64 either way." }
+  linear-algebra: { type: enum, options: [ auto, java ], default: auto, label: Linear algebra, help: "auto: the bundled OpenBLAS for the many-scope sums and the parametric matrix, pure Java when it is missing or does not load (said on the engine card and in the log, never a failed start); java: pure Java always. exact-path true is java too." }
+  gemm-min-sets: { type: int, default: 32, min: 2, max: 100000, label: Fewest sets per dgemm, help: "A tile of rows is one OpenBLAS dgemm when it feeds at least this many sets (measured: fewer are faster as Java additions)." }
+  gemm-min-density: { type: number, default: 0.25, min: 0.0001, max: 1, label: Least density per dgemm, help: "...and its sets hold at least this share of the tile's (set, row) pairs." }
   exact-path:
     type: bool
     default: false
