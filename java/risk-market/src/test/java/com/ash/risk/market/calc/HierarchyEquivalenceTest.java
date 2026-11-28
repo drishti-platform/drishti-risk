@@ -15,6 +15,7 @@
  */
 package com.ash.risk.market.calc;
 
+import com.ash.risk.kernel.vector.SumPool;
 import com.ash.risk.kernel.scope.HierarchySpec;
 import com.ash.risk.kernel.scope.PositionRules;
 
@@ -119,7 +120,7 @@ class HierarchyEquivalenceTest {
         VarTestDataPrecisionTest.lines(data.resolve("scenario-set"), n -> n.path("SCENARIO_DATES").forEach(d -> scen.add(LocalDate.parse(d.asText()))));
         fx = VarTestDataPrecisionTest.fx(data, scen.size());
         VarTestDataPrecisionTest.lines(data.resolve("var-limit"), n -> varLimits.put(n.path("NODE_ID").asText(), n.path("LIMIT_VAR").asDouble()));
-        sums = new ParallelSums(4, 4096);
+        sums = SumPool.of(4, 4096);
         columns = build(List.of(MGMT, LEGAL, LL), Cells.Names.NONE);
         try (InputStream in = HierarchyEquivalenceTest.class.getResourceAsStream("/var/hierarchy-golden-2026-09-30.json")) {
             golden = JSON.readTree(in);

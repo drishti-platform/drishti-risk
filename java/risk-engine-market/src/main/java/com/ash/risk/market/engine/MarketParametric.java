@@ -42,7 +42,7 @@ import java.util.TreeSet;
  * and standard deviation (equal weights with the sample variance, or EWMA), {@code PVaR = z σ − μ} and {@code PES = σ φ(z_ES)/(1 − c_ES) − μ},
  * computed by the moved {@link ParametricVar}; each child's component {@code z cov/σ − μᵢ} (the parts add up to the node's PVaR exactly),
  * its standalone and incremental PVaR. The explanation of PVAR, PES and SIGMA is in Rachana-EL over the node's scenario P&amp;Ls; the
- * workbook recomputes every figure with AVERAGE, STDEV, NORMSINV and SUMPRODUCT.
+ * workbook recomputes every figure with AVERAGE, SQRT, NORM.S.INV, EXP and SUMPRODUCT (the spreadsheet functions Excel, LibreOffice and Google Sheets share).
  */
 final class MarketParametric {
 
@@ -233,7 +233,16 @@ final class MarketParametric {
             }
 
             private String sigma(String v, String w, boolean equal) {
-                return equal ? (n > 1 ? "STDEV(" + v + ")" : "0") : "SQRT(SUMPRODUCT(" + w + ",(" + v + "-SUMPRODUCT(" + w + "," + v + "))^2))";
+                return equal ? (n > 1 ? "SQRT((SUMPRODUCT(" + v + "," + v + ")-SUM(" + v + ")^2/" + n + ")/" + (n - 1) + ")" : "0")
+                        : "SQRT(SUMPRODUCT(" + w + "," + v + "," + v + ")-SUMPRODUCT(" + w + "," + v + ")^2)";
+            }
+
+            // the formulas take whole ranges only (SUMPRODUCT of ranges, SUM): no array arithmetic inside a function, which the three
+            // spreadsheets evaluate differently outside an array formula; the weights sum to 1
+
+            private String cov(String p, String v, String w, boolean equal) {
+                return equal ? (n > 1 ? "(SUMPRODUCT(" + p + "," + v + ")-SUM(" + p + ")*SUM(" + v + ")/" + n + ")/" + (n - 1) : "0")
+                        : "(SUMPRODUCT(" + w + "," + p + "," + v + ")-SUMPRODUCT(" + w + "," + p + ")*SUMPRODUCT(" + w + "," + v + "))";
             }
 
             @Override
@@ -244,8 +253,8 @@ final class MarketParametric {
                 double ce = options.calc().esConfidence();
                 int zRow = at;
                 int fRow = at + 1;
-                main.row(zRow).text(0, "z", "bold").formula(1, "NORMSINV(" + c + ")", ParametricVar.inverse(c, options.parametric().strict()), "decimal");
-                main.row(fRow).text(0, "ES factor", "bold").formula(1, "NORMDIST(NORMSINV(" + ce + "),0,1,FALSE)/(1-" + ce + ")",
+                main.row(zRow).text(0, "z", "bold").formula(1, "NORM.S.INV(" + c + ")", ParametricVar.inverse(c, options.parametric().strict()), "decimal");
+                main.row(fRow).text(0, "ES factor", "bold").formula(1, "EXP(-NORM.S.INV(" + ce + ")^2/2)/SQRT(2*PI())/(1-" + ce + ")",
                         ParametricVar.esFactor(ce), "decimal");
                 int row = at + 3;
                 main.row(row).text(0, components ? "NODE_ID / CHILD" : "NODE_ID", "header").text(1, "MU", "header").text(2, "SIGMA", "header")
@@ -261,9 +270,16 @@ final class MarketParametric {
                             .formula(4, "C" + row + "*$B$" + fRow + "-B" + row, f.es(), "decimal");
                 }
                 if (!nodes.isEmpty()) {
-                    wb.name(AnswerBook.name("node-pvar", "SIGMA"), main.name(), "$C$" + firstRow);
-                    wb.name(AnswerBook.name("node-pvar", "PVAR"), main.name(), "$D$" + firstRow);
-                    wb.name(AnswerBook.name("node-pvar", "PES"), main.name(), "$E$" + firstRow);
+                    int answerFirst = 0;                                // the answer's first row is its least NODE_ID (the output's key order)
+                    for (int i = 1; i < nodes.size(); i++) {
+                        if (nodes.get(i).id().compareTo(nodes.get(answerFirst).id()) < 0) {
+                            answerFirst = i;
+                        }
+                    }
+                    int named = firstRow + answerFirst;
+                    wb.name(AnswerBook.name("node-pvar", "SIGMA"), main.name(), "$C$" + named);
+                    wb.name(AnswerBook.name("node-pvar", "PVAR"), main.name(), "$D$" + named);
+                    wb.name(AnswerBook.name("node-pvar", "PES"), main.name(), "$E$" + named);
                 }
                 if (!components) {
                     return row;
@@ -283,14 +299,15 @@ final class MarketParametric {
                         int ci = index(ch);
                         String p = AnswerBook.range(ci + 2, first + 1, first + n);
                         ParametricVar.Component k = ParametricVar.component(vectors.get(ci), vectors.get(i), f);
-                        String cov = equal ? (n > 1 ? "COVAR(" + p + "," + v + ")*" + n + "/" + (n - 1) : "0")
-                                : "SUMPRODUCT(" + w + ",(" + p + "-SUMPRODUCT(" + w + "," + p + "))*(" + v + "-SUMPRODUCT(" + w + "," + v + ")))";
+                        String cov = cov(p, v, w, equal);
                         String sg = sigma(v, w, equal);
                         String mp = mean(p, w, equal);
-                        String rest = v + "-" + p;
-                        String restSigma = equal ? (n > 1 ? "SQRT((SUMPRODUCT((" + rest + ")^2)-(SUM(" + v + ")-SUM(" + p + "))^2/" + n + ")/" + (n - 1) + ")" : "0")
-                                : "SQRT(SUMPRODUCT(" + w + ",(" + rest + "-SUMPRODUCT(" + w + "," + rest + "))^2))";
-                        String restMean = equal ? "(AVERAGE(" + v + ")-AVERAGE(" + p + "))" : "SUMPRODUCT(" + w + "," + rest + ")";
+                        // the rest of the node without the child (v - p): its squares and mean from the ranges' own sums
+                        String restSquares = equal ? "(SUMPRODUCT(" + v + "," + v + ")-2*SUMPRODUCT(" + p + "," + v + ")+SUMPRODUCT(" + p + "," + p + "))"
+                                : "(SUMPRODUCT(" + w + "," + v + "," + v + ")-2*SUMPRODUCT(" + w + "," + p + "," + v + ")+SUMPRODUCT(" + w + "," + p + "," + p + "))";
+                        String restSigma = equal ? (n > 1 ? "SQRT((" + restSquares + "-(SUM(" + v + ")-SUM(" + p + "))^2/" + n + ")/" + (n - 1) + ")" : "0")
+                                : "SQRT(" + restSquares + "-(SUMPRODUCT(" + w + "," + v + ")-SUMPRODUCT(" + w + "," + p + "))^2)";
+                        String restMean = equal ? "(AVERAGE(" + v + ")-AVERAGE(" + p + "))" : "(SUMPRODUCT(" + w + "," + v + ")-SUMPRODUCT(" + w + "," + p + "))";
                         row++;
                         main.row(row).text(0, x.id(), "normal").text(1, ch, "normal")
                                 .formula(2, "IF(" + sg + ">0,$B$" + zRow + "*" + cov + "/" + sg + ",0)-" + mp, k.componentVar(), "decimal")

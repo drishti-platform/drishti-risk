@@ -15,6 +15,7 @@
  */
 package com.ash.risk.market.calc;
 
+import com.ash.risk.kernel.vector.SumPool;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -88,7 +89,7 @@ class ShardReadAheadTest {
 
     @BeforeAll
     static void build() throws IOException {
-        sums = new ParallelSums(4, 64);
+        sums = SumPool.of(4, 64);
         Path wd = Files.createDirectories(dir.resolve("whole"));
         whole = BANK.fill(new VarBook.Builder(DAY, "HS-509", SyntheticBank.dates(), Long.MAX_VALUE,
                 SyntheticBank.target(wd, "whole.vhot", "whole")).currencyRates(c -> null), 42).build(sums);

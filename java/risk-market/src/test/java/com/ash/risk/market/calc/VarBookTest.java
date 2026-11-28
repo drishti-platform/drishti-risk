@@ -15,6 +15,7 @@
  */
 package com.ash.risk.market.calc;
 
+import com.ash.risk.kernel.vector.SumPool;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
@@ -43,7 +44,7 @@ class VarBookTest {
 
     @BeforeAll
     static void load() {
-        sums = new ParallelSums(4, 64);
+        sums = SumPool.of(4, 64);
         book = BANK.build(42, sums, Long.MAX_VALUE);
     }
 

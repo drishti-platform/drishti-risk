@@ -15,6 +15,7 @@
  */
 package com.ash.risk.market.calc;
 
+import com.ash.risk.kernel.vector.SumPool;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ash.risk.kernel.vector.OrdinalSet;
@@ -100,7 +101,7 @@ class VarTierBenchmark {
         long heap0 = heapUsed();
         List<VarBook> open = new ArrayList<>();
         List<Path> files = new ArrayList<>();
-        try (ParallelSums sums = new ParallelSums(threads, 4096)) {
+        try (ParallelSums sums = SumPool.of(threads, 4096)) {
             double buildTotal = 0;
             for (int d = 0; d < dates; d++) {
                 LocalDate day = LocalDate.of(2026, 9, 30).minusDays(d);

@@ -251,7 +251,7 @@ final class MarketWhatIf {
             }
 
             private String es(String range, int kes) {
-                return "-SUMPRODUCT(SMALL(" + range + ",ROW($1:$" + kes + ")))/" + kes;
+                return "-" + MarketWorkbook.worstSum(range, kes) + "/" + kes;
             }
         };
     }

@@ -113,7 +113,7 @@ The moved code that names them does not compile until the step named cuts it ont
 
 | Exemption | Where | Removed at |
 |---|---|---|
-| Jackson (YAML and JSON reading) in the moved code; the parent POM's Jackson ban is lifted until then | 18 main files of risk-kernel, risk-market, risk-ccr | K4 (options) and K5 (inputs) |
+| Jackson (YAML and JSON reading) in the moved code; the parent POM's Jackson ban is lifted until then | 2 main files of risk-ccr (risk-kernel and risk-market read YAML with the platform's StrictYaml) | K4 (options) and K5 (inputs) |
 | "Names no host": the moved code still names `drishti.` settings and pack words in text and keys | risk-kernel, risk-market, risk-ccr (the guard reads this list: the three moved modules are reported, not failed, until K4) | K4 |
 | Kernel candidates still in risk-market: `Cells`, `Columns`, `ScopeResolver`, `ShardAssembly`, `ShardSkeleton`, `Hierarchies`, `MembershipLines` (they name `VarBook`, `VarHotFile`, `CurrencyTotals`) | risk-market | K6 |
 | Tests that read Drishti's committed test data (`data/testdata/market-risk`, `counterparty-risk`) through `TestRoots` | `TestDataBook`, `VarTestDataPrecisionTest`, `ExposureParityTest`, `FrtbTestData`, `SimmTestData`, the hand-built FRTB and SIMM cases | K10 (the sample day in `tools/samples`) |

@@ -15,6 +15,7 @@
  */
 package com.ash.risk.market.calc;
 
+import com.ash.risk.kernel.vector.SumPool;
 import com.ash.risk.market.ReferenceData;
 import com.ash.risk.kernel.scope.PositionRules;
 
@@ -204,7 +205,7 @@ class VarTestDataPrecisionTest {
         PositionRules rules = PositionRules.of((Map<?, ?>) pack.get("positions"));
         List<LocalDate> scen = new ArrayList<>();
         lines(data.resolve("scenario-set"), n -> n.path("SCENARIO_DATES").forEach(d -> scen.add(LocalDate.parse(d.asText()))));
-        sums = new ParallelSums(4, 4096);
+        sums = SumPool.of(4, 4096);
         VarBook.Builder h = new VarBook.Builder(LocalDate.of(2026, 9, 30), "HS-509", scen, 65_536, Long.MAX_VALUE);
         fill(h, data, rules, 1);
         heap = h.build(sums);

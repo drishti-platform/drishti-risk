@@ -110,7 +110,7 @@ class MappedVectorsTest {
         }
         VectorStore heap = b.build();
         try (MappedMatrix m = MappedMatrix.open(write(dir, rows, MappedMatrix.Type.FLOAT32, 0), 0, rows.length, W, MappedMatrix.Type.FLOAT32, 700);
-                ParallelSums sums = new ParallelSums(4, 64)) {
+                ParallelSums sums = SumPool.of(4, 64)) {
             OrdinalSet set = new OrdinalSet.Builder().addRange(5, 2900).build().andNot(OrdinalSet.of(10, 11, 400, 2000));
             assertThat(sums.sum(m, set)).containsExactly(sums.sum(heap, set));
         }

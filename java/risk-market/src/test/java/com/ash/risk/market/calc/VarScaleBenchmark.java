@@ -15,6 +15,7 @@
  */
 package com.ash.risk.market.calc;
 
+import com.ash.risk.kernel.vector.SumPool;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ash.risk.kernel.vector.OrdinalSet;
@@ -59,7 +60,7 @@ class VarScaleBenchmark {
         double gb = rows * 509.0 * 8 / 1e9;
         System.out.printf("%nVaR scale benchmark: %,d positions, %,d trades (rows), %.2f GB of vectors, %d threads, %d desks, %d books%n",
                 positions, rows, gb, threads, les * Math.max(1, desks / les), bank.books());
-        try (ParallelSums sums = new ParallelSums(threads, 4096)) {
+        try (ParallelSums sums = SumPool.of(threads, 4096)) {
             long t0 = System.nanoTime();
             VarBook.Builder b = new VarBook.Builder(LocalDate.of(2026, 9, 30), "HS-509", SyntheticBank.dates(), 65_536, Long.MAX_VALUE);
             bank.fill(b, 1);

@@ -15,6 +15,7 @@
  */
 package com.ash.risk.market.calc;
 
+import com.ash.risk.kernel.vector.SumPool;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ash.risk.kernel.vector.OrdinalSet;
@@ -41,7 +42,7 @@ class PositionMembersTest {
 
     @BeforeAll
     static void open() {
-        sums = new ParallelSums(2, 64);
+        sums = SumPool.of(2, 64);
     }
 
     @AfterAll

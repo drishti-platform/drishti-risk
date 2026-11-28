@@ -69,7 +69,7 @@ class VectorStoreTest {
                 want[j] += keep[i][j];
             }
         }
-        try (ParallelSums serial = new ParallelSums(1, 1); ParallelSums par = new ParallelSums(4, 10)) {
+        try (ParallelSums serial = SumPool.of(1, 1); ParallelSums par = SumPool.of(4, 10)) {
             assertThat(serial.sum(s, set)).containsExactly(want);
             assertThat(par.sum(s, set)).containsExactly(want);
             double[] range = new double[W];

@@ -34,7 +34,7 @@ import java.util.Map;
  * rules, the VaR method (confidence, ES confidence, rank rule, component window, scaling) and the summation threads. The settings that
  * Drishti's properties classes held become these options; the old keys are the host's aliases.
  */
-record MarketOptions(List<HierarchySpec> hierarchies, PositionRules positions, VarCalc calc, int threads, String linearAlgebra,
+record MarketOptions(List<HierarchySpec> hierarchies, PositionRules positions, VarCalc calc, int threads,
         Map<String, String> words, ParametricVar.Settings parametric, String stressedPrefix, Regulatory regulatory, Sensitivities sensitivities,
         RiskLimits limits, FrtbParams frtb, boolean rraoFromPositions, boolean float32Rows) {
 
@@ -128,7 +128,7 @@ record MarketOptions(List<HierarchySpec> hierarchies, PositionRules positions, V
             Map<String, Object> m = (Map<String, Object>) r;
             ladderLimits.put(String.valueOf(m.get("cell")).strip().toUpperCase(java.util.Locale.ROOT), ((Number) m.get("limit")).doubleValue());
         }
-        return new MarketOptions(List.copyOf(specs), rules, calc, (int) o.integer("threads"), o.text("linear-algebra"), Map.copyOf(words), pv,
+        return new MarketOptions(List.copyOf(specs), rules, calc, (int) o.integer("threads"), Map.copyOf(words), pv,
                 o.text("stressed-prefix"), reg, new Sensitivities(java.util.Collections.unmodifiableMap(grid), Map.copyOf(ladderLimits)),
                 new RiskLimits(o.number("limit-near")), builtInFrtb(), o.flag("rrao-from-positions"),
                 "mapped".equals(o.text("vector-tier")));

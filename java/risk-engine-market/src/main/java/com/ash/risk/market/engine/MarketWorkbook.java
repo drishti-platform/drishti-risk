@@ -82,8 +82,8 @@ final class MarketWorkbook implements AnswerBook.Part {
         main.row(conf).text(0, "VaR confidence", "bold").number(1, calc.confidence(), "decimal");
         main.row(esConf).text(0, "ES confidence", "bold").number(1, calc.esConfidence(), "decimal");
         main.row(scen).text(0, "Scenarios", "bold").number(1, n, "int");
-        main.row(kRow).text(0, "k (VaR)", "bold").formula(1, "MAX(1,MIN(B" + scen + ",CEILING(B" + scen + "*(1-B" + conf + ")-1E-9,1)))", (double) k, "int");
-        main.row(kesRow).text(0, "k (ES)", "bold").formula(1, "MAX(1,MIN(B" + scen + ",CEILING(B" + scen + "*(1-B" + esConf + ")-1E-9,1)))", (double) kes, "int");
+        main.row(kRow).text(0, "k (VaR)", "bold").formula(1, "MAX(1,MIN(B" + scen + ",ROUNDUP(B" + scen + "*(1-B" + conf + ")-1E-9,0)))", (double) k, "int");
+        main.row(kesRow).text(0, "k (ES)", "bold").formula(1, "MAX(1,MIN(B" + scen + ",ROUNDUP(B" + scen + "*(1-B" + esConf + ")-1E-9,0)))", (double) kes, "int");
         int row = first + 6;
         main.row(row).text(0, "NODE_ID", "header").text(1, "VAR", "header").text(2, "ES", "header");
         int firstNode = row + 1;
@@ -110,7 +110,7 @@ final class MarketWorkbook implements AnswerBook.Part {
             } else {
                 var = "-SMALL(" + range + ",$B$" + kRow + ")";
             }
-            String es = "-SUMPRODUCT(SMALL(" + range + ",ROW($1:$" + kes + ")))/$B$" + kesRow;
+            String es = "-" + worstSum(range, kes) + "/$B$" + kesRow;
             if (nodes.get(c).id().equals(root)) {
                 rootRow = row;
             }
@@ -130,5 +130,17 @@ final class MarketWorkbook implements AnswerBook.Part {
     /** A zero-based column index as spreadsheet letters (0: A, 25: Z, 26: AA). */
     static String letters(int index) {
         return AnswerBook.letters(index);
+    }
+
+    /**
+     * The sum of the {@code k} worst (smallest) values of {@code range}, {@code (SMALL(r,1)+...+SMALL(r,k))}: written out term by term with
+     * the functions Excel, LibreOffice and Google Sheets share (no array {@code ROW($1:$k)}); an expected shortfall divides it by k.
+     */
+    static String worstSum(String range, int k) {
+        StringBuilder f = new StringBuilder("(");
+        for (int i = 1; i <= Math.max(1, k); i++) {
+            f.append(i > 1 ? "+" : "").append("SMALL(").append(range).append(',').append(i).append(')');
+        }
+        return f.append(')').toString();
     }
 }

@@ -15,6 +15,7 @@
  */
 package com.ash.risk.market.calc;
 
+import com.ash.risk.kernel.vector.SumPool;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
@@ -55,7 +56,7 @@ class VarIntradayTest {
 
     @BeforeAll
     static void data() {
-        sums = new ParallelSums(2, 64);
+        sums = SumPool.of(2, 64);
         SplittableRandom r = new SplittableRandom(11);
         List<ScenarioFx.Rates> rates = new ArrayList<>();
         for (String[] c : new String[][] {{"EUR", "1.08"}, {"CAD", "0.73"}, {"GBP", "1.27"}}) {

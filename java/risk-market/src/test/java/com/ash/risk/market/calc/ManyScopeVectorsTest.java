@@ -15,6 +15,7 @@
  */
 package com.ash.risk.market.calc;
 
+import com.ash.risk.kernel.vector.SumPool;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ash.risk.kernel.vector.OrdinalSet;
@@ -39,7 +40,7 @@ class ManyScopeVectorsTest {
     @Test
     void manyScopesGiveTheVectorsOfOneAtATime() {
         Random r = new Random(9);
-        try (ParallelSums sums = new ParallelSums(4, 256)) {
+        try (ParallelSums sums = SumPool.of(4, 256)) {
             VarBook.Builder b = new VarBook.Builder(LocalDate.of(2026, 9, 30), "HS-509", SyntheticBank.dates(), 65_536, Long.MAX_VALUE);
             b.columnHierarchies(List.of(), Map.of());
             List<String> cols = b.textColumns();
@@ -89,20 +90,9 @@ class ManyScopeVectorsTest {
             sets.add(OrdinalSet.empty());
             sets.add(OrdinalSet.of(5, 77, 9_000));
             List<double[]> many = book.vectors(sets, sums);
-            boolean exact = !com.ash.risk.kernel.linalg.Blas.get().isNative();
-            for (int i = 0; i < sets.size(); i++) {
+            for (int i = 0; i < sets.size(); i++) {                    // the many-set sums are Java's (an engine loads no native library): the same bits
                 double[] one = book.vector(sets.get(i), sums);
-                if (exact) {
-                    assertThat(many.get(i)).as("set " + i).containsExactly(one);
-                } else {
-                    double scale = 0;
-                    for (double v : one) {
-                        scale = Math.max(scale, Math.abs(v));
-                    }
-                    for (int j = 0; j < W; j++) {
-                        assertThat(Math.abs(many.get(i)[j] - one[j])).isLessThanOrEqualTo(1e-12 * scale);
-                    }
-                }
+                assertThat(many.get(i)).as("set " + i).containsExactly(one);
                 assertThat(VarMath.order(many.get(i))[VarMath.rank(W, 0.99) - 1]).as("the VaR scenario of set " + i)
                         .isEqualTo(VarMath.order(one)[VarMath.rank(W, 0.99) - 1]);
                 assertThat(VarMath.var(many.get(i), 0.99)).isCloseTo(VarMath.var(one, 0.99), org.assertj.core.data.Offset.offset(1e-6));

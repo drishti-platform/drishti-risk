@@ -734,8 +734,8 @@ final class MarketHistory {
                     "sum($.rows, 'VALUE')", Map.of("rows", List.of(pts.get(n - 1))), s.end()));
             case "AVERAGE" -> List.of(Steps.of("average", "The mean of the " + n + " official values of the period", "sum($.rows, 'VALUE') / $.n",
                     Map.of("rows", pts, "n", (long) n), s.average()));
-            case "HIGH" -> List.of(Steps.of("high", "The largest official value of the period", "max($.rows, 'VALUE')", Map.of("rows", pts), s.high()));
-            case "LOW" -> List.of(Steps.of("low", "The smallest official value of the period", "min($.rows, 'VALUE')", Map.of("rows", pts), s.low()));
+            case "HIGH" -> List.of(Steps.of("high", "The largest official value of the period", "max($.rows[*].VALUE)", Map.of("rows", pts), s.high()));
+            case "LOW" -> List.of(Steps.of("low", "The smallest official value of the period", "min($.rows[*].VALUE)", Map.of("rows", pts), s.low()));
             case "AVERAGE_N" -> List.of(Steps.of("average", "The mean of the official VaR of the last " + s.lastN().size() + " official dates to the period end",
                     "sum($.rows, 'VALUE') / $.n", Map.of("rows", points(null, s.lastN()), "n", (long) s.lastN().size()), s.averageN()));
             case "STRESSED_AVERAGE" -> List.of(Steps.of("average", "The mean of the official stressed VaR of the last "
@@ -831,7 +831,7 @@ final class MarketHistory {
     record ReportRow(String report, long order, String label, String code, String node, String compute, boolean total, Stats now, Stats prior,
             double[] values) {}
 
-    static final String[] REPORT_COLUMNS = {"PERIOD_END", "AVERAGE", "HIGH", "LOW", "PRIOR_PERIOD_END", "MOVEMENT"};
+    static final List<String> REPORT_COLUMNS = List.of("PERIOD_END", "AVERAGE", "HIGH", "LOW", "PRIOR_PERIOD_END", "MOVEMENT");
 
     List<ReportRow> reports(Request request, Filter see) throws EngineException {
         Map<LocalDate, Map<String, Map<Double, MarketExtras.Official>>> recs = officials(see);
@@ -907,7 +907,7 @@ final class MarketHistory {
             if (!r.report().equals(cell.key().get("REPORT_ID")) || !String.valueOf(r.order()).equals(cell.key().get("ROW_ORDER"))) {
                 continue;
             }
-            int c = java.util.Arrays.asList(REPORT_COLUMNS).indexOf(cell.column());
+            int c = REPORT_COLUMNS.indexOf(cell.column());
             if (c < 0 || !Double.isFinite(r.values()[c])) {
                 throw new EngineException("ENG-3005", Kind.REFUSED, "the cell " + cell.column() + " of row " + r.order() + " is not a figure");
             }
@@ -975,8 +975,8 @@ final class MarketHistory {
             @Override
             public int main(Workbook wb, Sheet main, int at) {
                 Sheet h = main.row(at).text(0, "REPORT_ID", "header").text(1, "ROW_ORDER", "header");
-                for (int c = 0; c < REPORT_COLUMNS.length; c++) {
-                    h.text(2 + c, REPORT_COLUMNS[c], "header");
+                for (int c = 0; c < REPORT_COLUMNS.size(); c++) {
+                    h.text(2 + c, REPORT_COLUMNS.get(c), "header");
                 }
                 int row = at;
                 Map<String, Integer> totalRow = new HashMap<>();
@@ -1024,8 +1024,8 @@ final class MarketHistory {
                     }
                     if (!named && x.now() != null) {
                         named = true;
-                        for (int c = 0; c < REPORT_COLUMNS.length; c++) {
-                            wb.name(AnswerBook.name("regulatory-report", REPORT_COLUMNS[c]), main.name(), "$" + AnswerBook.letters(2 + c) + "$" + row);
+                        for (int c = 0; c < REPORT_COLUMNS.size(); c++) {
+                            wb.name(AnswerBook.name("regulatory-report", REPORT_COLUMNS.get(c)), main.name(), "$" + AnswerBook.letters(2 + c) + "$" + row);
                         }
                     }
                 }

@@ -15,6 +15,7 @@
  */
 package com.ash.risk.market.calc;
 
+import com.ash.risk.kernel.vector.SumPool;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
@@ -54,7 +55,7 @@ class CurrencyTotalsTest {
 
     @BeforeAll
     static void build() {
-        sums = new ParallelSums(2, 64);
+        sums = SumPool.of(2, 64);
         int w = SyntheticBank.WIDTH;
         SplittableRandom r = new SplittableRandom(7);
         List<ScenarioFx.Rates> rates = new ArrayList<>();

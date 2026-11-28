@@ -15,6 +15,7 @@
  */
 package com.ash.risk.market.calc;
 
+import com.ash.risk.kernel.vector.SumPool;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
@@ -122,7 +123,7 @@ class ScenarioFxTest {
 
     @Test
     void aWholeBookConvertsWithTheSameTradesInTheSameOrder() {
-        try (ParallelSums sums = new ParallelSums(2, 16)) {
+        try (ParallelSums sums = SumPool.of(2, 16)) {
             VarBook.Builder b = new VarBook.Builder(LocalDate.of(2026, 9, 30), "HS-3", DAYS, 1024, Long.MAX_VALUE);
             b.trade("T2", new double[] {-100, 50, 0}, 3, texts("BOOK-2", "POS-BOOK-2~T2"), new double[] {1, 1200});
             b.trade("T1", new double[] {10, -20, 30}, 3, texts("BOOK-1", "POS-BOOK-1~T1"), new double[] {1, Double.NaN});

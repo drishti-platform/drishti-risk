@@ -169,7 +169,7 @@ class FrtbHandBuiltCasesTest {
         assertThat(r.sbm().total[0]).isCloseTo(290_579.79, offset(CENT));
         assertThat(r.sbm().total[1]).isCloseTo(281_300.03, offset(CENT));
         assertThat(r.sbm().total[2]).isCloseTo(271_079.64, offset(CENT));
-        assertThat(Sbm.SCENARIOS[r.sbm().binding]).isEqualTo("low");
+        assertThat(Sbm.SCENARIOS.get(r.sbm().binding)).isEqualTo("low");
         // a class's total is its measures added (the screen's Total column comes from here), and the classes' totals add up to SBM
         assertThat(r.sbm().classTotal("EQ", 0)).isCloseTo(180_000, offset(CENT));
         assertThat(r.sbm().classes()).contains("GIRR", "EQ");

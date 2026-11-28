@@ -15,6 +15,7 @@
  */
 package com.ash.risk.market.calc;
 
+import com.ash.risk.kernel.vector.SumPool;
 import com.ash.risk.kernel.scope.HierarchySpec;
 
 import com.ash.risk.kernel.vector.ParallelSums;
@@ -47,7 +48,7 @@ class ColumnHierarchyBenchmark {
             }
         }
         HierarchySpec ll = new HierarchySpec("LL", "Limit letters", List.of("LIMIT_LETTER", "DESK"), null, null, null, false, "LL", null, null);
-        try (ParallelSums sums = new ParallelSums(4, 4096)) {
+        try (ParallelSums sums = SumPool.of(4, 4096)) {
             for (int round = 0; round < 3; round++) {
                 long[] plain = run(v, List.of(), sums);
                 long[] letters = run(v, List.of(ll), sums);

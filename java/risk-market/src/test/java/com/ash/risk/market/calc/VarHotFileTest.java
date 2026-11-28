@@ -15,6 +15,7 @@
  */
 package com.ash.risk.market.calc;
 
+import com.ash.risk.kernel.vector.SumPool;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -55,7 +56,7 @@ class VarHotFileTest {
 
     @BeforeAll
     static void load() {
-        sums = new ParallelSums(4, 64);
+        sums = SumPool.of(4, 64);
         heap = BANK.build(42, sums, Long.MAX_VALUE);
         mapped = BANK.buildMapped(42, sums, Long.MAX_VALUE, dir);
         bound = bound(heap);
@@ -164,7 +165,7 @@ class VarHotFileTest {
         ScopeResolver fr = new ScopeResolver(f32, VarBookTest.defs());
         ScopeResolver mr = new ScopeResolver(mapped, VarBookTest.defs());
         Random r = new Random(5);
-        try (ParallelSums one = new ParallelSums(1, 64)) {
+        try (ParallelSums one = SumPool.of(1, 64)) {
             for (String s : List.of("BANK", "DESK:DESK-0-1", "LE:LE-1", "DESK:DESK-0-1 - TRD:T-3,T-4", "BOOK:BOOK-1-2-3 + POS:POS-5,POS-6",
                     "WHERE:CURRENCY == 'EUR' and DIRECTION == 'SHORT'", "TRD:T-7,T-8,T-100", "POS:POS-1", "BANK - DESK:DESK-1-2")) {
                 OrdinalSet set = fr.resolve(s).set();

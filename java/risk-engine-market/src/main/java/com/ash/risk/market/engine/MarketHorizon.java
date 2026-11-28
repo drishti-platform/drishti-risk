@@ -215,7 +215,7 @@ final class MarketHorizon {
                     VarCalc.Measures ms = lens.measures(c, vectors.get(i), lens.apply(vectors.get(i)));
                     String var = c.rule() == VarMath.RankRule.INTERPOLATED ? interpolated(range, width, c.confidence()) : "-SMALL(" + range + "," + k + ")";
                     main.row(row).text(0, nodes.get(i).id(), "normal").formula(1, "(" + var + ")" + f, ms.var(), "decimal")
-                            .formula(2, "(-SUMPRODUCT(SMALL(" + range + ",ROW($1:$" + kes + ")))/" + kes + ")" + f, ms.es(), "decimal");
+                            .formula(2, "(-" + MarketWorkbook.worstSum(range, kes) + "/" + kes + ")" + f, ms.es(), "decimal");
                 }
                 if (!nodes.isEmpty()) {
                     wb.name(AnswerBook.name("node-var-horizon", "VAR"), main.name(), "$B$" + firstRow);

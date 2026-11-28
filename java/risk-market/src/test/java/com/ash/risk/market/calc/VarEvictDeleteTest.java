@@ -15,6 +15,7 @@
  */
 package com.ash.risk.market.calc;
 
+import com.ash.risk.kernel.vector.SumPool;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ash.risk.kernel.vector.MappedMatrix;
@@ -35,7 +36,7 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class VarEvictDeleteTest {
 
-    static final ParallelSums SUMS = new ParallelSums(2, 4096);
+    static final ParallelSums SUMS = SumPool.of(2, 4096);
 
     @AfterAll
     static void close() {

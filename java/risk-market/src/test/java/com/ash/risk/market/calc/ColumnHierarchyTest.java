@@ -15,6 +15,7 @@
  */
 package com.ash.risk.market.calc;
 
+import com.ash.risk.kernel.vector.SumPool;
 import com.ash.risk.kernel.scope.HierarchySpec;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -60,7 +61,7 @@ class ColumnHierarchyTest {
 
     @BeforeAll
     static void data() {
-        sums = new ParallelSums(2, 64);
+        sums = SumPool.of(2, 64);
         SplittableRandom r = new SplittableRandom(5);
         for (int t = 0; t < 120; t++) {
             int b = t % 4;

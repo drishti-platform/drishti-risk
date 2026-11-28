@@ -15,6 +15,7 @@
  */
 package com.ash.risk.market.calc;
 
+import com.ash.risk.kernel.vector.SumPool;
 import com.ash.risk.kernel.scope.PositionRules;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -62,7 +63,7 @@ class VarComputeFirstTest {
         Map<String, Object> pack = new ObjectMapper(new YAMLFactory()).readValue(repo.resolve("modules/banking/packs/market-risk/pack.yaml").toFile(), Map.class);
         rules = PositionRules.of((Map<?, ?>) pack.get("positions"));
         scen = dates(false);
-        sums = new ParallelSums(4, 4096);
+        sums = SumPool.of(4, 4096);
     }
 
     @AfterAll

@@ -15,6 +15,7 @@
  */
 package com.ash.risk.market.calc;
 
+import com.ash.risk.kernel.vector.SumPool;
 import com.ash.risk.kernel.scope.HierarchySpec;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,7 +42,7 @@ class BlankNodeTest {
 
     @BeforeAll
     static void pool() {
-        sums = new ParallelSums(2, 64);
+        sums = SumPool.of(2, 64);
     }
 
     @AfterAll

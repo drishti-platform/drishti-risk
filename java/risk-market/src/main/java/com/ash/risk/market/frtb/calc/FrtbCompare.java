@@ -60,8 +60,8 @@ public final class FrtbCompare {
         lines.sort((x, y) -> Double.compare(Math.abs(y.difference()), Math.abs(x.difference())));
         double ta = base.total();
         double tb = alt.total();
-        String sa = Sbm.SCENARIOS[a.reported];
-        String sb = Sbm.SCENARIOS[b.reported];
+        String sa = Sbm.SCENARIOS.get(a.reported);
+        String sb = Sbm.SCENARIOS.get(b.reported);
         StringBuilder w = new StringBuilder();
         double d = tb - ta;
         if (Math.abs(d) < 0.005) {
@@ -104,7 +104,7 @@ public final class FrtbCompare {
         String bucket = null;
         String detail = null;
         if (sa != sb && ca != null && cb != null && Math.abs(ca.charge[sb] - cb.charge[sb]) < 0.005) {
-            step = "the scenario chosen (" + Sbm.SCENARIOS[sa] + " to " + Sbm.SCENARIOS[sb] + ")";
+            step = "the scenario chosen (" + Sbm.SCENARIOS.get(sa) + " to " + Sbm.SCENARIOS.get(sb) + ")";
         } else if (ca == null || cb == null) {
             step = "the factors themselves (the class is in one run only)";
         } else {

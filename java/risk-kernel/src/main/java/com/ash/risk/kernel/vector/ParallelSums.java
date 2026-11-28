@@ -19,10 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Sums of many vectors on every core, with a bounded pool (VAR_GUIDE.md section 25). Since 2.9.7 in a fixed reduction order ({@link #sum}):
@@ -32,27 +29,32 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * <p>Small sums (below {@code parallelRows} rows) run on the caller's thread: a desk of a few thousand rows is faster summed in place
  * than handed to a pool.
+ *
+ * <p>The threads are the caller's: an executor it owns (an engine's {@code EngineContext.executor()}, ENGINE_SPEC 8.5 rule 3), never
+ * one of this class. Every task it hands the executor is a leaf (it never waits on another task), so any executor size is safe.
  */
 public final class ParallelSums implements AutoCloseable {
 
     private final ExecutorService pool;
     private final int threads;
     private final int parallelRows;
+    private final Runnable release;
 
     /**
-     * @param threads the pool's threads (the cores to use; at least 1)
+     * @param pool the executor the blocks are summed on (the caller's; never shut down here)
+     * @param threads the blocks summed at once (at least 1; the bits never depend on it)
      * @param parallelRows the fewest rows worth splitting across threads
      */
-    public ParallelSums(int threads, int parallelRows) {
+    public ParallelSums(ExecutorService pool, int threads, int parallelRows) {
+        this(pool, threads, parallelRows, null);
+    }
+
+    /** As {@link #ParallelSums(ExecutorService, int, int)}; {@code release} runs at {@link #close} (the owner's way to stop its executor). */
+    public ParallelSums(ExecutorService pool, int threads, int parallelRows, Runnable release) {
+        this.pool = java.util.Objects.requireNonNull(pool, "pool");
         this.threads = Math.max(1, threads);
         this.parallelRows = Math.max(1, parallelRows);
-        AtomicInteger n = new AtomicInteger();
-        ThreadFactory tf = r -> {
-            Thread t = new Thread(r, "drishti-vector-sum-" + n.incrementAndGet());
-            t.setDaemon(true);
-            return t;
-        };
-        this.pool = Executors.newFixedThreadPool(this.threads, tf);
+        this.release = release;
     }
 
     public int threads() {
@@ -72,11 +74,8 @@ public final class ParallelSums implements AutoCloseable {
         if (store instanceof SetSums s && s.sumsSets() && !set.isEmpty()) {
             return s.sumSet(set, this);                                // a sharded date: each shard's part summed by an owner
         }
-        return FIXED_ORDER ? sumFixed(store, set) : sumSliced(store, set);
+        return sumFixed(store, set);
     }
-
-    /** True: {@link #sum} in the fixed order (2.9.7); false only to measure the earlier order ({@code -Ddrishti.var.fixed-order=false}). */
-    static final boolean FIXED_ORDER = !"false".equals(System.getProperty("drishti.var.fixed-order"));
 
     /** The fixed-order sum (see {@link #sum}). */
     double[] sumFixed(Vectors store, OrdinalSet set) {
@@ -162,7 +161,7 @@ public final class ParallelSums implements AutoCloseable {
         return Math.max(1_024, Integer.highestOneBit(Math.max(1, setSize / 64)));
     }
 
-    /** The order before 2.9.7: slices of the range by thread count (the bits depended on {@code threads}); kept to measure against. */
+    /** The order before 2.9.7: slices of the range by thread count (the bits depended on {@code threads}); kept for its test to measure against. */
     double[] sumSliced(Vectors store, OrdinalSet set) {
         double[] acc = new double[store.width()];
         if (set.isEmpty()) {
@@ -254,8 +253,11 @@ public final class ParallelSums implements AutoCloseable {
         }
     }
 
+    /** Runs the owner's release, if any (an engine's sums run on the host's executor and release nothing). */
     @Override
     public void close() {
-        pool.shutdownNow();
+        if (release != null) {
+            release.run();
+        }
     }
 }

@@ -75,12 +75,12 @@ class FixedOrderSumTest {
         VectorStore s = store(rows, 32, 7);
         List<OrdinalSet> sets = scopes(rows, 11);
         List<double[]> one = new ArrayList<>();
-        try (ParallelSums p = new ParallelSums(1, 4_096)) {
+        try (ParallelSums p = SumPool.of(1, 4_096)) {
             sets.forEach(x -> one.add(p.sumFixed(s, x)));
         }
         boolean slicedDiffered = false;
         for (int threads : new int[] {2, 3, 8, 24}) {
-            try (ParallelSums p = new ParallelSums(threads, 4_096); ParallelSums p1 = new ParallelSums(1, 4_096)) {
+            try (ParallelSums p = SumPool.of(threads, 4_096); ParallelSums p1 = SumPool.of(1, 4_096)) {
                 for (int i = 0; i < sets.size(); i++) {
                     assertThat(same(p.sumFixed(s, sets.get(i)), one.get(i))).as(threads + " threads, scope " + i).isTrue();
                     slicedDiffered |= !same(p.sumSliced(s, sets.get(i)), p1.sumSliced(s, sets.get(i)));
@@ -93,7 +93,7 @@ class FixedOrderSumTest {
         for (int j = 0; j < 32; j++) {
             assertThat(one.get(1)[j]).isCloseTo(plain[j], org.assertj.core.data.Offset.offset(1e-3));   // the same sum, to rounding
         }
-        try (ParallelSums p = new ParallelSums(4, 4_096)) {
+        try (ParallelSums p = SumPool.of(4, 4_096)) {
             assertThat(p.sum(s, OrdinalSet.empty())).containsOnly(0.0);
         }
     }
@@ -106,7 +106,7 @@ class FixedOrderSumTest {
         List<OrdinalSet> sets = scopes(rows, 5);
         String[] names = {"bank", "desk", "one trade", "block edge", "basket 25%", "bank minus a book"};
         for (int threads : new int[] {1, 8, Runtime.getRuntime().availableProcessors()}) {
-            try (ParallelSums p = new ParallelSums(threads, Integer.getInteger("rows.block", 4_096))) {
+            try (ParallelSums p = SumPool.of(threads, Integer.getInteger("rows.block", 4_096))) {
                 for (int i = 0; i < sets.size(); i++) {
                     OrdinalSet x = sets.get(i);
                     for (int warm = 0; warm < 30; warm++) {

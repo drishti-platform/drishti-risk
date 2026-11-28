@@ -15,6 +15,7 @@
  */
 package com.ash.risk.market.calc;
 
+import com.ash.risk.kernel.vector.SumPool;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ash.risk.kernel.vector.ParallelSums;
@@ -56,7 +57,7 @@ class HotFileDirectMemorySoakTest {
         long seconds = Long.getLong("drishti.soak.seconds", 10);
         SyntheticBank bank = new SyntheticBank(2, 3, 4, 3000, 3);             // 24 books, 3,000 positions, 9,000 trades
         List<Path> files = new ArrayList<>();
-        try (ParallelSums sums = new ParallelSums(2, 64)) {
+        try (ParallelSums sums = SumPool.of(2, 64)) {
             for (int d = 0; d < DATES; d++) {
                 VarBook b = bank.buildMapped(40 + d, sums, Long.MAX_VALUE, Files.createDirectories(dir.resolve("date-" + d)));
                 files.add(b.hot().file());

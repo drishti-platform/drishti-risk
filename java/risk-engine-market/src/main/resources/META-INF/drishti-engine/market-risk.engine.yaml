@@ -158,7 +158,6 @@ options:
   scale-to-var: { type: bool, default: true, label: Scale components to VaR }
   threads: { type: int, default: 4, min: 1, max: 256, label: Summation threads, help: The sums are the same bits at any count. }
   vector-tier: { type: enum, options: [ heap, mapped ], default: heap, label: Vector rows, help: "The rows as the host's VaR tier keeps them. heap: float64 rows as delivered; mapped: every position one float32 row (the float64 sum of its trades, converted once) and the trades of positions of several trades float32, as a mapped tier's hot file: the host and the engine agree to the bit (R2_CUT_PLAN MC-12). The aggregates of nodes and books stay float64 either way." }
-  linear-algebra: { type: enum, options: [ native, java ], default: java, label: Linear algebra }
   exact-path:
     type: bool
     default: false
@@ -198,7 +197,7 @@ options:
   rrao-from-positions: { type: bool, default: true, label: RRAO from product types, help: "Without residual-risk rows, derive the RRAO from each position's PRODUCT_TYPE and notional." }
 params:
   scenario-set: { type: text, default: "", label: Scenario set, help: "Empty: the date's one set that is not a stress set." }
-  window: { type: int, default: 0, min: 0, label: Window, help: "The newest N scenarios; 0: the whole set." }
+  window: { type: int, default: 0, min: 0, words: { all: 0 }, label: Window, help: "The newest N scenarios; 0 or all: the whole set." }
   currency: { type: text, default: USD, label: Reporting currency }
   stressed: { type: bool, default: false, label: Stressed, help: "True: the date's stress scenario set (stressed VaR)." }
   horizon: { type: enum, options: [ 1d, 10d ], default: 1d, label: Horizon }
@@ -235,6 +234,7 @@ outputs:
     about: One row per node of every hierarchy; members are the positions beneath the node; limit use is VaR over the node's limit.
     params: [ scenario-set, window, currency ]
     needs: [ scenario-set, fx-scenario ]
+    needs-any: [ pnl-vector, scenario-pv ]
     key: [ NODE_ID ]
     columns:
       - { name: NODE_ID, type: string, nullable: false, label: Node }
@@ -255,6 +255,7 @@ outputs:
     about: For every node with children, each child's component VaR (Euler, averaged over ranks k ± h, scaled to the node's VaR) and its standalone VaR.
     params: [ scenario-set, window, currency ]
     needs: [ scenario-set, fx-scenario ]
+    needs-any: [ pnl-vector, scenario-pv ]
     key: [ NODE_ID, CHILD ]
     columns:
       - { name: NODE_ID, type: string, nullable: false, label: Node }
@@ -267,6 +268,7 @@ outputs:
     about: One row per system basket; UNKNOWN lists the scope's names the date does not hold.
     params: [ scenario-set, window, currency ]
     needs: [ scenario-set, fx-scenario, system-basket ]
+    needs-any: [ pnl-vector, scenario-pv ]
     key: [ BASKET_ID ]
     columns:
       - { name: BASKET_ID, type: string, nullable: false, label: Basket }
@@ -286,6 +288,7 @@ outputs:
     about: One row per hierarchy root.
     params: [ scenario-set, window, currency ]
     needs: [ scenario-set, fx-scenario ]
+    needs-any: [ pnl-vector, scenario-pv ]
     key: [ HIERARCHY ]
     columns:
       - { name: HIERARCHY, type: string, nullable: false, label: Hierarchy }
@@ -299,6 +302,7 @@ outputs:
     about: For every node, the normal (variance-covariance) VaR z sigma - mu (z, PVAR and PES within relative 1e-12, as the normal quantile is computed with the platform's exp and log, whose last bit may differ between JVMs) and ES sigma phi(z_ES)/(1 - c_ES) - mu from the node's scenario P&L (equal or EWMA weights), with the historical VaR beside it, the scenarios beyond the parametric VaR, and the fit's shape (skewness, excess kurtosis) and the ES quantile and factor a host's tooltip shows. Through a horizon or the stress set (stressed, horizon, ten-day-method) the fit is of each node's vector through that lens (the 1-day P&L times the square root of 10, or overlapping sums of 10 days, on the normal or the stress set), HVAR and K the lens's historical figures.
     params: [ scenario-set, window, currency, stressed, horizon, ten-day-method, lens-confidence, lens-es-confidence ]
     needs: [ scenario-set, fx-scenario ]
+    needs-any: [ pnl-vector, scenario-pv ]
     key: [ NODE_ID ]
     columns:
       - { name: NODE_ID, type: string, nullable: false, label: Node }
@@ -324,6 +328,7 @@ outputs:
     about: For every node with children (the figures within relative 1e-12, as node-pvar), each child's parametric component VaR z cov/sigma - mu_i (the parts add up to the node's PVAR exactly), component ES, standalone and incremental parametric VaR, its correlation with the node and the moments the component is made of (the child's sigma and mean, its covariance with the node).
     params: [ scenario-set, window, currency ]
     needs: [ scenario-set, fx-scenario ]
+    needs-any: [ pnl-vector, scenario-pv ]
     key: [ NODE_ID, CHILD ]
     columns:
       - { name: NODE_ID, type: string, nullable: false, label: Node }
@@ -341,6 +346,7 @@ outputs:
     about: Every node's VaR and ES on the normal or the stress scenario set, 1-day or 10-day (the 1-day figures times the square root of 10, or overlapping sums of 10 scenario days).
     params: [ scenario-set, window, currency, stressed, horizon, ten-day-method, lens-confidence, lens-es-confidence ]
     needs: [ scenario-set, fx-scenario ]
+    needs-any: [ pnl-vector, scenario-pv ]
     key: [ NODE_ID ]
     columns:
       - { name: NODE_ID, type: string, nullable: false, label: Node }
@@ -573,6 +579,7 @@ outputs:
     about: One row per trade (or position sent whole) of the date's book of every row, in the book's canonical order; ORDINAL is what a row set names. The host resolves every scope kind over it (EN-68).
     params: [ scenario-set, window ]
     needs: [ scenario-set, fx-scenario ]
+    needs-any: [ pnl-vector, scenario-pv ]
     key: [ ORDINAL ]
     columns:
       - { name: ORDINAL, type: integer, nullable: false, label: Row }
@@ -587,6 +594,7 @@ outputs:
     about: One row per position (derived by the position rules, or sent whole); RUNS are its rows as from, to pairs of ordinals.
     params: [ scenario-set, window ]
     needs: [ scenario-set, fx-scenario ]
+    needs-any: [ pnl-vector, scenario-pv ]
     key: [ POSITION ]
     columns:
       - { name: POSITION, type: integer, nullable: false, label: Position index }
@@ -597,6 +605,7 @@ outputs:
     about: Each position's columns, one row per value (texts in TEXT, numbers in NUMBER, amounts in the reporting currency), for the rules a scope may name (WHERE).
     params: [ scenario-set, window, currency ]
     needs: [ scenario-set, fx-scenario ]
+    needs-any: [ pnl-vector, scenario-pv ]
     key: [ POSITION, COLUMN ]
     columns:
       - { name: POSITION, type: integer, nullable: false, label: Position index }
@@ -608,6 +617,7 @@ outputs:
     about: One row per node of every hierarchy; RUNS are its member rows as from, to pairs of ordinals of scope-index.
     params: [ scenario-set, window ]
     needs: [ scenario-set, fx-scenario ]
+    needs-any: [ pnl-vector, scenario-pv ]
     key: [ NODE_ID ]
     columns:
       - { name: NODE_ID, type: string, nullable: false, label: Node }
@@ -638,6 +648,7 @@ outputs:
     about: The VaR and ES of the rows named (any scope the host resolved), seen through the caller's visibility; a node whole takes its stored aggregate, anything else the planner's sum. PNL is the summed scenario P&L (the scope's path).
     params: [ scenario-set, window, currency, rows, node ]
     needs: [ scenario-set, fx-scenario ]
+    needs-any: [ pnl-vector, scenario-pv ]
     key: [ MEMBERS ]
     columns:
       - { name: MEMBERS, type: integer, nullable: false, label: Members }
@@ -651,6 +662,7 @@ outputs:
     about: The rows' summed scenario P&L (PNL, oldest first) as the caller sees it, ranked worst first (ORDER, scenario indices; near ties by scenario date, the older first), the VaR rank K and the ES count, and a histogram of BINS equal bins (EDGES, COUNTS); a node whole takes its stored aggregate. The VaR and ES are scope-var's to the bit.
     params: [ scenario-set, window, currency, rows, node, bins ]
     needs: [ scenario-set, fx-scenario ]
+    needs-any: [ pnl-vector, scenario-pv ]
     key: [ MEMBERS ]
     columns:
       - { name: MEMBERS, type: integer, nullable: false, label: Members }
@@ -669,6 +681,7 @@ outputs:
     about: "The newest DAYS scenario days of the rows' summed P&L (as scope-var sums it) against the set's own VaR of the date: in-sample, not a regulatory backtest (Drishti's replay of a scope without official records). Each day's P&L is compared with the VaR before it, from the second day; the exceptions, the zone (Basel's 4/9 limits scaled for fewer than 250 days), Kupiec's and Christoffersen's tests (the likelihood ratios and p-values within relative 1e-12: the platform's log and exp). FIRST is the scenario index of the first replayed day; FLAGS one 0/1 per replayed day."
     params: [ scenario-set, window, currency, rows, node, days ]
     needs: [ scenario-set, fx-scenario ]
+    needs-any: [ pnl-vector, scenario-pv ]
     key: [ MEMBERS ]
     columns:
       - { name: MEMBERS, type: integer, nullable: false, label: Members }
@@ -689,6 +702,7 @@ outputs:
     about: The parts of a row set (any the host resolved: child nodes, terms, positions), each summed as scope-var sums a row set, with its standalone VaR and ES, its component VaR (Euler, averaged over ranks k ± h, scaled to the set's VaR) and component ES, its share of the VaR and its incremental VaR (the set's VaR less the VaR without the part); exactly how Drishti's in-tree route measures a scope's parts.
     params: [ scenario-set, window, currency, rows, node, parts, part-nodes ]
     needs: [ scenario-set, fx-scenario ]
+    needs-any: [ pnl-vector, scenario-pv ]
     key: [ PART ]
     columns:
       - { name: PART, type: integer, nullable: false, label: Part }
@@ -704,6 +718,7 @@ outputs:
     about: The parts of a row set (any the host resolved: child nodes, positions, terms), each summed as scope-var sums a row set, with its parametric component VaR z cov/sigma - mu_i against the set's own normal fit (the parts of a partition add up to the set's PVAR), component ES, standalone and incremental parametric VaR, its correlation with the set and the moments the component is made of; as node-pvar-components measures a node's children, within relative 1e-12.
     params: [ scenario-set, window, currency, rows, node, parts, part-nodes ]
     needs: [ scenario-set, fx-scenario ]
+    needs-any: [ pnl-vector, scenario-pv ]
     key: [ PART ]
     columns:
       - { name: PART, type: integer, nullable: false, label: Part }
@@ -720,6 +735,7 @@ outputs:
     about: "Each pair of the parts (row sets in the host's order, each summed as scope-var sums a row set), its covariance and correlation from ParametricVar.matrix: one dgemm through the bound linear algebra (OpenBLAS where bound, Java otherwise; within relative 1e-12 of another), named in ENGINE."
     params: [ scenario-set, window, currency, parts, part-nodes ]
     needs: [ scenario-set, fx-scenario ]
+    needs-any: [ pnl-vector, scenario-pv ]
     key: [ I, J ]
     columns:
       - { name: I, type: integer, nullable: false, label: Part }
@@ -734,6 +750,7 @@ outputs:
     axis: DATE
     params: [ scenario-set, window ]
     needs: [ scenario-set, fx-scenario ]
+    needs-any: [ pnl-vector, scenario-pv ]
     key: [ INDEX ]
     columns:
       - { name: INDEX, type: integer, nullable: false, label: Scenario }
@@ -743,6 +760,7 @@ outputs:
     about: The Pearson correlation of the rows' summed scenario P&L with the other row set's, and the beta (covariance over the other's variance), over the same scenarios and currency, each seen through the caller's visibility.
     params: [ scenario-set, window, currency, rows, node, against ]
     needs: [ scenario-set, fx-scenario ]
+    needs-any: [ pnl-vector, scenario-pv ]
     key: [ MEMBERS ]
     columns:
       - { name: MEMBERS, type: integer, nullable: false, label: Members }
@@ -757,6 +775,7 @@ outputs:
     about: A node's VaR and ES (or a row set's, rows, summed as scope-var sums it) before and after hypothetical trades whose scenario P&L the caller supplies (the engine prices nothing), each trade's standalone, incremental and component VaR, and the stressed VaR of the worst window before and after.
     params: [ scenario-set, window, currency, node, rows, trades ]
     needs: [ scenario-set, fx-scenario ]
+    needs-any: [ pnl-vector, scenario-pv ]
     key: [ ROW ]
     columns:
       - { name: ROW, type: string, nullable: false, label: Row }

@@ -29,7 +29,7 @@ import java.util.Map;
  */
 public final class Sbm {
 
-    public static final String[] SCENARIOS = {"low", "medium", "high"};
+    public static final List<String> SCENARIOS = List.of("low", "medium", "high");
     /** The ρ matrices kept for the explanation when a bucket has at most this many factors. */
     static final int KEEP_RHO = 300;
 

@@ -285,7 +285,7 @@ final class MarketScopes {
             vectors.add(s.v());
             one = new ArrayList<>();
         }
-        com.ash.risk.kernel.linalg.LinearAlgebra la = com.ash.risk.kernel.linalg.Blas.get();
+        com.ash.risk.kernel.linalg.LinearAlgebra la = com.ash.risk.kernel.linalg.JavaBlas.INSTANCE;   // an engine loads no native library (8.4)
         double[][][] cm = com.ash.risk.market.calc.ParametricVar.matrix(vectors, options.parametric(), la);
         Tables.Builder t = Tables.of(descriptor.schema("scope-pmatrix"));
         for (int i = 0; i < vectors.size(); i++) {

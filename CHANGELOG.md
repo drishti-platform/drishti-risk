@@ -3,6 +3,17 @@
 
 ## 0.1.0 (unreleased)
 
+- `market-risk`, kit (2026-11-28, Drishti lane S2b): the workbooks use only the functions Excel, LibreOffice and Google Sheets share and
+  whole ranges (expected shortfall as the sum of the k smallest by `SMALL`, k by `ROUNDUP`, `NORM.S.INV`, the normal density by `EXP` and
+  `PI`, variances and covariances from `SUMPRODUCT` of ranges, gross sensitivity by `SUMIF`); the node-pvar names point at the answer's
+  first row (key order); the period statistics' high and low formulas read `$.rows[*].VALUE`; the outputs that read vectors declare
+  `needs-any: [ pnl-vector, scenario-pv ]`; the window parameter takes the word `all` (0). The summation runs on the host's executor
+  (`ParallelSums(executor, ..)`; `SumPool` for code outside a host); the engine's linear algebra is Java (an engine loads no native
+  library: the option `linear-algebra` removed, it changed nothing); the FRTB parameters read with the platform's `StrictYaml` (no
+  Jackson in risk-kernel or risk-market main; risk-kernel's unused Arrow, SLF4J and Jackson dependencies removed). Three hand cases
+  corrected to the outputs' key order (node-var-horizon, sensitivity-ladder, what-if) and the what-if factor given as a number.
+  The kit's scan: 338 findings to 58.
+
 - `market-risk`, R2 speed (2026-11-28, Drishti lane S2; R2 engine speed design steps 2, 5, 8, 9): `descriptor()` read once per engine
   object; the planner looks only at the books a set touches; each node's and whole position's measures and each visibility's rows kept
   with the built book as session state (`MarketDerived`); a scope's parts summed as Drishti's in-tree parts (a node whole its aggregate, a

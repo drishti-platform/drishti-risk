@@ -16,10 +16,7 @@
 package com.ash.risk.market.frtb.calc;
 
 import com.ash.tools.codec.Hashes;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.ash.engine.text.StrictYaml;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -42,7 +39,6 @@ import java.util.TreeMap;
  */
 public final class FrtbParams {
 
-    private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory());
 
     /** The scenario transformation of a correlation (MAR21.6): high {@code min(m·ρ, cap)}, low {@code max(a·ρ − b, f·ρ)}. */
     public record Scenarios(double highMultiplier, double highCap, double lowMultiplier, double lowMinus, double lowFloorMultiplier) {
@@ -144,7 +140,7 @@ public final class FrtbParams {
 
     private final List<String> problems = new ArrayList<>();
 
-    private FrtbParams(JsonNode sbm, JsonNode drc, String hash, Map<String, String> overrides) {
+    private FrtbParams(Map<String, Object> sbm, Map<String, Object> drc, String hash, Map<String, String> overrides) {
         this.hash = hash;
         this.overrides = Map.copyOf(new TreeMap<>(overrides));
         sbmRegime = text(sbm, "regime");
@@ -284,26 +280,38 @@ public final class FrtbParams {
         }
     }
 
-    /** The same from the files' bytes. */
+    /** The same from the files' bytes (the platform's strict YAML reader: block and flow mappings and lists, comments). */
     public static FrtbParams parse(byte[] sbm, byte[] drcRrao, Map<String, String> overrides) {
+        Map<String, Object> s = tree(sbm);
+        Map<String, Object> d = tree(drcRrao);
+        Map<String, String> applied = new LinkedHashMap<>();
+        for (Map.Entry<String, String> o : (overrides == null ? Map.<String, String>of() : overrides).entrySet()) {
+            String path = o.getKey();
+            Map<String, Object> root = path.startsWith("drc.") || path.startsWith("rrao.") ? d : s;
+            set(root, path, o.getValue());
+            applied.put(path, o.getValue());
+        }
+        MessageDigest md = Hashes.digest("SHA-256");
+        md.update(sbm);
+        md.update((byte) 0);
+        md.update(drcRrao);
+        return new FrtbParams(s, d, HexFormat.of().formatHex(md.digest()), applied);
+    }
+
+    /** A file's mapping, every mapping in it a copy the overrides may set. */
+    private static Map<String, Object> tree(byte[] yaml) {
         try {
-            JsonNode s = YAML.readTree(sbm);
-            JsonNode d = YAML.readTree(drcRrao);
-            Map<String, String> applied = new LinkedHashMap<>();
-            for (Map.Entry<String, String> o : (overrides == null ? Map.<String, String>of() : overrides).entrySet()) {
-                String path = o.getKey();
-                JsonNode root = path.startsWith("drc.") || path.startsWith("rrao.") ? d : s;
-                set(root, path, o.getValue());
-                applied.put(path, o.getValue());
-            }
-            MessageDigest md = Hashes.digest("SHA-256");
-            md.update(sbm);
-            md.update((byte) 0);
-            md.update(drcRrao);
-            return new FrtbParams(s, d, HexFormat.of().formatHex(md.digest()), applied);
-        } catch (IOException e) {
+            return copy(StrictYaml.readMap(new String(yaml, java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("the FRTB-SA parameter files are not YAML: " + e.getMessage(), e);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> copy(Map<String, Object> m) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        m.forEach((k, v) -> out.put(k, v instanceof Map<?, ?> x ? copy((Map<String, Object>) x) : v));
+        return out;
     }
 
     /** The same parameters with {@code overrides} added (a playground run; the source trees re-read from the same bytes). */
@@ -311,57 +319,77 @@ public final class FrtbParams {
         return parse(sbm, drcRrao, overrides);
     }
 
-    private static void set(JsonNode root, String path, String value) {
+    @SuppressWarnings("unchecked")
+    private static void set(Map<String, Object> root, String path, String value) {
         String[] parts = path.split("\\.");
-        JsonNode n = root;
+        Map<String, Object> n = root;
         for (int i = 0; i < parts.length - 1; i++) {
-            n = n.get(parts[i]);
-            if (n == null || !n.isObject()) {
+            if (!(n.get(parts[i]) instanceof Map<?, ?> next)) {
                 throw new IllegalArgumentException("override " + path + ": no such parameter");
             }
+            n = (Map<String, Object>) next;
         }
         String last = parts[parts.length - 1];
-        if (!n.has(last) || n.get(last).isContainerNode()) {
+        if (!n.containsKey(last) || n.get(last) instanceof Map<?, ?> || n.get(last) instanceof List<?>) {
             throw new IllegalArgumentException("override " + path + ": no such single value");
         }
         try {
-            ((ObjectNode) n).put(last, Double.parseDouble(value.strip()));
+            n.put(last, Double.parseDouble(value.strip()));
         } catch (NumberFormatException e) {
-            ((ObjectNode) n).put(last, value.strip());
+            n.put(last, value.strip());
         }
     }
 
-    private JsonNode at(JsonNode root, String path) {
-        JsonNode n = root;
+    private Object at(Map<String, Object> root, String path) {
+        Object n = root;
         for (String p : path.split("\\.")) {
-            n = n == null ? null : n.get(p);
+            n = n instanceof Map<?, ?> m ? m.get(p) : null;
         }
-        if (n == null || n.isNull()) {
+        if (n == null) {
             problems.add(path + " is missing");
         }
         return n;
     }
 
-    private String text(JsonNode root, String path) {
-        JsonNode n = at(root, path);
-        return n == null ? "" : n.asText();
+    /** A scalar as text: a number as YAML wrote it (a whole number without a point). */
+    private static String plain(Object v) {
+        if (v instanceof Double d && d == Math.rint(d) && Math.abs(d) < 1e15) {
+            return String.valueOf(d.longValue());
+        }
+        return String.valueOf(v);
     }
 
-    private boolean bool(JsonNode root, String path) {
-        JsonNode n = at(root, path);
-        return n != null && n.asBoolean();
+    /** A scalar as a double: a number, or text that reads as one; anything else NaN. */
+    private static double asDouble(Object v) {
+        if (v instanceof Number n) {
+            return n.doubleValue();
+        }
+        if (v instanceof String t && isNumber(t)) {
+            return Double.parseDouble(t);
+        }
+        return Double.NaN;
     }
 
-    private double num(JsonNode root, String path, double lo, double hi) {
-        JsonNode n = at(root, path);
+    private String text(Map<String, Object> root, String path) {
+        Object n = at(root, path);
+        return n == null ? "" : plain(n);
+    }
+
+    private boolean bool(Map<String, Object> root, String path) {
+        Object n = at(root, path);
+        return n instanceof Boolean b ? b : n instanceof String t && Boolean.parseBoolean(t.strip());
+    }
+
+    private double num(Map<String, Object> root, String path, double lo, double hi) {
+        Object n = at(root, path);
         if (n == null) {
             return Double.NaN;
         }
-        if (!n.isNumber() && !(n.isTextual() && isNumber(n.asText()))) {
+        if (!(n instanceof Number) && !(n instanceof String t && isNumber(t))) {
             problems.add(path + " is not a number");
             return Double.NaN;
         }
-        double v = n.asDouble();
+        double v = asDouble(n);
         if (!(v >= lo && v <= hi)) {
             problems.add(path + " is " + v + ", outside " + lo + " to " + hi);
         }
@@ -377,50 +405,49 @@ public final class FrtbParams {
         }
     }
 
-    private double[] nums(JsonNode root, String path, double lo, double hi) {
-        JsonNode n = at(root, path);
-        if (n == null || !n.isArray()) {
+    private double[] nums(Map<String, Object> root, String path, double lo, double hi) {
+        Object n = at(root, path);
+        if (!(n instanceof List<?> l)) {
             if (n != null) {
                 problems.add(path + " is not a list");
             }
             return new double[0];
         }
-        double[] out = new double[n.size()];
+        double[] out = new double[l.size()];
         for (int i = 0; i < out.length; i++) {
-            out[i] = n.get(i).asDouble(Double.NaN);
+            out[i] = asDouble(l.get(i));
             if (!(out[i] >= lo && out[i] <= hi)) {
-                problems.add(path + "[" + i + "] is " + n.get(i).asText() + ", outside " + lo + " to " + hi);
+                problems.add(path + "[" + i + "] is " + plain(l.get(i)) + ", outside " + lo + " to " + hi);
             }
         }
         return out;
     }
 
-    private List<String> texts(JsonNode root, String path) {
-        JsonNode n = at(root, path);
+    private List<String> texts(Map<String, Object> root, String path) {
+        Object n = at(root, path);
         List<String> out = new ArrayList<>();
-        if (n != null && n.isArray()) {
-            n.forEach(x -> out.add(x.asText()));
+        if (n instanceof List<?> l) {
+            l.forEach(x -> out.add(plain(x)));
         } else if (n != null) {
             problems.add(path + " is not a list");
         }
         return List.copyOf(out);
     }
 
-    private double[][] matrix(JsonNode root, String path, int size) {
-        JsonNode n = at(root, path);
+    private double[][] matrix(Map<String, Object> root, String path, int size) {
+        Object n = at(root, path);
         double[][] m = new double[size][size];
-        if (n == null || !n.isArray() || n.size() != size) {
+        if (!(n instanceof List<?> rows) || rows.size() != size) {
             problems.add(path + " is not a " + size + " by " + size + " table");
             return m;
         }
         for (int i = 0; i < size; i++) {
-            JsonNode row = n.get(i);
-            if (row == null || !row.isArray() || row.size() != size) {
+            if (!(rows.get(i) instanceof List<?> row) || row.size() != size) {
                 problems.add(path + " row " + (i + 1) + " does not have " + size + " values");
                 continue;
             }
             for (int j = 0; j < size; j++) {
-                m[i][j] = row.get(j).asDouble(Double.NaN);
+                m[i][j] = asDouble(row.get(j));
                 if (!(m[i][j] >= 0 && m[i][j] <= 1)) {
                     problems.add(path + " [" + (i + 1) + "," + (j + 1) + "] is outside 0 to 1");
                 }
@@ -442,19 +469,19 @@ public final class FrtbParams {
         }
     }
 
-    private Map<Integer, Double> byBucket(JsonNode root, String path, double lo, double hi) {
+    private Map<Integer, Double> byBucket(Map<String, Object> root, String path, double lo, double hi) {
         Map<Integer, Double> out = new TreeMap<>();
-        JsonNode n = at(root, path);
-        if (n != null && n.isObject()) {
-            n.fields().forEachRemaining(e -> {
-                double v = e.getValue().asDouble(Double.NaN);
+        Object n = at(root, path);
+        if (n instanceof Map<?, ?> m) {
+            m.forEach((k, x) -> {
+                double v = asDouble(x);
                 if (!(v >= lo && v <= hi)) {
-                    problems.add(path + "." + e.getKey() + " is " + e.getValue().asText() + ", outside " + lo + " to " + hi);
+                    problems.add(path + "." + k + " is " + plain(x) + ", outside " + lo + " to " + hi);
                 }
                 try {
-                    out.put(Integer.parseInt(e.getKey().strip()), v);
-                } catch (NumberFormatException x) {
-                    problems.add(path + ": bucket " + e.getKey() + " is not a number");
+                    out.put(Integer.parseInt(String.valueOf(k).strip()), v);
+                } catch (NumberFormatException e) {
+                    problems.add(path + ": bucket " + k + " is not a number");
                 }
             });
         } else if (n != null) {
@@ -463,16 +490,16 @@ public final class FrtbParams {
         return Map.copyOf(out);
     }
 
-    private Map<String, Double> byName(JsonNode root, String path, double lo, double hi) {
+    private Map<String, Double> byName(Map<String, Object> root, String path, double lo, double hi) {
         Map<String, Double> out = new LinkedHashMap<>();
-        JsonNode n = at(root, path);
-        if (n != null && n.isObject()) {
-            n.fields().forEachRemaining(e -> {
-                double v = e.getValue().asDouble(Double.NaN);
+        Object n = at(root, path);
+        if (n instanceof Map<?, ?> m) {
+            m.forEach((k, x) -> {
+                double v = asDouble(x);
                 if (!(v >= lo && v <= hi)) {
-                    problems.add(path + "." + e.getKey() + " is outside " + lo + " to " + hi);
+                    problems.add(path + "." + k + " is outside " + lo + " to " + hi);
                 }
-                out.put(e.getKey().toUpperCase(java.util.Locale.ROOT), v);
+                out.put(String.valueOf(k).toUpperCase(java.util.Locale.ROOT), v);
             });
         }
         return java.util.Collections.unmodifiableMap(out);

@@ -85,7 +85,7 @@ class MultiSumsTest {
 
     private static void sameBits(Vectors store, List<OrdinalSet> sets) {
         for (int threads : new int[] {1, 4}) {
-            try (ParallelSums pool = new ParallelSums(threads, 64)) {
+            try (ParallelSums pool = SumPool.of(threads, 64)) {
                 List<double[]> got = MultiSums.sums(store, sets, pool, JavaBlas.INSTANCE, MultiSums.DEFAULT_MIN_DENSITY);
                 for (int i = 0; i < sets.size(); i++) {
                     assertThat(got.get(i)).as("set " + i + ", " + threads + " threads").containsExactly(pool.sum(store, sets.get(i)));
@@ -157,7 +157,7 @@ class MultiSumsTest {
         Random r = new Random(4);
         VectorStore s = heap(rows(r, N));
         List<OrdinalSet> sets = sets(r, N);
-        try (ParallelSums pool = new ParallelSums(4, 64)) {
+        try (ParallelSums pool = SumPool.of(4, 64)) {
             for (double density : new double[] {0.0, MultiSums.DEFAULT_MIN_DENSITY}) {
                 java.util.concurrent.atomic.AtomicInteger gemms = new java.util.concurrent.atomic.AtomicInteger();
                 LinearAlgebra counted = new LinearAlgebra() {
@@ -214,7 +214,7 @@ class MultiSumsTest {
         Random r = new Random(6);
         VectorStore s = heap(rows(r, N));
         List<OrdinalSet> sets = sets(r, N);
-        try (ParallelSums pool = new ParallelSums(4, 64)) {
+        try (ParallelSums pool = SumPool.of(4, 64)) {
             Blas.clusterOnJava("member node-c runs BLAS on Java");
             assertThat(Blas.forClusterSums()).isSameAs(JavaBlas.INSTANCE);
             List<double[]> got = MultiSums.sums(s, sets, pool);

@@ -35,19 +35,12 @@
     <dependency><groupId>com.ash.tools</groupId><artifactId>tools-codec</artifactId><scope>provided</scope></dependency>
     <dependency><groupId>com.ash.tools</groupId><artifactId>tools-files</artifactId><scope>provided</scope></dependency>
     <!-- private: merged into each engine JAR -->
-    <dependency><groupId>org.apache.arrow</groupId><artifactId>arrow-vector</artifactId></dependency>
-    <dependency><groupId>org.apache.arrow</groupId><artifactId>arrow-memory-unsafe</artifactId><scope>runtime</scope></dependency>
     <dependency><groupId>org.bytedeco</groupId><artifactId>javacpp</artifactId></dependency>
     <dependency><groupId>org.bytedeco</groupId><artifactId>javacpp</artifactId><classifier>linux-x86_64</classifier></dependency>
     <dependency><groupId>org.bytedeco</groupId><artifactId>javacpp</artifactId><classifier>windows-x86_64</classifier></dependency>
     <dependency><groupId>org.bytedeco</groupId><artifactId>openblas</artifactId></dependency>
     <dependency><groupId>org.bytedeco</groupId><artifactId>openblas</artifactId><classifier>linux-x86_64</classifier></dependency>
     <dependency><groupId>org.bytedeco</groupId><artifactId>openblas</artifactId><classifier>windows-x86_64</classifier></dependency>
-    <dependency><groupId>org.slf4j</groupId><artifactId>slf4j-api</artifactId></dependency>
-    <!-- K3 exemption: the moved code's Jackson; K4/K5 remove it (SPLIT_EXEMPTIONS.md) -->
-    <dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-databind</artifactId></dependency>
-    <dependency><groupId>com.fasterxml.jackson.dataformat</groupId><artifactId>jackson-dataformat-yaml</artifactId></dependency>
-    <dependency><groupId>com.fasterxml.jackson.datatype</groupId><artifactId>jackson-datatype-jsr310</artifactId></dependency>
     <dependency><groupId>com.ash.lake</groupId><artifactId>lake-tck</artifactId><scope>test</scope></dependency>
   </dependencies>
 </project>

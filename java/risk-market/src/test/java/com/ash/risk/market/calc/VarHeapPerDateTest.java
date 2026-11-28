@@ -15,6 +15,7 @@
  */
 package com.ash.risk.market.calc;
 
+import com.ash.risk.kernel.vector.SumPool;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ash.risk.kernel.vector.OrdinalSet;
@@ -38,7 +39,7 @@ import org.junit.jupiter.api.io.TempDir;
 class VarHeapPerDateTest {
 
     static final int POSITIONS = Integer.getInteger("var.heap.positions", 10_000);
-    static final ParallelSums SUMS = new ParallelSums(2, 4096);
+    static final ParallelSums SUMS = SumPool.of(2, 4096);
 
     @AfterAll
     static void close() {

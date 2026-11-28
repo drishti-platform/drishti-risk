@@ -88,8 +88,8 @@ public final class MarketRiskEngine implements Engine {
         if (lifecycle != LifecycleState.INITIALISED) {
             throw new EngineException("ENG-5020", Kind.REFUSED, "start follows init; this engine is " + lifecycle);
         }
-        // the kernel state: one summation pool per engine instance, never a static one (two instances in one JVM stay apart)
-        sums = new ParallelSums(options.threads(), MarketOptions.PARALLEL_ROWS);
+        // the summation runs on the host's executor (ENGINE_SPEC 8.5 rule 3): one per engine instance, never a static one
+        sums = new ParallelSums(context.executor(), options.threads(), MarketOptions.PARALLEL_ROWS);
         lifecycle = LifecycleState.RUNNING;
     }
 
@@ -149,7 +149,7 @@ public final class MarketRiskEngine implements Engine {
         List<String> out = new ArrayList<>();
         MarketOptions o = options;
         if (o != null) {
-            out.add("linear algebra: " + o.linearAlgebra() + "; summation threads: " + o.threads());
+            out.add("linear algebra: java; summation threads: " + o.threads());
         }
         return out;
     }
@@ -173,11 +173,7 @@ public final class MarketRiskEngine implements Engine {
         if (lifecycle == LifecycleState.SHUTDOWN) {
             return;
         }
-        ParallelSums s = sums;
-        sums = null;
-        if (s != null) {
-            s.close();
-        }
+        sums = null;                                                   // the executor is the host's: nothing of ours to stop
         lifecycle = LifecycleState.SHUTDOWN;
     }
 }

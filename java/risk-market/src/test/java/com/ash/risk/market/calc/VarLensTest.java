@@ -15,6 +15,7 @@
  */
 package com.ash.risk.market.calc;
 
+import com.ash.risk.kernel.vector.SumPool;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -187,11 +188,11 @@ class VarLensTest {
         scopes.add(basket.build());
         VarLens sum = new VarLens(10, VarLens.Method.SUM, 0.99, 0.975);
         List<double[]> one = new ArrayList<>();
-        try (ParallelSums p = new ParallelSums(1, 4_096)) {
+        try (ParallelSums p = SumPool.of(1, 4_096)) {
             scopes.forEach(s -> one.add(sum.apply(p.sum(store, s))));
         }
         for (int threads : new int[] {2, 3, 8, 24}) {
-            try (ParallelSums p = new ParallelSums(threads, 4_096)) {
+            try (ParallelSums p = SumPool.of(threads, 4_096)) {
                 for (int i = 0; i < scopes.size(); i++) {
                     double[] w = sum.apply(p.sum(store, scopes.get(i)));
                     assertThat(w).hasSize(500);

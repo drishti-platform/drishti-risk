@@ -361,7 +361,7 @@ final class MarketSensitivities {
                     String v = AnswerBook.range(4, b[0], b[1]);
                     row++;
                     main.row(row).text(0, c.row(), "normal").text(1, c.column(), "normal").formula(2, "SUM(" + v + ")", c.net(), "decimal")
-                            .formula(3, "SUMPRODUCT(ABS(" + v + "))", c.gross(), "decimal");
+                            .formula(3, "SUMIF(" + v + ",\">0\")-SUMIF(" + v + ",\"<0\")", c.gross(), "decimal");
                     if (i == 0) {
                         wb.name(AnswerBook.name(output, "NET"), main.name(), "$C$" + row);
                         wb.name(AnswerBook.name(output, "GROSS"), main.name(), "$D$" + row);
@@ -486,7 +486,7 @@ final class MarketSensitivities {
             }
         }
         t.row("SBM", "*", "*", "*", nn(sbm.sbm()), nn(sbm.total[0]), nn(sbm.total[1]), nn(sbm.total[2]),
-                "reported: " + Sbm.SCENARIOS[rep] + "; binding: " + Sbm.SCENARIOS[sbm.binding]);
+                "reported: " + Sbm.SCENARIOS.get(rep) + "; binding: " + Sbm.SCENARIOS.get(sbm.binding));
         Drc.Result d = r.drc();
         if (d.delivered()) {
             for (Drc.Bucket b : d.buckets()) {
@@ -546,7 +546,7 @@ final class MarketSensitivities {
                     for (Sbm.ClassCharge cc : r.sbm().charges) {
                         rows.add(Map.<String, Object>of("RISK_CLASS", cc.cls, "MEASURE", cc.measure, "CHARGE", cc.charge[rep]));
                     }
-                    steps.add(Steps.of("sbm", "The class and measure charges of the " + Sbm.SCENARIOS[rep] + " scenario added (MAR21.6)",
+                    steps.add(Steps.of("sbm", "The class and measure charges of the " + Sbm.SCENARIOS.get(rep) + " scenario added (MAR21.6)",
                             "sum($.rows, 'CHARGE')", Map.of("rows", rows), r.sbm().sbm()));
                 } else {
                     Sbm.ClassCharge cc = r.sbm().classCharge(cls, cell.key().get("MEASURE"));
